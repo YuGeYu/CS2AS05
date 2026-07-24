@@ -1,0 +1,1551 @@
+diff --git a/addons/counterstrikesharp/plugins/NadeSystem/NadeAudit.cs b/addons/counterstrikesharp/plugins/NadeSystem/NadeAudit.cs
+new file mode 100644
+index 0000000..6f42e3a
+--- /dev/null
++++ b/addons/counterstrikesharp/plugins/NadeSystem/NadeAudit.cs
+@@ -0,0 +1,171 @@
++using System;
++using System.Collections.Generic;
++using System.Globalization;
++using System.IO;
++using System.Linq;
++
++internal sealed record NadeAuditRecord(
++    float Time, int Round, float FreezeElapsed, int Team, uint Bot, string Type, string Reason,
++    int Emergency, int Opening, string Decision, float BotGap, float TeamGap,
++    int BotOpening, int BotOpeningLimit, int TeamOpening, int TeamOpeningLimit,
++    int TeamOpeningSmoke, int TeamOpeningSmokeLimit,
++    int BotFlash, int BotSmoke, int BotHE, int BotMolotov)
++{
++    internal const string Prefix = "[NadeAudit] ";
++    private static readonly HashSet<string> RequiredKeys = new(StringComparer.Ordinal)
++    {
++        "event", "time", "round", "freeze_elapsed", "team", "bot", "type", "reason",
++        "emergency", "opening", "decision", "bot_gap", "team_gap", "bot_opening",
++        "team_opening", "team_opening_smoke", "bot_flash", "bot_smoke", "bot_he", "bot_molotov",
++    };
++
++    internal string Format() => string.Format(CultureInfo.InvariantCulture,
++        Prefix + "event=throw time={0:F3} round={1} freeze_elapsed={2:F3} team={3} bot={4} type={5} reason={6} emergency={7} opening={8} decision={9} bot_gap={10:F3} team_gap={11:F3} bot_opening={12}/{13} team_opening={14}/{15} team_opening_smoke={16}/{17} bot_flash={18} bot_smoke={19} bot_he={20} bot_molotov={21}",
++        Time, Round, FreezeElapsed, Team, Bot, Type, Reason, Emergency, Opening, Decision, BotGap, TeamGap,
++        BotOpening, BotOpeningLimit, TeamOpening, TeamOpeningLimit, TeamOpeningSmoke, TeamOpeningSmokeLimit,
++        BotFlash, BotSmoke, BotHE, BotMolotov);
++
++    internal static NadeAuditRecord Parse(string line)
++    {
++        int prefixAt = line.IndexOf(Prefix, StringComparison.Ordinal);
++        if (prefixAt < 0) throw new FormatException("Missing [NadeAudit] prefix.");
++        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
++        foreach (string token in line[(prefixAt + Prefix.Length)..].Split(' ', StringSplitOptions.RemoveEmptyEntries))
++        {
++            int equals = token.IndexOf('=');
++            if (equals <= 0 || equals == token.Length - 1) throw new FormatException($"Malformed token '{token}'.");
++            string key = token[..equals];
++            if (!RequiredKeys.Contains(key)) throw new FormatException($"Unknown field '{key}'.");
++            if (!fields.TryAdd(key, token[(equals + 1)..])) throw new FormatException($"Duplicate field '{key}'.");
++        }
++        foreach (string key in RequiredKeys)
++            if (!fields.ContainsKey(key)) throw new FormatException($"Missing field '{key}'.");
++        if (fields["event"] != "throw") throw new FormatException("event must be throw.");
++        string type = fields["type"];
++        if (type is not ("flash" or "smoke" or "he" or "molotov")) throw new FormatException($"Invalid type '{type}'.");
++        var botOpening = ParseRatio(fields["bot_opening"], "bot_opening");
++        var teamOpening = ParseRatio(fields["team_opening"], "team_opening");
++        var smokeOpening = ParseRatio(fields["team_opening_smoke"], "team_opening_smoke");
++        return new NadeAuditRecord(
++            Float(fields, "time"), Int(fields, "round"), Float(fields, "freeze_elapsed"), Int(fields, "team"), UInt(fields, "bot"),
++            type, fields["reason"], Bit(fields, "emergency"), Bit(fields, "opening"), fields["decision"],
++            Float(fields, "bot_gap"), Float(fields, "team_gap"), botOpening.Value, botOpening.Limit,
++            teamOpening.Value, teamOpening.Limit, smokeOpening.Value, smokeOpening.Limit,
++            Int(fields, "bot_flash"), Int(fields, "bot_smoke"), Int(fields, "bot_he"), Int(fields, "bot_molotov"));
++    }
++
++    private static (int Value, int Limit) ParseRatio(string value, string key)
++    {
++        string[] parts = value.Split('/');
++        if (parts.Length != 2 || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out int current)
++            || !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out int limit))
++            throw new FormatException($"Invalid ratio field '{key}'.");
++        return (current, limit);
++    }
++
++    private static float Float(Dictionary<string, string> f, string key) =>
++        float.TryParse(f[key], NumberStyles.Float, CultureInfo.InvariantCulture, out float value) && float.IsFinite(value)
++            ? value : throw new FormatException($"Invalid float field '{key}'.");
++    private static int Int(Dictionary<string, string> f, string key) =>
++        int.TryParse(f[key], NumberStyles.Integer, CultureInfo.InvariantCulture, out int value)
++            ? value : throw new FormatException($"Invalid integer field '{key}'.");
++    private static uint UInt(Dictionary<string, string> f, string key) =>
++        uint.TryParse(f[key], NumberStyles.None, CultureInfo.InvariantCulture, out uint value)
++            ? value : throw new FormatException($"Invalid unsigned field '{key}'.");
++    private static int Bit(Dictionary<string, string> f, string key)
++    {
++        int value = Int(f, key);
++        return value is 0 or 1 ? value : throw new FormatException($"Field '{key}' must be 0 or 1.");
++    }
++}
++
++internal static class NadeAuditAnalyzer
++{
++    internal static int Analyze(string inputPath, string outputDirectory)
++    {
++        Directory.CreateDirectory(outputDirectory);
++        var records = new List<(int Line, string Raw, NadeAuditRecord Record)>();
++        var modeByRound = new Dictionary<int, string>();
++        string? currentMode = null;
++        int lineNumber = 0;
++        foreach (string line in File.ReadLines(inputPath))
++        {
++            lineNumber++;
++            string lower = line.ToLowerInvariant();
++            foreach (string mode in new[] { "normal", "more", "max" })
++                if (lower.Contains($"bot_nades set to {mode}", StringComparison.Ordinal)) currentMode = mode;
++            if (!line.Contains(NadeAuditRecord.Prefix, StringComparison.Ordinal)) continue;
++            try
++            {
++                var record = NadeAuditRecord.Parse(line);
++                records.Add((lineNumber, line, record));
++                if (currentMode != null)
++                {
++                    if (!modeByRound.TryGetValue(record.Round, out string? existing)) modeByRound[record.Round] = currentMode;
++                    else if (existing != currentMode) modeByRound[record.Round] = "mixed";
++                }
++            }
++            catch (Exception ex) { throw new FormatException($"Line {lineNumber}: {ex.Message}\n{line}", ex); }
++        }
++        if (records.Count == 0) throw new FormatException("No [NadeAudit] records found.");
++
++        var violations = new List<string>();
++        foreach (var group in records.Where(x => x.Record.Emergency == 0).GroupBy(x => (x.Record.Round, x.Record.Bot)))
++            CheckGaps(group.OrderBy(x => x.Record.Time).ToList(), 5f, "bot", violations);
++        foreach (var group in records.Where(x => x.Record.Emergency == 0).GroupBy(x => (x.Record.Round, x.Record.Team)))
++            CheckGaps(group.OrderBy(x => x.Record.Time).ToList(), 0.5f, "team", violations);
++
++        var opening = records.Where(x => x.Record.Emergency == 0 && x.Record.FreezeElapsed >= 0f && x.Record.FreezeElapsed < 15f).ToList();
++        foreach (var g in opening.GroupBy(x => (x.Record.Round, x.Record.Bot)).Where(g => g.Count() > 1)) AddGroupViolation("opening bot > 1", g, violations);
++        foreach (var g in opening.GroupBy(x => (x.Record.Round, x.Record.Team)).Where(g => g.Count() > g.Min(x => x.Record.TeamOpeningLimit))) AddGroupViolation("opening team exceeds limit", g, violations);
++        foreach (var g in opening.Where(x => x.Record.Type == "smoke").GroupBy(x => (x.Record.Round, x.Record.Team)).Where(g => g.Count() > g.Min(x => x.Record.TeamOpeningSmokeLimit))) AddGroupViolation("opening smoke exceeds limit", g, violations);
++
++        foreach (var g in records.GroupBy(x => (x.Record.Round, x.Record.Bot)))
++        {
++            CheckHard(g, "flash", 2, violations); CheckHard(g, "smoke", 1, violations);
++            CheckHard(g, "he", 1, violations); CheckHard(g, "molotov", 1, violations);
++        }
++
++        var normalPlannedSmokes = records.Where(x => modeByRound.TryGetValue(x.Record.Round, out string? mode)
++            && mode == "normal" && x.Record.Reason == nameof(ThrowReason.PlannedReplay) && x.Record.Type == "smoke");
++        foreach (var g in normalPlannedSmokes.GroupBy(x => (x.Record.Round, x.Record.Team)).Where(g => g.Count() > NadePacingPolicy.NormalPlannedSmokeCapPerTeam))
++            AddGroupViolation("normal planned smoke team > 1", g, violations);
++
++        string csvPath = Path.Combine(outputDirectory, "nade-audit-summary.csv");
++        using (var csv = new StreamWriter(csvPath, false))
++        {
++            csv.WriteLine("category,key,count");
++            foreach (var g in records.GroupBy(x => x.Record.Type).OrderBy(g => g.Key)) csv.WriteLine($"type,{g.Key},{g.Count()}");
++            foreach (var g in records.GroupBy(x => x.Record.Round).OrderBy(g => g.Key)) csv.WriteLine($"round,{g.Key},{g.Count()}");
++            foreach (var g in records.GroupBy(x => x.Record.Decision).OrderBy(g => g.Key)) csv.WriteLine($"decision,{g.Key},{g.Count()}");
++        }
++        string txtPath = Path.Combine(outputDirectory, "nade-audit-summary.txt");
++        using (var txt = new StreamWriter(txtPath, false))
++        {
++            txt.WriteLine($"records={records.Count}");
++            foreach (var g in records.GroupBy(x => x.Record.Type).OrderBy(g => g.Key)) txt.WriteLine($"type.{g.Key}={g.Count()}");
++            foreach (var g in records.GroupBy(x => x.Record.Round).OrderBy(g => g.Key)) txt.WriteLine($"round.{g.Key}={g.Count()}");
++            foreach (var g in records.GroupBy(x => x.Record.Decision).OrderBy(g => g.Key)) txt.WriteLine($"decision.{g.Key}={g.Count()}");
++            txt.WriteLine($"violations={violations.Count}");
++            foreach (string violation in violations) txt.WriteLine(violation);
++            txt.WriteLine(violations.Count == 0 ? "RESULT=PASS" : "RESULT=FAIL");
++        }
++        return violations.Count == 0 ? 0 : 2;
++    }
++
++    private static void CheckGaps(List<(int Line, string Raw, NadeAuditRecord Record)> rows, float minimum, string kind, List<string> violations)
++    {
++        for (int i = 1; i < rows.Count; i++)
++            if (rows[i].Record.Time - rows[i - 1].Record.Time + 0.0001f < minimum)
++                violations.Add($"{kind}_gap line={rows[i].Line} raw={rows[i].Raw}");
++    }
++    private static void CheckHard(IEnumerable<(int Line, string Raw, NadeAuditRecord Record)> rows, string type, int limit, List<string> violations)
++    {
++        var matching = rows.Where(x => x.Record.Type == type).ToList();
++        if (matching.Count > limit) AddGroupViolation($"hard {type} > {limit}", matching, violations);
++    }
++    private static void AddGroupViolation(string name, IEnumerable<(int Line, string Raw, NadeAuditRecord Record)> rows, List<string> violations)
++    {
++        foreach (var row in rows) violations.Add($"{name} line={row.Line} raw={row.Raw}");
++    }
++}
+diff --git a/addons/counterstrikesharp/plugins/NadeSystem/NadePacingPolicy.cs b/addons/counterstrikesharp/plugins/NadeSystem/NadePacingPolicy.cs
+new file mode 100644
+index 0000000..038b379
+--- /dev/null
++++ b/addons/counterstrikesharp/plugins/NadeSystem/NadePacingPolicy.cs
+@@ -0,0 +1,339 @@
++using System;
++using System.Collections.Generic;
++
++internal static class NadeDecisionPolicy
++{
++    internal const float EffectiveHERadius = 450f;
++    internal const float EffectiveMolotovRadius = 450f;
++    internal const float FlashFallbackRadius = 1600f;
++    internal const float OpeningOffensivePrioritySeconds = 8f;
++
++    internal static int Score(string type, float freezeElapsed) => type switch
++    {
++        "molotov" => 400,
++        "he" => 300,
++        "flash" => 200,
++        "smoke" => 100,
++        _ => 0,
++    } + (freezeElapsed >= 0f && freezeElapsed < OpeningOffensivePrioritySeconds && type != "smoke" ? 10 : 0);
++
++    internal static bool IsEnemyInEffectiveRadius(string type, float distance) =>
++        distance <= (type == "he" ? EffectiveHERadius : EffectiveMolotovRadius);
++
++    internal static bool CanUseFlashFallback(string mode, bool hasTeamTag, bool inSchedule,
++        float nearestEnemyDistance, double roll) => hasTeamTag && inSchedule
++        && nearestEnemyDistance <= FlashFallbackRadius
++        && roll < FlashFallbackProbability(mode);
++
++    internal static float NoInfoProbability(string mode, string type) => mode switch
++    {
++        "normal" => 1f,
++        "more" => 1f,
++        _ => 1f,
++    };
++
++    internal static float FlashFallbackProbability(string mode) => mode switch
++    {
++        "normal" => 0.45f,
++        "more" => 0.70f,
++        _ => 1f,
++    };
++}
++
++internal enum ThrowReason
++{
++    PlannedReplay,
++    Retaliation,
++    PlantCover,
++    DefuseCover,
++    ExtinguishFire,
++}
++
++internal sealed class ThrowReservation
++{
++    public uint BotIndex { get; }
++    public int TeamNum { get; }
++    public string GrenadeType { get; }
++    public ThrowReason Reason { get; }
++    public bool IsNonEmergency { get; }
++    public bool IsOpening { get; }
++    public int OpeningTeamLimit { get; }
++    public bool UsesNormalPlannedSmokeCap { get; }
++
++    public ThrowReservation(uint botIndex, int teamNum, string grenadeType,
++        ThrowReason reason, bool isNonEmergency, bool isOpening, int openingTeamLimit,
++        bool usesNormalPlannedSmokeCap)
++    {
++        BotIndex = botIndex;
++        TeamNum = teamNum;
++        GrenadeType = grenadeType;
++        Reason = reason;
++        IsNonEmergency = isNonEmergency;
++        IsOpening = isOpening;
++        OpeningTeamLimit = openingTeamLimit;
++        UsesNormalPlannedSmokeCap = usesNormalPlannedSmokeCap;
++    }
++}
++
++internal readonly record struct PacingAuditSnapshot(
++    float BotGap, float TeamGap, int BotOpening, int TeamOpening, int TeamOpeningSmoke,
++    int BotFlash, int BotSmoke, int BotHE, int BotMolotov, int OpeningTeamLimit);
++
++internal sealed class NadePacingPolicy
++{
++    internal const float OpeningWindowSeconds = 15f;
++    internal const int OpeningThrowsPerBot = 1;
++    internal const int OpeningSmokeCap = 1;
++    internal const int OpeningOffensiveCap = 3;
++    internal const float PerBotThrowGapSeconds = 5f;
++    internal const float PerTeamThrowGapSeconds = 0.5f;
++    internal const int NormalPlannedSmokeCapPerTeam = 1;
++
++    private sealed class GrenadeCounts
++    {
++        public int Flash;
++        public int Smoke;
++        public int HE;
++        public int Molotov;
++
++        public GrenadeCounts Clone() => new()
++        {
++            Flash = Flash,
++            Smoke = Smoke,
++            HE = HE,
++            Molotov = Molotov,
++        };
++    }
++
++    private readonly Dictionary<uint, GrenadeCounts> _committedByBot = new();
++    private readonly Dictionary<uint, GrenadeCounts> _pendingByBot = new();
++    private readonly Dictionary<uint, float> _lastBotThrowAt = new();
++    private readonly Dictionary<int, float> _lastTeamThrowAt = new();
++    private readonly Dictionary<uint, int> _openingByBot = new();
++    private readonly Dictionary<int, int> _openingByTeam = new();
++    private readonly Dictionary<int, int> _openingSmokeByTeam = new();
++    private readonly Dictionary<int, int> _openingOffensiveByTeam = new();
++    private readonly Dictionary<uint, int> _pendingOpeningByBot = new();
++    private readonly Dictionary<int, int> _pendingOpeningByTeam = new();
++    private readonly Dictionary<int, int> _pendingOpeningSmokeByTeam = new();
++    private readonly Dictionary<int, int> _pendingOpeningOffensiveByTeam = new();
++    private readonly Dictionary<int, int> _normalPlannedSmokeByTeam = new();
++    private readonly Dictionary<int, int> _pendingNormalPlannedSmokeByTeam = new();
++    private readonly HashSet<uint> _pendingNonEmergencyBots = new();
++    private readonly HashSet<int> _pendingNonEmergencyTeams = new();
++
++    internal static string? NormalizeGrenadeType(string grenadeType) => grenadeType.ToLowerInvariant() switch
++    {
++        "flash" => "flash",
++        "smoke" => "smoke",
++        "he" => "he",
++        "molotov" or "incgrenade" => "molotov",
++        _ => null,
++    };
++
++    internal ThrowReservation? TryBegin(uint botIndex, int teamNum, string grenadeType,
++        ThrowReason reason, float now, float freezeEndTime, int aliveBotCount, string mode = "normal")
++    {
++        string? normalized = NormalizeGrenadeType(grenadeType);
++        if (normalized == null) return null;
++        bool isNonEmergency = reason is not ThrowReason.DefuseCover and not ThrowReason.ExtinguishFire;
++        bool isOpening = freezeEndTime > 0f
++            && now >= freezeEndTime
++            && now - freezeEndTime < OpeningWindowSeconds;
++        int openingBudget = Math.Min(Math.Max(aliveBotCount, 0), 5);
++        if (!CanBegin(botIndex, teamNum, normalized, reason, now, freezeEndTime, aliveBotCount, mode)) return null;
++        bool usesNormalPlannedSmokeCap = mode == "normal" && reason == ThrowReason.PlannedReplay && normalized == "smoke";
++        if (usesNormalPlannedSmokeCap) AddValue(_pendingNormalPlannedSmokeByTeam, teamNum, 1);
++        if (isNonEmergency)
++        {
++            _pendingNonEmergencyBots.Add(botIndex);
++            _pendingNonEmergencyTeams.Add(teamNum);
++            if (isOpening)
++            {
++                AddValue(_pendingOpeningByBot, botIndex, 1);
++                if (reason != ThrowReason.PlantCover)
++                    AddValue(_pendingOpeningByTeam, teamNum, 1);
++                if (reason != ThrowReason.PlantCover)
++                    AddOpeningTypePending(teamNum, normalized, 1);
++            }
++        }
++
++        AddCount(_pendingByBot, botIndex, normalized);
++        return new ThrowReservation(botIndex, teamNum, normalized, reason, isNonEmergency, isOpening, openingBudget, usesNormalPlannedSmokeCap);
++    }
++
++    internal bool CanBegin(uint botIndex, int teamNum, string grenadeType, ThrowReason reason,
++        float now, float freezeEndTime, int aliveBotCount, string mode = "normal")
++    {
++        string? normalized = NormalizeGrenadeType(grenadeType);
++        if (normalized == null || !CanReserveHardLimit(botIndex, normalized)) return false;
++        bool usesNormalPlannedSmokeCap = mode == "normal" && reason == ThrowReason.PlannedReplay && normalized == "smoke";
++        if (usesNormalPlannedSmokeCap
++            && GetValue(_normalPlannedSmokeByTeam, teamNum) + GetValue(_pendingNormalPlannedSmokeByTeam, teamNum) >= NormalPlannedSmokeCapPerTeam)
++            return false;
++        bool isNonEmergency = reason is not ThrowReason.DefuseCover and not ThrowReason.ExtinguishFire;
++        if (!isNonEmergency) return true;
++        if (_pendingNonEmergencyBots.Contains(botIndex) || _pendingNonEmergencyTeams.Contains(teamNum)) return false;
++        if (_lastBotThrowAt.TryGetValue(botIndex, out float lastBot) && now - lastBot < PerBotThrowGapSeconds) return false;
++        if (_lastTeamThrowAt.TryGetValue(teamNum, out float lastTeam) && now - lastTeam < PerTeamThrowGapSeconds) return false;
++        bool isOpening = freezeEndTime > 0f && now >= freezeEndTime && now - freezeEndTime < OpeningWindowSeconds;
++        if (!isOpening) return true;
++        int openingBudget = Math.Min(Math.Max(aliveBotCount, 0), 5);
++        if (GetValue(_openingByBot, botIndex) + GetValue(_pendingOpeningByBot, botIndex) >= OpeningThrowsPerBot) return false;
++        if (reason != ThrowReason.PlantCover
++            && GetValue(_openingByTeam, teamNum) + GetValue(_pendingOpeningByTeam, teamNum) >= openingBudget) return false;
++        return reason == ThrowReason.PlantCover || CanBeginOpeningType(teamNum, normalized, true);
++    }
++
++    internal bool CanBeginOpeningType(int teamNum, string grenadeType, bool isOpening)
++    {
++        if (!isOpening) return true;
++        if (grenadeType == "smoke")
++            return GetValue(_openingSmokeByTeam, teamNum) + GetValue(_pendingOpeningSmokeByTeam, teamNum) < OpeningSmokeCap;
++        return GetValue(_openingOffensiveByTeam, teamNum) + GetValue(_pendingOpeningOffensiveByTeam, teamNum) < OpeningOffensiveCap;
++    }
++
++    internal PacingAuditSnapshot Commit(ThrowReservation reservation, float now)
++    {
++        float botGap = reservation.IsNonEmergency && _lastBotThrowAt.TryGetValue(reservation.BotIndex, out float lastBot)
++            ? now - lastBot : -1f;
++        float teamGap = reservation.IsNonEmergency && _lastTeamThrowAt.TryGetValue(reservation.TeamNum, out float lastTeam)
++            ? now - lastTeam : -1f;
++        RemoveCount(_pendingByBot, reservation.BotIndex, reservation.GrenadeType);
++        AddCount(_committedByBot, reservation.BotIndex, reservation.GrenadeType);
++        if (reservation.UsesNormalPlannedSmokeCap)
++        {
++            RemoveValue(_pendingNormalPlannedSmokeByTeam, reservation.TeamNum, 1);
++            AddValue(_normalPlannedSmokeByTeam, reservation.TeamNum, 1);
++        }
++        if (!reservation.IsNonEmergency) return Snapshot(reservation, botGap, teamGap);
++
++        _pendingNonEmergencyBots.Remove(reservation.BotIndex);
++        _pendingNonEmergencyTeams.Remove(reservation.TeamNum);
++        _lastBotThrowAt[reservation.BotIndex] = now;
++        _lastTeamThrowAt[reservation.TeamNum] = now;
++        if (!reservation.IsOpening) return Snapshot(reservation, botGap, teamGap);
++
++        AddValue(_openingByBot, reservation.BotIndex, 1);
++        if (reservation.Reason != ThrowReason.PlantCover)
++            AddValue(_openingByTeam, reservation.TeamNum, 1);
++        RemoveValue(_pendingOpeningByBot, reservation.BotIndex, 1);
++        if (reservation.Reason != ThrowReason.PlantCover)
++            RemoveValue(_pendingOpeningByTeam, reservation.TeamNum, 1);
++        if (reservation.Reason != ThrowReason.PlantCover)
++            AddOpeningTypeCommitted(reservation.TeamNum, reservation.GrenadeType, 1);
++        if (reservation.Reason != ThrowReason.PlantCover)
++            AddOpeningTypePending(reservation.TeamNum, reservation.GrenadeType, -1);
++        return Snapshot(reservation, botGap, teamGap);
++    }
++
++    internal void Cancel(ThrowReservation reservation)
++    {
++        RemoveCount(_pendingByBot, reservation.BotIndex, reservation.GrenadeType);
++        if (reservation.UsesNormalPlannedSmokeCap)
++            RemoveValue(_pendingNormalPlannedSmokeByTeam, reservation.TeamNum, 1);
++        if (!reservation.IsNonEmergency) return;
++
++        _pendingNonEmergencyBots.Remove(reservation.BotIndex);
++        _pendingNonEmergencyTeams.Remove(reservation.TeamNum);
++        if (!reservation.IsOpening) return;
++        RemoveValue(_pendingOpeningByBot, reservation.BotIndex, 1);
++        if (reservation.Reason != ThrowReason.PlantCover)
++            RemoveValue(_pendingOpeningByTeam, reservation.TeamNum, 1);
++        if (reservation.Reason != ThrowReason.PlantCover)
++            AddOpeningTypePending(reservation.TeamNum, reservation.GrenadeType, -1);
++    }
++
++    internal void Reset()
++    {
++        _committedByBot.Clear();
++        _pendingByBot.Clear();
++        _lastBotThrowAt.Clear();
++        _lastTeamThrowAt.Clear();
++        _openingByBot.Clear();
++        _openingByTeam.Clear();
++        _openingSmokeByTeam.Clear();
++        _openingOffensiveByTeam.Clear();
++        _pendingOpeningByBot.Clear();
++        _pendingOpeningByTeam.Clear();
++        _pendingOpeningSmokeByTeam.Clear();
++        _pendingOpeningOffensiveByTeam.Clear();
++        _normalPlannedSmokeByTeam.Clear();
++        _pendingNormalPlannedSmokeByTeam.Clear();
++        _pendingNonEmergencyBots.Clear();
++        _pendingNonEmergencyTeams.Clear();
++    }
++
++    private PacingAuditSnapshot Snapshot(ThrowReservation reservation, float botGap, float teamGap) => new(
++        botGap, teamGap,
++        GetValue(_openingByBot, reservation.BotIndex), GetValue(_openingByTeam, reservation.TeamNum),
++        GetValue(_openingSmokeByTeam, reservation.TeamNum),
++        GetCount(_committedByBot, reservation.BotIndex, "flash"), GetCount(_committedByBot, reservation.BotIndex, "smoke"),
++        GetCount(_committedByBot, reservation.BotIndex, "he"), GetCount(_committedByBot, reservation.BotIndex, "molotov"),
++        reservation.OpeningTeamLimit);
++
++    private void AddOpeningTypeCommitted(int teamNum, string type, int amount)
++    {
++        if (type == "smoke") AddValue(_openingSmokeByTeam, teamNum, amount);
++        else AddValue(_openingOffensiveByTeam, teamNum, amount);
++    }
++
++    private void AddOpeningTypePending(int teamNum, string type, int amount)
++    {
++        if (type == "smoke") AddValue(_pendingOpeningSmokeByTeam, teamNum, amount);
++        else AddValue(_pendingOpeningOffensiveByTeam, teamNum, amount);
++    }
++
++    private bool CanReserveHardLimit(uint botIndex, string grenadeType)
++    {
++        int count = GetCount(_committedByBot, botIndex, grenadeType)
++            + GetCount(_pendingByBot, botIndex, grenadeType);
++        return count < (grenadeType == "flash" ? 2 : 1);
++    }
++
++    private static int GetCount(Dictionary<uint, GrenadeCounts> map, uint key, string type)
++    {
++        if (!map.TryGetValue(key, out var counts)) return 0;
++        return type switch
++        {
++            "flash" => counts.Flash,
++            "smoke" => counts.Smoke,
++            "he" => counts.HE,
++            _ => counts.Molotov,
++        };
++    }
++
++    private static void AddCount(Dictionary<uint, GrenadeCounts> map, uint key, string type)
++    {
++        if (!map.TryGetValue(key, out var counts))
++            map[key] = counts = new GrenadeCounts();
++        switch (type)
++        {
++            case "flash": counts.Flash++; break;
++            case "smoke": counts.Smoke++; break;
++            case "he": counts.HE++; break;
++            default: counts.Molotov++; break;
++        }
++    }
++
++    private static void RemoveCount(Dictionary<uint, GrenadeCounts> map, uint key, string type)
++    {
++        if (!map.TryGetValue(key, out var counts)) return;
++        switch (type)
++        {
++            case "flash": counts.Flash--; break;
++            case "smoke": counts.Smoke--; break;
++            case "he": counts.HE--; break;
++            default: counts.Molotov--; break;
++        }
++        if (counts.Flash <= 0 && counts.Smoke <= 0 && counts.HE <= 0 && counts.Molotov <= 0)
++            map.Remove(key);
++    }
++
++    private static int GetValue(Dictionary<uint, int> map, uint key) => map.TryGetValue(key, out int value) ? value : 0;
++    private static int GetValue(Dictionary<int, int> map, int key) => map.TryGetValue(key, out int value) ? value : 0;
++    private static void AddValue(Dictionary<uint, int> map, uint key, int amount) => map[key] = GetValue(map, key) + amount;
++    private static void AddValue(Dictionary<int, int> map, int key, int amount) => map[key] = GetValue(map, key) + amount;
++    private static void RemoveValue(Dictionary<uint, int> map, uint key, int amount) { if (map.TryGetValue(key, out int value) && (value -= amount) > 0) map[key] = value; else map.Remove(key); }
++    private static void RemoveValue(Dictionary<int, int> map, int key, int amount) { if (map.TryGetValue(key, out int value) && (value -= amount) > 0) map[key] = value; else map.Remove(key); }
++}
+diff --git a/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.cs b/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.cs
+index 485da5a..4cf5f8f 100644
+--- a/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.cs
++++ b/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.cs
+@@ -9,6 +9,7 @@ using CounterStrikeSharp.API.Modules.Timers;
+ using CounterStrikeSharp.API.Modules.Utils;
+ using System;
+ using System.Collections.Generic;
++using System.Globalization;
+ using System.IO;
+ using System.Linq;
+ using System.Runtime.InteropServices;
+@@ -94,6 +95,8 @@ public class RoundCounter
+     public int Molotov { get; set; }
+ }
+ 
++internal sealed record PlannedCandidate(GrenadeData Grenade, string Decision, int Score);
++
+ // ═══════════════════════════════════════════════════════════════
+ //  Plugin
+ // ═══════════════════════════════════════════════════════════════
+@@ -101,7 +104,7 @@ public class RoundCounter
+ public class NadeSystemPlugin : BasePlugin
+ {
+     public override string ModuleName    => "NadeSystem";
+-    public override string ModuleVersion => "1.1.6";
++    public override string ModuleVersion => "1.1.6-botlimit.3";
+     public override string ModuleAuthor  => "ed0ard";
+ 
+     // grenades folder lives inside the plugin directory
+@@ -117,6 +120,7 @@ public class NadeSystemPlugin : BasePlugin
+     private int                   _tick              = 0;
+     private bool                  _roundOver         = false;
+     private float                 _freezeEndTime     = 0f;
++    private int                   _roundSerial       = 0;
+     private Dictionary<uint, int> _roundSpendPerBot  = new();
+     private HashSet<uint>         _poorBots          = new();
+     // Information System
+@@ -132,14 +136,13 @@ public class NadeSystemPlugin : BasePlugin
+     private bool _plantSmokeUsed     = false;
+     // key = TeamNum (2=T, 3=CT)
+     private Dictionary<int, RoundCounter> _roundCountByTeam = new();
++    private readonly NadePacingPolicy _pacingPolicy = new();
+     // key = bot Id, value = first continuous damage time
+     private Dictionary<uint, float> _botMolotovDmgStart = new();
+     // team-side cooldown: key = teamNum (2=T,3=CT), value = expiry time
+     private Dictionary<int, float>  _molotovEscapeSmokeCooldown = new();
+     // Normal and More modes
+     private Dictionary<int, float> _retaliationCooldown      = new();
+-    // Normal Mode
+-    private Dictionary<int,  int>    _earlySmokeCountByTeam   = new();
+     private Dictionary<uint, HashSet<string>> _botInFlashZone = new();
+     // Normal Mode: post-throw probability window for flash
+     // key = botIndex, value = (windowExpiresAt, blindRatio)
+@@ -296,7 +299,9 @@ public class NadeSystemPlugin : BasePlugin
+             LoadDb();
+             _cooldowns.Clear();
+             _roundCountByTeam.Clear();
++            _pacingPolicy.Reset();
+             _replayBots.Clear();
++            _roundSerial = 0;
+         });
+         
+         AddCommand("bot_nades", "Control bots' nade throw mode (off/normal/more/max)", CmdBotNades);
+@@ -395,6 +400,7 @@ public class NadeSystemPlugin : BasePlugin
+             var pos = pawn.AbsOrigin;
+             if (pos == null) continue;
+ 
++            var candidates = new List<PlannedCandidate>();
+             foreach (var g in mapNades)
+             {
+                 var gtype = g.GrenadeType; // lowercase since LoadDb
+@@ -409,8 +415,7 @@ public class NadeSystemPlugin : BasePlugin
+                     if (IsOnCooldown(g.Id)) continue;
+                     if (dx * dx + dy * dy > 200f * 200f) continue;
+                     if (MathF.Abs(dz) > 85f) continue;
+-                    RegisterCooldown(g.Id, "decoy");
+-                    SpawnProjectile(bot, g);
++                    SpawnProjectile(bot, g, success => { if (success) RegisterCooldown(g.Id, "decoy"); });
+                     // No _replayBots, no IncrementCount, no money deduction
+                     break;
+                 }
+@@ -445,83 +450,20 @@ public class NadeSystemPlugin : BasePlugin
+                     : (gtype == "smoke");
+                 if (doDirectionCheck && !FacesThrowDirection(pawn, g)) continue;
+ 
+-                if (_botNadesMode == "max")
+-                {
+-                    if (gtype == "flash" && CanBlindAnyEnemy(bot, g, allControllers).Count == 0) continue;
+-                    // No HE/molotov within 1s of this bot firing.
+-                    if (gtype is "he" or "molotov" && FiredRecently(bot, 1f)) continue;
+-                    if (gtype is "he" or "molotov")
+-                    {
+-                        float lx = g.LandingPosition.X, ly = g.LandingPosition.Y, lz = g.LandingPosition.Z;
+-                        bool enemyIn400 = allControllers
+-                            .Any(p =>
+-                            {
+-                                if (!p.IsValid || (int)p.TeamNum == bot.TeamNum) return false;
+-                                var ep = GetActiveLivePawn(p)?.AbsOrigin;
+-                                if (ep == null) return false;
+-                                float ddx = ep.X - lx, ddy = ep.Y - ly, ddz = ep.Z - lz;
+-                                return ddx*ddx + ddy*ddy + ddz*ddz <= 300f * 300f;
+-                            });
+-                        // Throw directly if any enemy is in range
+-                        if (!enemyIn400) continue;
+-
+-                        // Don't throw molotov into smoke
+-                        if (gtype == "molotov")
+-                        {
+-                            float now = Server.CurrentTime;
+-                            bool intoSmoke = _cooldowns.Any(cd =>
+-                            {
+-                                if (cd.ExpiresAt <= now) return false;
+-                                var s = _mapNades.FirstOrDefault(d => d.Id == cd.GrenadeId
+-                                    && string.Equals(d.GrenadeType, "smoke", StringComparison.OrdinalIgnoreCase));
+-                                if (s == null) return false;
+-                                float ddx = lx - s.LandingPosition.X;
+-                                float ddy = ly - s.LandingPosition.Y;
+-                                float ddz = lz - s.LandingPosition.Z;
+-                                return ddx*ddx + ddy*ddy + ddz*ddz < 200f * 200f;
+-                            });
+-                            if (intoSmoke) continue;
+-                        }
+-                    }
+-                    // smoke: no additional check beyond zone/overlap/direction above
+-                    TryReplay(bot, g, allControllers);
+-                }
+-                else //normal mode/ more mode
+-                {
+-                    if (gtype == "flash")
+-                    {
+-                        uint bidx = (uint)bot.Index;
+-                        if (!_botInFlashZone.TryGetValue(bidx, out var inZoneSet))
+-                        {
+-                            inZoneSet = new HashSet<string>();
+-                            _botInFlashZone[bidx] = inZoneSet;
+-                        }
+-                        // Already inside this zone, skip
+-                        if (inZoneSet.Contains(g.Id)) continue;
+-                        // Entering this zone, mark and allow replay
+-                        inZoneSet.Add(g.Id);
+-                        // 12s ratio window check
+-                        if (_botFlashRatioWindow.TryGetValue(bidx, out var window)
+-                            && Server.CurrentTime < window.ExpiresAt)
+-                        {
+-                            // within 12s window: apply ratio threshold
+-                            if (window.Ratio < 1f && Random.Shared.NextDouble() >= window.Ratio) break;
+-                        }
+-                        // Passed — compute new ratio and reset window after TryConditionalReplay succeeds
+-                        // We pass ratio computation into TryConditionalReplay via a pre-check here
+-                        var (blindable, total) = CountBlindableEnemies(bot, g, allControllers);
+-                        float ratio = GetFlashRatioThreshold(blindable, total);
+-                        if (ratio <= 0f) break; // 0% → never throw
+-                        _botFlashRatioWindow[bidx] = (Server.CurrentTime + 12f, ratio);
+-
+-                        TryConditionalReplay(bot, g, allControllers);
+-                        break;
+-                    }
+-
+-                    TryConditionalReplay(bot, g, allControllers);
+-                }
+-                break; // one grenade trigger per bot per scan
++                int aliveBotCount = allControllers.Count(p => p.IsValid && p.IsBot && p.PawnIsAlive
++                    && (int)p.TeamNum == bot.TeamNum);
++                if (!_pacingPolicy.CanBegin((uint)bot.Index, bot.TeamNum, gtype, ThrowReason.PlannedReplay,
++                    Server.CurrentTime, _freezeEndTime, aliveBotCount, _botNadesMode)) continue;
++                if (!PassesSituationalCheck(bot, pawn, g, gtype, allControllers, out string decision)) continue;
++                float elapsed = _freezeEndTime > 0f ? Server.CurrentTime - _freezeEndTime : -1f;
++                candidates.Add(new PlannedCandidate(g, decision, NadeDecisionPolicy.Score(gtype, elapsed)));
+             }
++            var selected = candidates
++                .OrderByDescending(c => c.Score)
++                .ThenBy(c => c.Grenade.Id, StringComparer.Ordinal)
++                .FirstOrDefault();
++            if (selected != null)
++                TryReplay(bot, selected.Grenade, allControllers, selected.Decision);
+             // Clear the flash zone marker for this bot
+             if (_botInFlashZone.TryGetValue((uint)bot.Index, out var currentInZone))
+             {
+@@ -796,7 +738,8 @@ public class NadeSystemPlugin : BasePlugin
+     //  Grenade Replay
+     // ═══════════════════════════════════════════════════════════
+ 
+-    private void TryReplay(CCSPlayerController bot, GrenadeData g, List<CCSPlayerController> allControllers)
++    private void TryReplay(CCSPlayerController bot, GrenadeData g, List<CCSPlayerController> allControllers,
++        string decision = "special")
+     {
+         if (_botNadesMode == "off") return;
+         // In case the bot has been taken over
+@@ -866,32 +809,60 @@ public class NadeSystemPlugin : BasePlugin
+         // Expensure Limit
+         bool deductMoney = alreadySpent < spendCap;
+ 
+-        // ── All checks passed — commit ─────────────────────────────────
+-        if (deductMoney)
+-        {
+-            money.Account -= cost;
+-            Utilities.SetStateChanged(bot, "CCSPlayerController", "m_pInGameMoneyServices");
+-            _roundSpendPerBot[botIdx] = alreadySpent + cost;
+-        }
++        var reservation = _pacingPolicy.TryBegin(
++            botIdx, bot.TeamNum, gtype, ThrowReason.PlannedReplay,
++            Server.CurrentTime, _freezeEndTime,
++            allControllers.Count(p => p.IsValid && p.IsBot && p.PawnIsAlive && (int)p.TeamNum == bot.TeamNum), _botNadesMode);
++        if (reservation == null) return;
+ 
+-        _replayBots.Add((uint)bot.Index);
+-        RegisterCooldown(g.Id, gtype);
+-        IncrementCount(gtype, bot.TeamNum);
+-        // Normal Mode early smoke limit
+-        if (_botNadesMode == "normal" && gtype == "smoke"
+-            && _freezeEndTime > 0f && Server.CurrentTime - _freezeEndTime < 5f)
++        _replayBots.Add(botIdx);
++        SpawnProjectile(bot, g, success =>
+         {
+-            _earlySmokeCountByTeam.TryGetValue(bot.TeamNum, out int cnt);
+-            _earlySmokeCountByTeam[bot.TeamNum] = cnt + 1;
+-        }
+-        SpawnProjectile(bot, g);
++            if (!success)
++            {
++                _pacingPolicy.Cancel(reservation);
++                _replayBots.Remove(botIdx);
++                return;
++            }
++            var audit = _pacingPolicy.Commit(reservation, Server.CurrentTime);
++            if (deductMoney)
++            {
++                money.Account -= cost;
++                Utilities.SetStateChanged(bot, "CCSPlayerController", "m_pInGameMoneyServices");
++                _roundSpendPerBot[botIdx] = alreadySpent + cost;
++            }
++            RegisterCooldown(g.Id, gtype);
++            IncrementCount(gtype, bot.TeamNum);
++            WriteNadeAudit(reservation, audit, decision);
++            AddTimer(1f, () => _replayBots.Remove(botIdx));
++        });
++    }
+ 
+-        // Allow bot to throw another grenade after this window
+-        AddTimer(1f, () => _replayBots.Remove((uint)bot.Index));
++    private void WriteNadeAudit(ThrowReservation reservation, PacingAuditSnapshot state, string decision)
++    {
++        float now = Server.CurrentTime;
++        float freezeElapsed = _freezeEndTime > 0f ? now - _freezeEndTime : -1f;
++        int emergency = reservation.IsNonEmergency ? 0 : 1;
++        var record = new NadeAuditRecord(
++            now, _roundSerial, freezeElapsed, reservation.TeamNum, reservation.BotIndex, reservation.GrenadeType,
++            reservation.Reason.ToString(), emergency, reservation.IsOpening ? 1 : 0, decision,
++            state.BotGap, state.TeamGap, state.BotOpening, NadePacingPolicy.OpeningThrowsPerBot,
++            state.TeamOpening, state.OpeningTeamLimit, state.TeamOpeningSmoke, NadePacingPolicy.OpeningSmokeCap,
++            state.BotFlash, state.BotSmoke, state.BotHE, state.BotMolotov);
++        Server.PrintToConsole(record.Format());
+     }
+ 
+-    private void SpawnProjectile(CCSPlayerController bot, GrenadeData g)
++    private void SpawnProjectile(CCSPlayerController bot, GrenadeData g, Action<bool> completed)
+     {
++        bool completionSent = false;
++        void Complete(bool success)
++        {
++            if (completionSent) return;
++            completionSent = true;
++            try { completed(success); }
++            catch (Exception ex) { Server.PrintToConsole($"[NadeSystem] throw commit error: {ex.Message}"); }
++        }
++
+         // ── Item definition indices (weapon_def_index) ────────────
+         // The native Create() functions require the item def index.
+         static ushort GetItemIndex(string t) => t switch
+@@ -927,6 +898,7 @@ public class NadeSystemPlugin : BasePlugin
+                 if (botPawn == null || !botPawn.IsValid)
+                 {
+                     Server.PrintToConsole("[NadeSystem] bot pawn invalid, skipping replay");
++                    Complete(false);
+                     return;
+                 }
+ 
+@@ -939,6 +911,7 @@ public class NadeSystemPlugin : BasePlugin
+                     if (flash == null)
+                     {
+                         Server.PrintToConsole("[NadeSystem] flash CreateEntityByName null");
++                        Complete(false);
+                         return;
+                     }
+                     flash.TeamNum             = teamNum;
+@@ -969,6 +942,7 @@ public class NadeSystemPlugin : BasePlugin
+                         $"bot=[{bot.PlayerName}] " +
+                         $"origin=({origin.X:F0},{origin.Y:F0},{origin.Z:F0}) " +
+                         $"vel=({velocity.X:F1},{velocity.Y:F1},{velocity.Z:F1})");
++                    Complete(true);
+                     return;
+                 }
+ 
+@@ -979,6 +953,7 @@ public class NadeSystemPlugin : BasePlugin
+                     if (decoy == null)
+                     {
+                         Server.PrintToConsole("[NadeSystem] decoy CreateEntityByName null");
++                        Complete(false);
+                         return;
+                     }
+                     decoy.TeamNum             = teamNum;
+@@ -1001,6 +976,7 @@ public class NadeSystemPlugin : BasePlugin
+                         $"[NadeSystem] Replayed [decoy] id={g.Id[..8]}... " +
+                         $"bot=[{bot.PlayerName}] " +
+                         $"origin=({origin.X:F0},{origin.Y:F0},{origin.Z:F0})");
++                    Complete(true);
+                     return;
+                 }
+ 
+@@ -1018,6 +994,7 @@ public class NadeSystemPlugin : BasePlugin
+                     if (smoke == null || !smoke.IsValid)
+                     {
+                         Server.PrintToConsole("[NadeSystem] smoke native Create returned null");
++                        Complete(false);
+                         return;
+                     }
+                     smoke.TeamNum             = teamNum;
+@@ -1029,6 +1006,7 @@ public class NadeSystemPlugin : BasePlugin
+                         $"bot=[{bot.PlayerName}] " +
+                         $"origin=({origin.X:F0},{origin.Y:F0},{origin.Z:F0}) " +
+                         $"vel=({velocity.X:F1},{velocity.Y:F1},{velocity.Z:F1})");
++                    Complete(true);
+                     return;
+                 }
+ 
+@@ -1045,6 +1023,7 @@ public class NadeSystemPlugin : BasePlugin
+                     if (he == null || !he.IsValid)
+                     {
+                         Server.PrintToConsole("[NadeSystem] HE native Create returned null");
++                        Complete(false);
+                         return;
+                     }
+                     he.TeamNum             = teamNum;
+@@ -1056,6 +1035,7 @@ public class NadeSystemPlugin : BasePlugin
+                         $"bot=[{bot.PlayerName}] " +
+                         $"origin=({origin.X:F0},{origin.Y:F0},{origin.Z:F0}) " +
+                         $"vel=({velocity.X:F1},{velocity.Y:F1},{velocity.Z:F1})");
++                    Complete(true);
+                     return;
+                 }
+ 
+@@ -1074,6 +1054,7 @@ public class NadeSystemPlugin : BasePlugin
+                     if (molotov == null || !molotov.IsValid)
+                     {
+                         Server.PrintToConsole("[NadeSystem] molotov native Create returned null");
++                        Complete(false);
+                         return;
+                     }
+                     molotov.TeamNum             = teamNum;
+@@ -1085,15 +1066,18 @@ public class NadeSystemPlugin : BasePlugin
+                         $"bot=[{bot.PlayerName}] " +
+                         $"origin=({origin.X:F0},{origin.Y:F0},{origin.Z:F0}) " +
+                         $"vel=({velocity.X:F1},{velocity.Y:F1},{velocity.Z:F1})");
++                    Complete(true);
+                     return;
+                 }
+ 
+                 Server.PrintToConsole(
+                     $"[NadeSystem] Unknown grenadeType '{g.GrenadeType}' for id {g.Id}");
++                Complete(false);
+             }
+             catch (Exception ex)
+             {
+                 Server.PrintToConsole($"[NadeSystem] SpawnProjectile error: {ex.Message}");
++                Complete(false);
+             }
+         });
+     }
+@@ -1197,9 +1181,11 @@ public class NadeSystemPlugin : BasePlugin
+ 
+     private HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
+     {
++        _roundSerial++;
+         _roundOver  = false;
+         _freezeEndTime = 0f;
+         _roundCountByTeam.Clear();
++        _pacingPolicy.Reset();
+         _cooldowns.Clear();
+         _replayBots.Clear();
+         _smokeCooldownBots.Clear();
+@@ -1208,7 +1194,6 @@ public class NadeSystemPlugin : BasePlugin
+         _defuseFlashUsed  = false;
+         _plantSmokeUsed   = false;
+         _botMolotovDmgStart.Clear();
+-        _earlySmokeCountByTeam.Clear();
+         _botInFlashZone.Clear();
+         _botFlashRatioWindow.Clear();
+         _botFlashImmunityUntil.Clear();
+@@ -1350,7 +1335,7 @@ public class NadeSystemPlugin : BasePlugin
+     {
+         var pawn = bot.PlayerPawn?.Value;
+         if (pawn == null || !pawn.IsValid) return;
+-        if (!PassesSituationalCheck(bot, pawn, g, g.GrenadeType, allControllers))
++        if (!PassesSituationalCheck(bot, pawn, g, g.GrenadeType, allControllers, out string decision))
+         {
+             // Probability attempt cooldown
+             if (g.GrenadeType.Equals("smoke", StringComparison.OrdinalIgnoreCase))
+@@ -1360,13 +1345,14 @@ public class NadeSystemPlugin : BasePlugin
+             }
+             return;
+         }
+-        TryReplay(bot, g, allControllers);
++        TryReplay(bot, g, allControllers, decision);
+     }
+ 
+     private bool PassesSituationalCheck(
+         CCSPlayerController bot, CCSPlayerPawn pawn, GrenadeData g, string gtype,
+-        List<CCSPlayerController> allControllers)
++        List<CCSPlayerController> allControllers, out string decision)
+     {
++        decision = "special";
+         //  He / Molotov decision
+         if (gtype is "he" or "molotov")
+         {
+@@ -1381,7 +1367,10 @@ public class NadeSystemPlugin : BasePlugin
+                     var ep = GetActiveLivePawn(p)?.AbsOrigin;
+                     if (ep == null) return false;
+                     float dx = ep.X - lx, dy = ep.Y - ly, dz = ep.Z - lz;
+-                    return dx*dx + dy*dy + dz*dz <= 200f * 200f;
++                    float radius = gtype == "he"
++                        ? NadeDecisionPolicy.EffectiveHERadius
++                        : NadeDecisionPolicy.EffectiveMolotovRadius;
++                    return dx*dx + dy*dy + dz*dz <= radius * radius;
+                 })
+                 .ToList();
+             if (nearbyEnemies.Count == 0) return false;
+@@ -1393,12 +1382,8 @@ public class NadeSystemPlugin : BasePlugin
+                 if (!anyInfo)
+                 {
+                     // No info on any nearby enemy: roll probability.
+-                    float prob;
+-                    if (_botNadesMode == "more")
+-                        prob = gtype == "he" ? 0.50f : 0.80f;   // more: HE 50%, molotov 80%
+-                    else
+-                        prob = gtype == "he" ? 0.20f : 0.60f;   // normal: HE 20%, molotov 60%
+-                    if (Random.Shared.NextDouble() >= prob)
++                    float prob = NadeDecisionPolicy.NoInfoProbability(_botNadesMode, gtype);
++                    if (prob < 1f && Random.Shared.NextDouble() >= prob)
+                     {
+                         RegisterProbFailCooldown(g.Id);
+                         return false;
+@@ -1423,6 +1408,7 @@ public class NadeSystemPlugin : BasePlugin
+                     if (ddx*ddx + ddy*ddy + ddz*ddz < 200f * 200f) return false;
+                 }
+             }
++            decision = gtype == "he" ? "he_effective" : "molotov_effective";
+         }
+ 
+         // Flash decision
+@@ -1432,7 +1418,29 @@ public class NadeSystemPlugin : BasePlugin
+ 
+             // Collect enemies that can actually be blinded by this flash.
+             var blindableEnemies = CanBlindAnyEnemy(bot, g, allControllers);
+-            if (blindableEnemies.Count == 0) return false;
++            if (blindableEnemies.Count == 0)
++            {
++                // Only explicitly scheduled, team-tagged lineups receive the fallback.
++                string scheduleKey = $"{Server.MapName.ToLowerInvariant()}_{g.TeamTag}";
++                bool inSchedule = ThrowSchedule.TryGetValue(scheduleKey, out float maxSecs)
++                    && _freezeEndTime > 0f && Server.CurrentTime - _freezeEndTime <= maxSecs;
++                float lx = g.LandingPosition.X, ly = g.LandingPosition.Y, lz = g.LandingPosition.Z;
++                float nearestEnemyDistance = allControllers
++                    .Where(p => p.IsValid && (int)p.TeamNum != bot.TeamNum)
++                    .Select(p => GetActiveLivePawn(p)?.AbsOrigin)
++                    .Where(ep => ep != null)
++                    .Select(ep => Dist3D(lx, ly, lz, ep!.X, ep.Y, ep.Z))
++                    .DefaultIfEmpty(float.PositiveInfinity)
++                    .Min();
++                if (!NadeDecisionPolicy.CanUseFlashFallback(_botNadesMode, !string.IsNullOrEmpty(g.TeamTag),
++                    inSchedule, nearestEnemyDistance, Random.Shared.NextDouble()))
++                {
++                    RegisterProbFailCooldown(g.Id);
++                    return false;
++                }
++                decision = "flash_schedule_fallback";
++                return true;
++            }
+ 
+             // Information gate (normal / more mode): if no blindable enemy has info on this bot,
+             if (_botNadesMode == "normal" || _botNadesMode == "more")
+@@ -1449,6 +1457,7 @@ public class NadeSystemPlugin : BasePlugin
+                     }
+                 }
+             }
++            decision = "flash_direct";
+         }
+ 
+         // Smoke decision
+@@ -1466,13 +1475,6 @@ public class NadeSystemPlugin : BasePlugin
+                        && Dist3D(lx, ly, lz, d.LandingPosition.X, d.LandingPosition.Y, d.LandingPosition.Z) < 250f);
+             if (tooClose) return false;
+ 
+-            // Normal mode: Don't throw all your smoke right after freezeend
+-            if (_botNadesMode == "normal" && _freezeEndTime > 0f && Server.CurrentTime - _freezeEndTime < 5f)
+-            {
+-                _earlySmokeCountByTeam.TryGetValue(bot.TeamNum, out int cnt);
+-                if (cnt >= 1) return false;
+-            }
+-
+             // Smoke Effective Range
+             bool anyEnemyClose = allControllers
+                 .Any(p =>
+@@ -1531,6 +1533,7 @@ public class NadeSystemPlugin : BasePlugin
+             if (threshold < 1f && Random.Shared.NextDouble() >= threshold) return false;
+         }
+ 
++        if (gtype == "smoke") decision = "smoke_standard";
+         return true;
+     }
+     // Nades that only trigger at round start
+@@ -1679,7 +1682,8 @@ public class NadeSystemPlugin : BasePlugin
+     //  Special Nades
+     // ═══════════════════════════════════════════════════════════
+     // Defuse smoke/flash
+-    private void TrySpawnInstantGrenade(CCSPlayerController bot, Vector spawnPos, string gtype, Vector? velocity = null)
++    private void TrySpawnInstantGrenade(CCSPlayerController bot, Vector spawnPos, string gtype,
++        ThrowReason reason, Vector? velocity = null)
+     {
+         if (_botNadesMode == "off") return;
+         // In case the bot has been taken over
+@@ -1706,13 +1710,12 @@ public class NadeSystemPlugin : BasePlugin
+         if (!_roundSpendPerBot.TryGetValue(botIdx, out int alreadySpent))
+             alreadySpent = 0;
+         bool deduct = alreadySpent < spendCap;
+-
+-        if (deduct)
+-        {
+-            money.Account -= cost;
+-            Utilities.SetStateChanged(bot, "CCSPlayerController", "m_pInGameMoneyServices");
+-            _roundSpendPerBot[botIdx] = alreadySpent + cost;
+-        }
++        int aliveBotCount = Utilities
++            .FindAllEntitiesByDesignerName<CCSPlayerController>("cs_player_controller")
++            .Count(p => p.IsValid && p.IsBot && p.PawnIsAlive && p.TeamNum == bot.TeamNum);
++        var reservation = _pacingPolicy.TryBegin(
++            botIdx, bot.TeamNum, gtype, reason, Server.CurrentTime, _freezeEndTime, aliveBotCount, _botNadesMode);
++        if (reservation == null) return;
+ 
+         var vel = velocity ?? new Vector(0f, 0f, 0f);
+         Server.NextFrame(() =>
+@@ -1720,7 +1723,11 @@ public class NadeSystemPlugin : BasePlugin
+             try
+             {
+                 var botPawn = bot.PlayerPawn?.Value;
+-                if (botPawn == null || !botPawn.IsValid) return;
++                if (botPawn == null || !botPawn.IsValid)
++                {
++                    _pacingPolicy.Cancel(reservation);
++                    return;
++                }
+ 
+                 int teamNum = bot.TeamNum;
+ 
+@@ -1730,7 +1737,11 @@ public class NadeSystemPlugin : BasePlugin
+                         spawnPos.Handle, spawnPos.Handle,
+                         vel.Handle, vel.Handle,
+                         botPawn.Handle, 45, teamNum);
+-                    if (smoke == null || !smoke.IsValid) return;
++                    if (smoke == null || !smoke.IsValid)
++                    {
++                        _pacingPolicy.Cancel(reservation);
++                        return;
++                    }
+                     smoke.TeamNum             = (byte)teamNum;
+                     smoke.Thrower.Raw         = botPawn.EntityHandle.Raw;
+                     smoke.OriginalThrower.Raw = botPawn.EntityHandle.Raw;
+@@ -1740,7 +1751,11 @@ public class NadeSystemPlugin : BasePlugin
+                 {
+                     var flash = Utilities.CreateEntityByName<CFlashbangProjectile>(
+                         "flashbang_projectile");
+-                    if (flash == null) return;
++                    if (flash == null)
++                    {
++                        _pacingPolicy.Cancel(reservation);
++                        return;
++                    }
+                     flash.TeamNum             = (byte)teamNum;
+                     flash.Thrower.Raw         = botPawn.EntityHandle.Raw;
+                     flash.OriginalThrower.Raw = botPawn.EntityHandle.Raw;
+@@ -1757,9 +1772,25 @@ public class NadeSystemPlugin : BasePlugin
+                     flash.DispatchSpawn();
+                     flash.Teleport(spawnPos, ang, vel);
+                 }
++                else
++                {
++                    _pacingPolicy.Cancel(reservation);
++                    return;
++                }
++
++                var audit = _pacingPolicy.Commit(reservation, Server.CurrentTime);
++                Server.PrintToConsole($"[NadeSystem] Replayed [{reservation.GrenadeType}] id=instant... bot=[{bot.PlayerName}] special={reason}");
++                WriteNadeAudit(reservation, audit, "special");
++                if (deduct)
++                {
++                    money.Account -= cost;
++                    Utilities.SetStateChanged(bot, "CCSPlayerController", "m_pInGameMoneyServices");
++                    _roundSpendPerBot[botIdx] = alreadySpent + cost;
++                }
+             }
+             catch (Exception ex)
+             {
++                _pacingPolicy.Cancel(reservation);
+                 Server.PrintToConsole($"[NadeSystem] TrySpawnInstantGrenade error: {ex.Message}");
+             }
+         });
+@@ -1794,7 +1825,7 @@ public class NadeSystemPlugin : BasePlugin
+             if (hasDefuser || Random.Shared.NextDouble() < 0.33)
+             {
+                 _defuseSmokeUsed = true;
+-                TrySpawnInstantGrenade(bot, spawnPos, "smoke");
++                TrySpawnInstantGrenade(bot, spawnPos, "smoke", ThrowReason.DefuseCover);
+             }
+         }
+ 
+@@ -1807,7 +1838,7 @@ public class NadeSystemPlugin : BasePlugin
+                 // Don't flash yourself
+                 _botFlashImmunityUntil[(uint)bot.Index] = Server.CurrentTime + 2f;
+                 var flashVel = new Vector(0f, 0f, -800f);
+-                TrySpawnInstantGrenade(bot, spawnPos, "flash", flashVel);
++                TrySpawnInstantGrenade(bot, spawnPos, "flash", ThrowReason.DefuseCover, flashVel);
+             }
+         }
+ 
+@@ -1835,7 +1866,7 @@ public class NadeSystemPlugin : BasePlugin
+         if (pos == null) return HookResult.Continue;
+ 
+         _plantSmokeUsed = true;
+-        TrySpawnInstantGrenade(bot, new Vector(pos.X, pos.Y, pos.Z + 5f), "smoke");
++        TrySpawnInstantGrenade(bot, new Vector(pos.X, pos.Y, pos.Z + 5f), "smoke", ThrowReason.PlantCover);
+         return HookResult.Continue;
+     }
+ 
+@@ -1887,7 +1918,7 @@ public class NadeSystemPlugin : BasePlugin
+ 
+         var pos = pawn.AbsOrigin;
+         if (pos == null) return;
+-        TrySpawnInstantGrenade(victim, new Vector(pos.X, pos.Y, pos.Z + 5f), "smoke");
++        TrySpawnInstantGrenade(victim, new Vector(pos.X, pos.Y, pos.Z + 5f), "smoke", ThrowReason.ExtinguishFire);
+     }
+     // Revenge grenade
+     private void HandleRetaliationHE(EventPlayerHurt @event)
+@@ -1927,25 +1958,6 @@ public class NadeSystemPlugin : BasePlugin
+             if (_retaliationCooldown.TryGetValue(teamNum, out float cdExpiry)
+                 && Server.CurrentTime < cdExpiry) return;
+         }
+-        // normal mode/ more mode: limit total he+molotov spawned per hurt event
+-        int retaliationLimit = int.MaxValue;
+-        if (_botNadesMode == "normal" || _botNadesMode == "more")
+-        {
+-            var vPos = victimPawn.AbsOrigin;
+-            int aliveTeamSize = Utilities
+-                .FindAllEntitiesByDesignerName<CCSPlayerController>("cs_player_controller")
+-                .Count(p =>
+-                {
+-                    if (!p.IsValid || (int)p.TeamNum != victim.TeamNum) return false;
+-                    if (vPos == null) return false;
+-                    var pp = GetActiveLivePawn(p)?.AbsOrigin;
+-                    if (pp == null) return false;
+-                    return Dist3D(vPos.X, vPos.Y, vPos.Z, pp.X, pp.Y, pp.Z) <= 800f;
+-                });
+-            retaliationLimit = aliveTeamSize < 1 ? 1 : aliveTeamSize;
+-        }
+-        int retaliationSpawned = 0;
+-
+         // Build candidate list (single pass: filter then sort)
+         // primary  : satisfies both direction and distance check  -> first
+         // secondary: nearest projectilePosition to victim         -> ascending
+@@ -1979,8 +1991,6 @@ public class NadeSystemPlugin : BasePlugin
+ 
+         foreach (var g in candidates)
+         {
+-            if (retaliationSpawned >= retaliationLimit) break;
+-
+             string gt = g.GrenadeType; // lowercase since LoadDb
+ 
+             if (!costTable.TryGetValue(gt, out int cost)) continue;
+@@ -1988,23 +1998,36 @@ public class NadeSystemPlugin : BasePlugin
+ 
+             if (!_roundSpendPerBot.TryGetValue(botIdx, out int alreadySpent)) alreadySpent = 0;
+             bool deduct = alreadySpent < spendCap;
+-            if (deduct)
+-            {
+-                money.Account -= cost;
+-                Utilities.SetStateChanged(victim, "CCSPlayerController", "m_pInGameMoneyServices");
+-                _roundSpendPerBot[botIdx] = alreadySpent + cost;
+-            }
++            int aliveBotCount = Utilities
++                .FindAllEntitiesByDesignerName<CCSPlayerController>("cs_player_controller")
++                .Count(p => p.IsValid && p.IsBot && p.PawnIsAlive && p.TeamNum == victim.TeamNum);
++            var reservation = _pacingPolicy.TryBegin(
++                botIdx, victim.TeamNum, gt, ThrowReason.Retaliation,
++                Server.CurrentTime, _freezeEndTime, aliveBotCount, _botNadesMode);
++            if (reservation == null) continue;
+ 
+-            RegisterCooldown(g.Id, gt);
+-            SpawnProjectile(victim, g);
+-            // Normal mode: counts retaliation nades toward round limit.
+-            if (_botNadesMode == "normal") 
+-                IncrementCount(gt, victim.TeamNum);
+-            retaliationSpawned++;
++            SpawnProjectile(victim, g, success =>
++            {
++                if (!success)
++                {
++                    _pacingPolicy.Cancel(reservation);
++                    return;
++                }
++                var audit = _pacingPolicy.Commit(reservation, Server.CurrentTime);
++                WriteNadeAudit(reservation, audit, "special");
++                if (deduct)
++                {
++                    money.Account -= cost;
++                    Utilities.SetStateChanged(victim, "CCSPlayerController", "m_pInGameMoneyServices");
++                    _roundSpendPerBot[botIdx] = alreadySpent + cost;
++                }
++                RegisterCooldown(g.Id, gt);
++                if (_botNadesMode == "normal") IncrementCount(gt, victim.TeamNum);
++                if (_botNadesMode == "normal" || _botNadesMode == "more")
++                    _retaliationCooldown[teamNum] = Server.CurrentTime + 7f;
++            });
++            return;
+         }
+-        // Write cooldown after retaliation completes (normal / more only)
+-        if ((_botNadesMode == "normal" || _botNadesMode == "more") && retaliationSpawned > 0)
+-            _retaliationCooldown[teamNum] = Server.CurrentTime + 7f;
+     }
+     // ═══════════════════════════════════════════════════════════
+     //  Tick
+diff --git a/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.csproj b/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.csproj
+index d3a5d01..2c2ae27 100644
+--- a/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.csproj
++++ b/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.csproj
+@@ -1,5 +1,4 @@
+-﻿<Project Sdk="Microsoft.NET.Sdk">
+-
++<Project Sdk="Microsoft.NET.Sdk">
+   <PropertyGroup>
+     <TargetFramework>net10.0</TargetFramework>
+     <RootNamespace>NadeSystem</RootNamespace>
+@@ -8,12 +7,11 @@
+     <Nullable>enable</Nullable>
+     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+   </PropertyGroup>
+-
+   <ItemGroup>
++    <Compile Remove="tests\**\*.cs" />
+     <PackageReference Include="CounterStrikeSharp.API" Version="1.0.371" />
+     <Reference Include="RayTraceApi">
+       <HintPath>libs/RayTraceApi.dll</HintPath>
+     </Reference>
+   </ItemGroup>
+-
+ </Project>
+diff --git a/addons/counterstrikesharp/plugins/NadeSystem/tests/NadePacingPolicy.Tests.csproj b/addons/counterstrikesharp/plugins/NadeSystem/tests/NadePacingPolicy.Tests.csproj
+new file mode 100644
+index 0000000..c7e37b0
+--- /dev/null
++++ b/addons/counterstrikesharp/plugins/NadeSystem/tests/NadePacingPolicy.Tests.csproj
+@@ -0,0 +1,12 @@
++<Project Sdk="Microsoft.NET.Sdk">
++  <PropertyGroup>
++    <OutputType>Exe</OutputType>
++    <TargetFramework>net10.0</TargetFramework>
++    <ImplicitUsings>disable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++  <ItemGroup>
++    <Compile Include="..\NadePacingPolicy.cs" Link="NadePacingPolicy.cs" />
++    <Compile Include="..\NadeAudit.cs" Link="NadeAudit.cs" />
++  </ItemGroup>
++</Project>
+diff --git a/addons/counterstrikesharp/plugins/NadeSystem/tests/Program.cs b/addons/counterstrikesharp/plugins/NadeSystem/tests/Program.cs
+new file mode 100644
+index 0000000..5ea8a91
+--- /dev/null
++++ b/addons/counterstrikesharp/plugins/NadeSystem/tests/Program.cs
+@@ -0,0 +1,251 @@
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Linq;
++
++internal static class Program
++{
++    private static int _assertions;
++
++    private static int Main(string[] args)
++    {
++        if (args.Length > 0)
++        {
++            if (args.Length > 2) throw new ArgumentException("Usage: dotnet run -c Release -- <log-path> [output-directory]");
++            string output = args.Length == 2 ? args[1] : Path.GetDirectoryName(Path.GetFullPath(args[0]))!;
++            return NadeAuditAnalyzer.Analyze(args[0], output);
++        }
++
++        OpeningPerBotLimit();
++        BotAndTeamGaps();
++        OpeningTeamAndTypeBudgets();
++        NormalPlannedSmokeCap();
++        ModeSpecificSmokeCapAndEmergencies();
++        CandidatePriorityAndStableTieBreak();
++        SmokeRemainsEligibleWithoutOffensiveCandidate();
++        EffectiveRadiusBoundariesAndProbabilities();
++        FlashFallbackProbabilities();
++        EmergencyStillUsesHardLimit();
++        HardLimitsAndMolotovAlias();
++        FailedCreationRollsBackReservation();
++        AuditCommitAndRoundTrip();
++        AuditParserRejectsMalformedFields();
++        AuditAnalyzerRequiresExplicitNormalMode();
++        RoundResetClearsState();
++        Console.WriteLine($"Nade pacing/audit policy: {_assertions} assertions passed.");
++        return 0;
++    }
++
++    private static void OpeningPerBotLimit()
++    {
++        var policy = new NadePacingPolicy();
++        Commit(policy, Begin(policy, 1, 2, "flash", ThrowReason.PlannedReplay, 101f, 100f, 5), 101f);
++        Reject(policy.TryBegin(1, 2, "he", ThrowReason.PlannedReplay, 107f, 100f, 5), "same bot opening limit");
++        Accept(policy.TryBegin(1, 2, "he", ThrowReason.PlannedReplay, 116f, 100f, 5), "opening expires at 15 seconds");
++    }
++
++    private static void BotAndTeamGaps()
++    {
++        var policy = new NadePacingPolicy();
++        Commit(policy, Begin(policy, 1, 2, "flash", ThrowReason.PlannedReplay, 20f, 0f, 5), 20f);
++        Reject(policy.TryBegin(1, 2, "he", ThrowReason.PlannedReplay, 24.999f, 0f, 5), "bot gap");
++        Reject(policy.TryBegin(2, 2, "he", ThrowReason.PlannedReplay, 20.499f, 0f, 5), "team gap");
++        Accept(policy.TryBegin(2, 2, "he", ThrowReason.PlannedReplay, 20.5f, 0f, 5), "exact team gap");
++    }
++
++    private static void OpeningTeamAndTypeBudgets()
++    {
++        var policy = new NadePacingPolicy();
++        string[] types = { "smoke", "flash", "he", "molotov" };
++        for (int i = 0; i < types.Length; i++)
++            Commit(policy, Begin(policy, (uint)i + 1, 2, types[i], ThrowReason.PlannedReplay, 101f + i, 100f, 6), 101f + i);
++        Reject(policy.TryBegin(5, 2, "smoke", ThrowReason.PlannedReplay, 105f, 100f, 6), "second opening smoke rejected");
++        Reject(policy.TryBegin(5, 2, "flash", ThrowReason.PlannedReplay, 105f, 100f, 6), "fourth opening offensive throw rejected");
++
++        var smokePolicy = new NadePacingPolicy();
++        Commit(smokePolicy, Begin(smokePolicy, 1, 2, "smoke", ThrowReason.PlannedReplay, 101f, 100f, 5), 101f);
++        Reject(smokePolicy.TryBegin(2, 2, "smoke", ThrowReason.PlannedReplay, 102f, 100f, 5), "opening smoke cap is one");
++    }
++
++    private static void CandidatePriorityAndStableTieBreak()
++    {
++        var candidates = new[] { (Id: "z", Type: "smoke"), (Id: "h", Type: "he"), (Id: "m", Type: "molotov"), (Id: "f", Type: "flash") };
++        var selected = candidates.OrderByDescending(x => NadeDecisionPolicy.Score(x.Type, 2f)).ThenBy(x => x.Id, StringComparer.Ordinal).First();
++        Equal("molotov", selected.Type, "offensive priority");
++        var tied = new[] { (Id: "b", Type: "he"), (Id: "a", Type: "he") }
++            .OrderByDescending(x => NadeDecisionPolicy.Score(x.Type, 2f)).ThenBy(x => x.Id, StringComparer.Ordinal).First();
++        Equal("a", tied.Id, "ordinal tie break");
++    }
++
++    private static void SmokeRemainsEligibleWithoutOffensiveCandidate()
++    {
++        Equal(100, NadeDecisionPolicy.Score("smoke", 2f), "smoke eligible before eight seconds");
++        Equal(100, NadeDecisionPolicy.Score("smoke", 10f), "smoke eligible after eight seconds");
++    }
++
++    private static void EffectiveRadiusBoundariesAndProbabilities()
++    {
++        True(NadeDecisionPolicy.IsEnemyInEffectiveRadius("he", 450f), "HE boundary");
++        False(NadeDecisionPolicy.IsEnemyInEffectiveRadius("he", 451f), "HE outside");
++        True(NadeDecisionPolicy.IsEnemyInEffectiveRadius("molotov", 450f), "molotov boundary");
++        False(NadeDecisionPolicy.IsEnemyInEffectiveRadius("molotov", 451f), "molotov outside");
++        Equal(1f, NadeDecisionPolicy.NoInfoProbability("normal", "he"), "normal HE probability");
++        Equal(1f, NadeDecisionPolicy.NoInfoProbability("normal", "molotov"), "normal fire probability");
++        Equal(1f, NadeDecisionPolicy.NoInfoProbability("more", "he"), "more HE probability");
++        Equal(1f, NadeDecisionPolicy.NoInfoProbability("more", "molotov"), "more fire probability");
++        Equal(1f, NadeDecisionPolicy.NoInfoProbability("max", "he"), "max probability");
++        Equal(1f, NadeDecisionPolicy.NoInfoProbability("max", "molotov"), "max fire probability");
++    }
++
++    private static void FlashFallbackProbabilities()
++    {
++        Equal(1600f, NadeDecisionPolicy.FlashFallbackRadius, "fallback radius");
++        Equal(0.45f, NadeDecisionPolicy.FlashFallbackProbability("normal"), "normal fallback");
++        Equal(0.70f, NadeDecisionPolicy.FlashFallbackProbability("more"), "more fallback");
++        Equal(1f, NadeDecisionPolicy.FlashFallbackProbability("max"), "max fallback");
++        True(NadeDecisionPolicy.CanUseFlashFallback("normal", true, true, 1600f, 0.449), "fallback valid boundary");
++        False(NadeDecisionPolicy.CanUseFlashFallback("normal", false, true, 100f, 0), "fallback requires team tag");
++        False(NadeDecisionPolicy.CanUseFlashFallback("normal", true, false, 100f, 0), "fallback requires schedule");
++        False(NadeDecisionPolicy.CanUseFlashFallback("normal", true, true, 1601f, 0), "fallback radius boundary");
++        False(NadeDecisionPolicy.CanUseFlashFallback("normal", true, true, 100f, 0.45), "deterministic probability boundary");
++    }
++
++    private static void EmergencyStillUsesHardLimit()
++    {
++        var policy = new NadePacingPolicy();
++        Commit(policy, Begin(policy, 1, 2, "flash", ThrowReason.PlannedReplay, 101f, 100f, 5), 101f);
++        Commit(policy, Begin(policy, 1, 2, "flash", ThrowReason.DefuseCover, 101.1f, 100f, 5), 101.1f);
++        Reject(policy.TryBegin(1, 2, "flash", ThrowReason.DefuseCover, 101.2f, 100f, 5), "flash hard limit");
++        Commit(policy, Begin(policy, 1, 2, "smoke", ThrowReason.ExtinguishFire, 101.2f, 100f, 5), 101.2f);
++        Reject(policy.TryBegin(1, 2, "smoke", ThrowReason.DefuseCover, 101.3f, 100f, 5), "smoke hard limit");
++    }
++
++    private static void HardLimitsAndMolotovAlias()
++    {
++        foreach (string type in new[] { "he", "smoke" })
++        {
++            var policy = new NadePacingPolicy();
++            Commit(policy, Begin(policy, 1, 2, type, ThrowReason.DefuseCover, 1f, 0f, 5), 1f);
++            Reject(policy.TryBegin(1, 2, type, ThrowReason.DefuseCover, 2f, 0f, 5), type + " hard limit");
++        }
++        var fire = new NadePacingPolicy();
++        Commit(fire, Begin(fire, 1, 2, "molotov", ThrowReason.DefuseCover, 1f, 0f, 5), 1f);
++        Reject(fire.TryBegin(1, 2, "incgrenade", ThrowReason.DefuseCover, 2f, 0f, 5), "shared fire bucket");
++    }
++
++    private static void FailedCreationRollsBackReservation()
++    {
++        var policy = new NadePacingPolicy();
++        var failed = Begin(policy, 1, 2, "smoke", ThrowReason.PlannedReplay, 101f, 100f, 5);
++        policy.Cancel(failed);
++        Accept(policy.TryBegin(1, 2, "smoke", ThrowReason.PlannedReplay, 101f, 100f, 5), "cancel releases all pending state");
++    }
++
++    private static void NormalPlannedSmokeCap()
++    {
++        var opening = new NadePacingPolicy();
++        Commit(opening, Begin(opening, 1, 2, "smoke", ThrowReason.PlannedReplay, 101f, 100f, 5), 101f);
++        Reject(opening.TryBegin(2, 2, "smoke", ThrowReason.PlannedReplay, 116f, 100f, 5), "opening smoke consumes whole-round cap");
++        var noOpeningSmoke = new NadePacingPolicy();
++        Commit(noOpeningSmoke, Begin(noOpeningSmoke, 1, 2, "flash", ThrowReason.PlannedReplay, 101f, 100f, 5), 101f);
++        Accept(noOpeningSmoke.TryBegin(2, 2, "smoke", ThrowReason.PlannedReplay, 116f, 100f, 5), "late first smoke remains available");
++
++        var policy = new NadePacingPolicy();
++        Commit(policy, Begin(policy, 1, 2, "smoke", ThrowReason.PlannedReplay, 20f, 0f, 5), 20f);
++        Reject(policy.TryBegin(2, 2, "smoke", ThrowReason.PlannedReplay, 20.5f, 0f, 5), "normal team smoke cap");
++        var pending = Begin(policy, 3, 3, "smoke", ThrowReason.PlannedReplay, 20f, 0f, 5);
++        Reject(policy.TryBegin(4, 3, "smoke", ThrowReason.PlannedReplay, 20.5f, 0f, 5), "pending smoke cap");
++        policy.Cancel(pending);
++        Accept(policy.TryBegin(4, 3, "smoke", ThrowReason.PlannedReplay, 20.5f, 0f, 5), "cancel restores smoke cap");
++    }
++
++    private static void ModeSpecificSmokeCapAndEmergencies()
++    {
++        var more = new NadePacingPolicy();
++        Commit(more, Begin(more, 1, 2, "smoke", ThrowReason.PlannedReplay, 20f, 0f, 5, "more"), 20f);
++        Accept(more.TryBegin(2, 2, "smoke", ThrowReason.PlannedReplay, 20.5f, 0f, 5, "more"), "more bypasses normal balance cap");
++        var max = new NadePacingPolicy();
++        Commit(max, Begin(max, 1, 2, "smoke", ThrowReason.PlannedReplay, 20f, 0f, 5, "max"), 20f);
++        Commit(max, Begin(max, 2, 2, "smoke", ThrowReason.PlannedReplay, 20.5f, 0f, 5, "max"), 20.5f);
++        Accept(max.TryBegin(3, 2, "smoke", ThrowReason.PlannedReplay, 21f, 0f, 5, "max"), "max third smoke bypasses normal balance cap");
++        foreach (ThrowReason reason in new[] { ThrowReason.DefuseCover, ThrowReason.ExtinguishFire, ThrowReason.PlantCover })
++        {
++            var exempt = new NadePacingPolicy();
++            Commit(exempt, Begin(exempt, 1, 2, "smoke", reason, 1f, 0f, 5), 1f);
++            Accept(exempt.TryBegin(2, 2, "smoke", ThrowReason.PlannedReplay, 1.5f, 0f, 5), reason + " does not consume normal planned smoke cap");
++        }
++        var special = new NadePacingPolicy();
++        Commit(special, Begin(special, 1, 2, "smoke", ThrowReason.DefuseCover, 1f, 0f, 5), 1f);
++        Reject(special.TryBegin(1, 2, "smoke", ThrowReason.DefuseCover, 2f, 0f, 5), "special smoke remains hard limited per bot");
++    }
++
++    private static void AuditCommitAndRoundTrip()
++    {
++        var policy = new NadePacingPolicy();
++        var cancelled = Begin(policy, 9, 2, "he", ThrowReason.PlannedReplay, 1f, 0f, 5);
++        policy.Cancel(cancelled);
++        int emitted = 0;
++        var first = Begin(policy, 1, 2, "flash", ThrowReason.PlannedReplay, 101f, 100f, 5);
++        var state = policy.Commit(first, 101f); emitted++;
++        Equal(-1f, state.BotGap, "first bot gap"); Equal(-1f, state.TeamGap, "first team gap"); Equal(1, emitted, "only commit emits");
++        var record = new NadeAuditRecord(101f, 7, 1f, 2, 1, "flash", "PlannedReplay", 0, 1, "flash_direct",
++            state.BotGap, state.TeamGap, state.BotOpening, 1, state.TeamOpening, state.OpeningTeamLimit,
++            state.TeamOpeningSmoke, NadePacingPolicy.OpeningSmokeCap, state.BotFlash, state.BotSmoke, state.BotHE, state.BotMolotov);
++        string text = record.Format();
++        Equal(text, NadeAuditRecord.Parse(text).Format(), "invariant audit round trip");
++    }
++
++    private static void AuditParserRejectsMalformedFields()
++    {
++        string valid = new NadeAuditRecord(1, 1, 0, 2, 1, "he", "PlannedReplay", 0, 1, "he_effective", -1, -1, 1, 1, 1, 5, 0, NadePacingPolicy.OpeningSmokeCap, 0, 0, 1, 0).Format();
++        Throws(() => NadeAuditRecord.Parse(valid + " unknown=1"), "unknown field");
++        Throws(() => NadeAuditRecord.Parse(valid + " time=2.000"), "duplicate field");
++        Throws(() => NadeAuditRecord.Parse(valid.Replace(" type=he", " type=bad", StringComparison.Ordinal)), "invalid type");
++    }
++
++    private static void RoundResetClearsState()
++    {
++        var policy = new NadePacingPolicy();
++        Commit(policy, Begin(policy, 1, 2, "he", ThrowReason.PlannedReplay, 101f, 100f, 5), 101f);
++        policy.Reset();
++        Accept(policy.TryBegin(1, 2, "he", ThrowReason.PlannedReplay, 102f, 100f, 5), "reset");
++    }
++
++    private static void AuditAnalyzerRequiresExplicitNormalMode()
++    {
++        string root = Path.Combine(Path.GetTempPath(), "nade-audit-mode-" + Guid.NewGuid().ToString("N"));
++        Directory.CreateDirectory(root);
++        try
++        {
++            string first = AuditSmoke(1f, 8, 2, 1);
++            string second = AuditSmoke(2f, 8, 2, 2);
++            string noMode = Path.Combine(root, "no-mode.log");
++            File.WriteAllLines(noMode, new[] { first, second });
++            Equal(0, NadeAuditAnalyzer.Analyze(noMode, Path.Combine(root, "no-mode-out")), "missing mode evidence is not normal");
++
++            string normal = Path.Combine(root, "normal.log");
++            File.WriteAllLines(normal, new[] { "bot_nades set to normal", first, second });
++            Equal(2, NadeAuditAnalyzer.Analyze(normal, Path.Combine(root, "normal-out")), "explicit normal mode enforces team smoke cap");
++            string report = File.ReadAllText(Path.Combine(root, "normal-out", "nade-audit-summary.txt"));
++            True(report.Contains("normal planned smoke team > 1", StringComparison.Ordinal), "normal violation includes source rows");
++        }
++        finally
++        {
++            Directory.Delete(root, true);
++        }
++    }
++
++    private static string AuditSmoke(float time, int round, int team, uint bot) =>
++        new NadeAuditRecord(time, round, 20f, team, bot, "smoke", "PlannedReplay", 0, 0, "special",
++            -1, -1, 0, 1, 0, 5, 0, NadePacingPolicy.OpeningSmokeCap, 0, 1, 0, 0).Format();
++
++    private static ThrowReservation Begin(NadePacingPolicy p, uint bot, int team, string type, ThrowReason reason, float now, float freeze, int alive, string mode = "normal") =>
++        p.TryBegin(bot, team, type, reason, now, freeze, alive, mode) ?? throw new InvalidOperationException($"Expected reservation for {type} at {now}.");
++    private static PacingAuditSnapshot Commit(NadePacingPolicy p, ThrowReservation r, float now) => p.Commit(r, now);
++    private static void Accept(ThrowReservation? value, string message) { _assertions++; if (value == null) throw new InvalidOperationException("Expected allow: " + message); }
++    private static void Reject(ThrowReservation? value, string message) { _assertions++; if (value != null) throw new InvalidOperationException("Expected reject: " + message); }
++    private static void True(bool value, string message) { _assertions++; if (!value) throw new InvalidOperationException("Expected true: " + message); }
++    private static void False(bool value, string message) { _assertions++; if (value) throw new InvalidOperationException("Expected false: " + message); }
++    private static void Equal<T>(T expected, T actual, string message) where T : notnull { _assertions++; if (!EqualityComparer<T>.Default.Equals(expected, actual)) throw new InvalidOperationException($"{message}: expected {expected}, actual {actual}"); }
++    private static void Throws(Action action, string message) { _assertions++; try { action(); } catch (FormatException) { return; } throw new InvalidOperationException("Expected format error: " + message); }
++}

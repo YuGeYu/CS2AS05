@@ -1,0 +1,11 @@
+{
+  "productName": "CS2人机增强助手-WebView2固定版",
+  "bundle": {
+    "windows": {
+      "webviewInstallMode": {
+        "type": "fixedRuntime",
+        "path": "resources/webview2-fixed/x64"
+      }
+    }
+  }
+}

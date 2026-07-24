@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "workspace": {
+    "name": "CS2人机增强助手工作区",
+    "rootDir": "workspace/projects",
+    "runtimeDir": "workspace/runtime"
+  },
+  "projects": [
+    {
+      "id": "cs2-bot-improver",
+      "name": "CS2人机增强助手",
+      "status": "active",
+      "channel": "prod",
+      "rootDir": "workspace/projects/cs2-bot-improver",
+      "envFile": ".env.projects.cs2-bot-improver",
+      "tauriConfig": "src-tauri/tauri.conf.json",
+      "distDir": "workspace/runtime/cs2-bot-improver/dist",
+      "bundleDir": "workspace/runtime/cs2-bot-improver/bundles",
+      "logDir": "workspace/runtime/cs2-bot-improver/logs",
+      "description": "官方 CS2-Bot-Improver v1.4.2 安装与 Panel 启动入口。"
+    }
+  ]
+}

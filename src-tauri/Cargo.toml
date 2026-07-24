@@ -1,0 +1,37 @@
+[package]
+name = "ai_pc_fac"
+# 发布事故记录：2026-06-01 升级 0.3.7 时，曾因批量替换误改 Cargo.lock 中第三方依赖版本。
+# 改版本号时只能改本 package 版本，并让 Cargo 维护锁文件；禁止全局替换依赖版本。
+version = "0.5.2"
+description = "CS2人机增强助手"
+authors = ["YuGeYu"]
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/YuGeYu/CS2AS05"
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "ai_pc_fac_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.6", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.10.3", features = ["unstable"] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+sysinfo = "0.37"
+zip = { version = "4.6.1", default-features = false, features = ["deflate"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+sha2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp"] }

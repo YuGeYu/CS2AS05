@@ -1,0 +1,76 @@
+# Logs
+/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.projects.*
+*.local
+
+# OS / editor
+.DS_Store
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Build outputs and caches
+dist/
+dist-ssr/
+dist-release/
+coverage/
+output/
+.eslintcache
+*.tsbuildinfo
+docs/build-logs/
+docs/dev-log-*
+
+src-tauri/target/
+workspace/runtime/
+
+# Cypress
+/cypress/videos/
+/cypress/screenshots/
+
+# Vitest
+__screenshots__/
+
+# Vite
+*.timestamp-*-*.mjs
+
+# Release media / generated video projects
+video-output/
+video-cs2-*/
+
+# Large binary release resources
+src-tauri/resources/CS2BotImprover.zip.before_*
+src-tauri/resources/*.bak*
+src-tauri/resources/webview2-fixed/
+
+# Local task material and generated third-party outputs
+/.agents/
+/.claude/
+/.codex/
+/backups/
+/cleanup-*.txt
+/问题截图（一般是过期问题，除非指定）/
+/docs/handoff-*.md
+third_party/**/bin/
+third_party/**/obj/
+third_party/**/workspace/

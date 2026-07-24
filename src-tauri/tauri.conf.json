@@ -1,0 +1,55 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "CS2人机增强助手",
+  "mainBinaryName": "CS2BotImproverAssistant",
+  "version": "0.5.2",
+  "identifier": "com.aipc.cs2botimprover",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev:web",
+    "beforeBuildCommand": "npm run build:web"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "CS2人机增强助手",
+        "width": 960,
+        "height": 700,
+        "minWidth": 720,
+        "minHeight": 620,
+        "resizable": true,
+        "decorations": false,
+        "shadow": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "nsis",
+    "windows": {
+      "nsis": {
+        "installerHooks": "nsis-hooks.nsh"
+      }
+    },
+    "resources": [
+      "resources/CS2BotImprover.zip",
+      "../LICENSE",
+      "../NOTICE.md"
+    ],
+    "license": "AGPL-3.0-or-later",
+    "licenseFile": "../LICENSE",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

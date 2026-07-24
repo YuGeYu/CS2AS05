@@ -1,0 +1,54 @@
+Upstream project: https://github.com/ed0ard/CS2-Bot-Improver
+Upstream tag: v1.4.2
+Upstream commit: 97fd57d2ee1e14e408ae3ca7b1b0cae596a792cc
+Official Windows asset: CS2BotImprover.zip
+Official ZIP SHA256: 0603709B1BC1AE42D5D0BA65D9FCDEC32C31A0DB0E421D2797435F63946052D3
+
+Build project: addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.csproj
+Additional source: addons/counterstrikesharp/plugins/NadeSystem/NadePacingPolicy.cs
+Build commands:
+  dotnet restore NadeSystem.csproj
+  dotnet build NadeSystem.csproj -c Release
+
+RayTraceApi.dll build reference source:
+  addons/counterstrikesharp/plugins/RayTraceImpl/RayTraceApi.dll
+  SHA256 ADFE79B62EBE119FFB03F268A8E00D2AC6BF675C692F5728E843CF65592E0CA8
+
+Only replaced ZIP entry:
+  addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll
+
+Customization:
+  Per BOT, per round limits for NadeSystem-scheduled throws: flash=2,
+  HE=1, smoke=1, molotov/incgrenade=1. The limit applies in normal,
+  more, and max bot_nades modes at replay, instant-special, and
+  retaliation entry points. Unknown grenade types retain upstream behavior.
+  Non-emergency throws are paced across the round: one per BOT during
+  the first 15 seconds after freeze end, no more than min(alive BOTs, 5)
+  per team in that opening window, at least 5 seconds between throws by
+  one BOT, and at least 0.5 seconds between throws by one team. Defuse
+  cover and fire-extinguishing throws bypass pacing but not hard limits;
+  plant cover bypasses only the opening team budget. Hard limits, pacing,
+  money, team counts, and cooldowns commit only after entity creation.
+  The limit adds no console output. Existing NadeSystem diagnostics and
+  projectile error logs remain unchanged.
+
+0.5.2 balance and audit customization:
+  Planned candidates are collected then selected by deterministic score
+  (molotov, HE, flash, smoke; Id ordinal tie-break), rather than JSON order.
+  In the 15-second opening window, a team may commit at most one smoke and
+  three non-smokes while retaining the min(alive BOTs, 5) total budget.
+  HE and fire require live enemies within 450 units respectively;
+  no-information probabilities are normal=1.00/1.00 and more=1.00/1.00
+  (max=1.00/1.00). Normal PlannedReplay smoke is capped at one successful
+  throw per team per round, with pending reservations cancelled on failure.
+  Team-tagged, scheduled flashes may use a 1600-unit fallback at
+  normal=0.45, more=0.70, max=1.00. Direct blindable flashes remain preferred.
+  A single ASCII [NadeAudit] line is written only after a successful commit.
+  tests/NadePacingPolicy.Tests.csproj parses logs and writes
+  nade-audit-summary.txt/csv when given a log path.
+
+Policy test:
+  dotnet run --project tests/NadePacingPolicy.Tests.csproj -c Release
+
+Audit log analysis:
+  dotnet run --project tests/NadePacingPolicy.Tests.csproj -c Release -- <raw-console.log> <output-directory>
