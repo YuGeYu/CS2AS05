@@ -1,10 +1,48 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Cs2RootCandidate {
     pub path: String,
     pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Cs2SuggestedRoot {
+    pub path: String,
+    pub source: String,
+    pub confidence: String,
+    pub evidence: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
+pub enum Cs2RootScanEvent {
+    Progress {
+        elapsed_ms: u64,
+        checked_locations: u32,
+        current_location: Option<String>,
+    },
+    Candidate {
+        elapsed_ms: u64,
+        checked_locations: u32,
+        candidate: Cs2SuggestedRoot,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Cs2RootScanSummary {
+    pub candidates: Vec<Cs2SuggestedRoot>,
+    pub elapsed_ms: u64,
+    pub checked_locations: u32,
+    pub stop_reason: String,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]

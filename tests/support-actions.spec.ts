@@ -30,7 +30,7 @@ describe('support actions', () => {
   it('maps update, official-site, and idea buttons to their commands', async () => {
     const wrapper = mount(SupportActions, { global: { stubs: { Teleport: true } } })
     await flushPromises()
-    expect(wrapper.text()).toContain('当前 0.5.2 已是最新版本')
+    expect(wrapper.text()).toContain('当前 0.5.3 已是最新版本')
     const buttons = wrapper.findAll('.support-actions button')
     await buttons[0]?.trigger('click')
     await buttons[1]?.trigger('click')

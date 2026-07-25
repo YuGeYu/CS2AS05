@@ -17,7 +17,7 @@
       "distDir": "workspace/runtime/cs2-bot-improver/dist",
       "bundleDir": "workspace/runtime/cs2-bot-improver/bundles",
       "logDir": "workspace/runtime/cs2-bot-improver/logs",
-      "description": "官方 CS2-Bot-Improver v1.4.2 安装与 Panel 启动入口。"
+      "description": "原生融合 CS2-Bot-Improver v1.4.2 Panel 功能的安装与配置助手。"
     }
   ]
 }

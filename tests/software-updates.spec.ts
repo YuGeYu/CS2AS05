@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { config } = vi.hoisted(() => ({
   config: {
-    appVersion: '0.5.2',
+    appVersion: '0.5.3',
     channel: 'prod',
     updateFeedUrl: 'https://cs2as.600318.xyz/api/software-updates/cs2-bot-improver',
     updaterEnabled: true,
@@ -26,7 +26,7 @@ function response(body: unknown, status = 200) {
 }
 
 function payload(hasUpdate: boolean, latest: unknown = release) {
-  return { projectId: 'cs2-bot-improver', channel: 'prod', currentVersion: '0.5.2', hasUpdate, latest, history: [] }
+  return { projectId: 'cs2-bot-improver', channel: 'prod', currentVersion: '0.5.3', hasUpdate, latest, history: [] }
 }
 
 describe('software update checks', () => {
@@ -40,7 +40,7 @@ describe('software update checks', () => {
   it('uses the real version and channel and trusts hasUpdate=false', async () => {
     const fetchMock = vi.fn(async (input: URL | RequestInfo) => {
       const url = new URL(String(input))
-      expect(url.searchParams.get('currentVersion')).toBe('0.5.2')
+      expect(url.searchParams.get('currentVersion')).toBe('0.5.3')
       expect(url.searchParams.get('channel')).toBe('prod')
       return response(payload(false, { ...release, version: '0.5.0' }))
     })

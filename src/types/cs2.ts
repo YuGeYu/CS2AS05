@@ -3,7 +3,34 @@ export interface Cs2RootCandidate {
   source: string
 }
 
+export interface Cs2SuggestedRoot extends Cs2RootCandidate {
+  confidence: 'verified' | 'likely'
+  evidence: string[]
+}
+
+export interface Cs2RootScanEvent {
+  kind: 'progress' | 'candidate'
+  elapsedMs: number
+  checkedLocations: number
+  currentLocation?: string
+  candidate?: Cs2SuggestedRoot
+}
+
+export interface Cs2RootScanSummary {
+  candidates: Cs2SuggestedRoot[]
+  elapsedMs: number
+  checkedLocations: number
+  stopReason: 'threeFound' | 'timeout' | 'userStopped'
+  warnings: string[]
+}
+
 export type Cs2ProcessState = 'checking' | 'running' | 'stopped' | 'unknown'
+
+export interface ToastMessage {
+  tone: 'ready' | 'warn' | 'danger' | 'info'
+  title: string
+  message: string
+}
 
 export interface Cs2EnvironmentStatus {
   rootPath: string

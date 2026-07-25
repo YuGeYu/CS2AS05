@@ -1,21 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 
 internal static class Program
 {
     private static int _assertions;
 
-    private static int Main(string[] args)
+    private static int Main()
     {
-        if (args.Length > 0)
-        {
-            if (args.Length > 2) throw new ArgumentException("Usage: dotnet run -c Release -- <log-path> [output-directory]");
-            string output = args.Length == 2 ? args[1] : Path.GetDirectoryName(Path.GetFullPath(args[0]))!;
-            return NadeAuditAnalyzer.Analyze(args[0], output);
-        }
-
         OpeningPerBotLimit();
         BotAndTeamGaps();
         OpeningTeamAndTypeBudgets();
@@ -28,11 +20,8 @@ internal static class Program
         EmergencyStillUsesHardLimit();
         HardLimitsAndMolotovAlias();
         FailedCreationRollsBackReservation();
-        AuditCommitAndRoundTrip();
-        AuditParserRejectsMalformedFields();
-        AuditAnalyzerRequiresExplicitNormalMode();
         RoundResetClearsState();
-        Console.WriteLine($"Nade pacing/audit policy: {_assertions} assertions passed.");
+        Console.WriteLine($"Nade pacing policy: {_assertions} assertions passed.");
         return 0;
     }
 
@@ -179,30 +168,6 @@ internal static class Program
         Reject(special.TryBegin(1, 2, "smoke", ThrowReason.DefuseCover, 2f, 0f, 5), "special smoke remains hard limited per bot");
     }
 
-    private static void AuditCommitAndRoundTrip()
-    {
-        var policy = new NadePacingPolicy();
-        var cancelled = Begin(policy, 9, 2, "he", ThrowReason.PlannedReplay, 1f, 0f, 5);
-        policy.Cancel(cancelled);
-        int emitted = 0;
-        var first = Begin(policy, 1, 2, "flash", ThrowReason.PlannedReplay, 101f, 100f, 5);
-        var state = policy.Commit(first, 101f); emitted++;
-        Equal(-1f, state.BotGap, "first bot gap"); Equal(-1f, state.TeamGap, "first team gap"); Equal(1, emitted, "only commit emits");
-        var record = new NadeAuditRecord(101f, 7, 1f, 2, 1, "flash", "PlannedReplay", 0, 1, "flash_direct",
-            state.BotGap, state.TeamGap, state.BotOpening, 1, state.TeamOpening, state.OpeningTeamLimit,
-            state.TeamOpeningSmoke, NadePacingPolicy.OpeningSmokeCap, state.BotFlash, state.BotSmoke, state.BotHE, state.BotMolotov);
-        string text = record.Format();
-        Equal(text, NadeAuditRecord.Parse(text).Format(), "invariant audit round trip");
-    }
-
-    private static void AuditParserRejectsMalformedFields()
-    {
-        string valid = new NadeAuditRecord(1, 1, 0, 2, 1, "he", "PlannedReplay", 0, 1, "he_effective", -1, -1, 1, 1, 1, 5, 0, NadePacingPolicy.OpeningSmokeCap, 0, 0, 1, 0).Format();
-        Throws(() => NadeAuditRecord.Parse(valid + " unknown=1"), "unknown field");
-        Throws(() => NadeAuditRecord.Parse(valid + " time=2.000"), "duplicate field");
-        Throws(() => NadeAuditRecord.Parse(valid.Replace(" type=he", " type=bad", StringComparison.Ordinal)), "invalid type");
-    }
-
     private static void RoundResetClearsState()
     {
         var policy = new NadePacingPolicy();
@@ -210,34 +175,6 @@ internal static class Program
         policy.Reset();
         Accept(policy.TryBegin(1, 2, "he", ThrowReason.PlannedReplay, 102f, 100f, 5), "reset");
     }
-
-    private static void AuditAnalyzerRequiresExplicitNormalMode()
-    {
-        string root = Path.Combine(Path.GetTempPath(), "nade-audit-mode-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        try
-        {
-            string first = AuditSmoke(1f, 8, 2, 1);
-            string second = AuditSmoke(2f, 8, 2, 2);
-            string noMode = Path.Combine(root, "no-mode.log");
-            File.WriteAllLines(noMode, new[] { first, second });
-            Equal(0, NadeAuditAnalyzer.Analyze(noMode, Path.Combine(root, "no-mode-out")), "missing mode evidence is not normal");
-
-            string normal = Path.Combine(root, "normal.log");
-            File.WriteAllLines(normal, new[] { "bot_nades set to normal", first, second });
-            Equal(2, NadeAuditAnalyzer.Analyze(normal, Path.Combine(root, "normal-out")), "explicit normal mode enforces team smoke cap");
-            string report = File.ReadAllText(Path.Combine(root, "normal-out", "nade-audit-summary.txt"));
-            True(report.Contains("normal planned smoke team > 1", StringComparison.Ordinal), "normal violation includes source rows");
-        }
-        finally
-        {
-            Directory.Delete(root, true);
-        }
-    }
-
-    private static string AuditSmoke(float time, int round, int team, uint bot) =>
-        new NadeAuditRecord(time, round, 20f, team, bot, "smoke", "PlannedReplay", 0, 0, "special",
-            -1, -1, 0, 1, 0, 5, 0, NadePacingPolicy.OpeningSmokeCap, 0, 1, 0, 0).Format();
 
     private static ThrowReservation Begin(NadePacingPolicy p, uint bot, int team, string type, ThrowReason reason, float now, float freeze, int alive, string mode = "normal") =>
         p.TryBegin(bot, team, type, reason, now, freeze, alive, mode) ?? throw new InvalidOperationException($"Expected reservation for {type} at {now}.");
@@ -247,5 +184,4 @@ internal static class Program
     private static void True(bool value, string message) { _assertions++; if (!value) throw new InvalidOperationException("Expected true: " + message); }
     private static void False(bool value, string message) { _assertions++; if (value) throw new InvalidOperationException("Expected false: " + message); }
     private static void Equal<T>(T expected, T actual, string message) where T : notnull { _assertions++; if (!EqualityComparer<T>.Default.Equals(expected, actual)) throw new InvalidOperationException($"{message}: expected {expected}, actual {actual}"); }
-    private static void Throws(Action action, string message) { _assertions++; try { action(); } catch (FormatException) { return; } throw new InvalidOperationException("Expected format error: " + message); }
 }

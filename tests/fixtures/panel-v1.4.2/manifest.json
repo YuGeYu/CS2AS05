@@ -1,0 +1,13 @@
+{
+  "source": "ed0ard/CS2-Bot-Improver@97fd57d2ee1e14e408ae3ca7b1b0cae596a792cc",
+  "bundleSha256": "55DC504BFF8340ABE6AB317661518B512DB6FFA463F10EE3AF84149B1795C3E9",
+  "panelSha256": "9C3AB83909E506C0D4BD4886C961DFC0E871DA71BB47E1D1BEA7EF2CCFE40AB2",
+  "knifeManifest": "src/assets/knives/manifest.json",
+  "commands": {
+    "path": "src/data/panel/commands.txt",
+    "sha256": "185893ADB080565E77447066E42256C58E76A8343459C0C7C3ED1D723A21C139",
+    "parsedEntries": 176,
+    "teams": 40
+  },
+  "generatedFixture": true
+}

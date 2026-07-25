@@ -32,7 +32,7 @@ Customization:
   The limit adds no console output. Existing NadeSystem diagnostics and
   projectile error logs remain unchanged.
 
-0.5.2 balance and audit customization:
+0.5.2 balance customization:
   Planned candidates are collected then selected by deterministic score
   (molotov, HE, flash, smoke; Id ordinal tie-break), rather than JSON order.
   In the 15-second opening window, a team may commit at most one smoke and
@@ -43,12 +43,8 @@ Customization:
   throw per team per round, with pending reservations cancelled on failure.
   Team-tagged, scheduled flashes may use a 1600-unit fallback at
   normal=0.45, more=0.70, max=1.00. Direct blindable flashes remain preferred.
-  A single ASCII [NadeAudit] line is written only after a successful commit.
-  tests/NadePacingPolicy.Tests.csproj parses logs and writes
-  nade-audit-summary.txt/csv when given a log path.
+  No [NadeAudit] console lines are generated. Existing upstream loading,
+  command usage, entity creation, and projectile error diagnostics remain.
 
 Policy test:
   dotnet run --project tests/NadePacingPolicy.Tests.csproj -c Release
-
-Audit log analysis:
-  dotnet run --project tests/NadePacingPolicy.Tests.csproj -c Release -- <raw-console.log> <output-directory>

@@ -1,183 +1,6 @@
-diff --git a/addons/counterstrikesharp/plugins/NadeSystem/NadeAudit.cs b/addons/counterstrikesharp/plugins/NadeSystem/NadeAudit.cs
-new file mode 100644
-index 0000000..6f42e3a
---- /dev/null
-+++ b/addons/counterstrikesharp/plugins/NadeSystem/NadeAudit.cs
-@@ -0,0 +1,171 @@
-+using System;
-+using System.Collections.Generic;
-+using System.Globalization;
-+using System.IO;
-+using System.Linq;
-+
-+internal sealed record NadeAuditRecord(
-+    float Time, int Round, float FreezeElapsed, int Team, uint Bot, string Type, string Reason,
-+    int Emergency, int Opening, string Decision, float BotGap, float TeamGap,
-+    int BotOpening, int BotOpeningLimit, int TeamOpening, int TeamOpeningLimit,
-+    int TeamOpeningSmoke, int TeamOpeningSmokeLimit,
-+    int BotFlash, int BotSmoke, int BotHE, int BotMolotov)
-+{
-+    internal const string Prefix = "[NadeAudit] ";
-+    private static readonly HashSet<string> RequiredKeys = new(StringComparer.Ordinal)
-+    {
-+        "event", "time", "round", "freeze_elapsed", "team", "bot", "type", "reason",
-+        "emergency", "opening", "decision", "bot_gap", "team_gap", "bot_opening",
-+        "team_opening", "team_opening_smoke", "bot_flash", "bot_smoke", "bot_he", "bot_molotov",
-+    };
-+
-+    internal string Format() => string.Format(CultureInfo.InvariantCulture,
-+        Prefix + "event=throw time={0:F3} round={1} freeze_elapsed={2:F3} team={3} bot={4} type={5} reason={6} emergency={7} opening={8} decision={9} bot_gap={10:F3} team_gap={11:F3} bot_opening={12}/{13} team_opening={14}/{15} team_opening_smoke={16}/{17} bot_flash={18} bot_smoke={19} bot_he={20} bot_molotov={21}",
-+        Time, Round, FreezeElapsed, Team, Bot, Type, Reason, Emergency, Opening, Decision, BotGap, TeamGap,
-+        BotOpening, BotOpeningLimit, TeamOpening, TeamOpeningLimit, TeamOpeningSmoke, TeamOpeningSmokeLimit,
-+        BotFlash, BotSmoke, BotHE, BotMolotov);
-+
-+    internal static NadeAuditRecord Parse(string line)
-+    {
-+        int prefixAt = line.IndexOf(Prefix, StringComparison.Ordinal);
-+        if (prefixAt < 0) throw new FormatException("Missing [NadeAudit] prefix.");
-+        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-+        foreach (string token in line[(prefixAt + Prefix.Length)..].Split(' ', StringSplitOptions.RemoveEmptyEntries))
-+        {
-+            int equals = token.IndexOf('=');
-+            if (equals <= 0 || equals == token.Length - 1) throw new FormatException($"Malformed token '{token}'.");
-+            string key = token[..equals];
-+            if (!RequiredKeys.Contains(key)) throw new FormatException($"Unknown field '{key}'.");
-+            if (!fields.TryAdd(key, token[(equals + 1)..])) throw new FormatException($"Duplicate field '{key}'.");
-+        }
-+        foreach (string key in RequiredKeys)
-+            if (!fields.ContainsKey(key)) throw new FormatException($"Missing field '{key}'.");
-+        if (fields["event"] != "throw") throw new FormatException("event must be throw.");
-+        string type = fields["type"];
-+        if (type is not ("flash" or "smoke" or "he" or "molotov")) throw new FormatException($"Invalid type '{type}'.");
-+        var botOpening = ParseRatio(fields["bot_opening"], "bot_opening");
-+        var teamOpening = ParseRatio(fields["team_opening"], "team_opening");
-+        var smokeOpening = ParseRatio(fields["team_opening_smoke"], "team_opening_smoke");
-+        return new NadeAuditRecord(
-+            Float(fields, "time"), Int(fields, "round"), Float(fields, "freeze_elapsed"), Int(fields, "team"), UInt(fields, "bot"),
-+            type, fields["reason"], Bit(fields, "emergency"), Bit(fields, "opening"), fields["decision"],
-+            Float(fields, "bot_gap"), Float(fields, "team_gap"), botOpening.Value, botOpening.Limit,
-+            teamOpening.Value, teamOpening.Limit, smokeOpening.Value, smokeOpening.Limit,
-+            Int(fields, "bot_flash"), Int(fields, "bot_smoke"), Int(fields, "bot_he"), Int(fields, "bot_molotov"));
-+    }
-+
-+    private static (int Value, int Limit) ParseRatio(string value, string key)
-+    {
-+        string[] parts = value.Split('/');
-+        if (parts.Length != 2 || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out int current)
-+            || !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out int limit))
-+            throw new FormatException($"Invalid ratio field '{key}'.");
-+        return (current, limit);
-+    }
-+
-+    private static float Float(Dictionary<string, string> f, string key) =>
-+        float.TryParse(f[key], NumberStyles.Float, CultureInfo.InvariantCulture, out float value) && float.IsFinite(value)
-+            ? value : throw new FormatException($"Invalid float field '{key}'.");
-+    private static int Int(Dictionary<string, string> f, string key) =>
-+        int.TryParse(f[key], NumberStyles.Integer, CultureInfo.InvariantCulture, out int value)
-+            ? value : throw new FormatException($"Invalid integer field '{key}'.");
-+    private static uint UInt(Dictionary<string, string> f, string key) =>
-+        uint.TryParse(f[key], NumberStyles.None, CultureInfo.InvariantCulture, out uint value)
-+            ? value : throw new FormatException($"Invalid unsigned field '{key}'.");
-+    private static int Bit(Dictionary<string, string> f, string key)
-+    {
-+        int value = Int(f, key);
-+        return value is 0 or 1 ? value : throw new FormatException($"Field '{key}' must be 0 or 1.");
-+    }
-+}
-+
-+internal static class NadeAuditAnalyzer
-+{
-+    internal static int Analyze(string inputPath, string outputDirectory)
-+    {
-+        Directory.CreateDirectory(outputDirectory);
-+        var records = new List<(int Line, string Raw, NadeAuditRecord Record)>();
-+        var modeByRound = new Dictionary<int, string>();
-+        string? currentMode = null;
-+        int lineNumber = 0;
-+        foreach (string line in File.ReadLines(inputPath))
-+        {
-+            lineNumber++;
-+            string lower = line.ToLowerInvariant();
-+            foreach (string mode in new[] { "normal", "more", "max" })
-+                if (lower.Contains($"bot_nades set to {mode}", StringComparison.Ordinal)) currentMode = mode;
-+            if (!line.Contains(NadeAuditRecord.Prefix, StringComparison.Ordinal)) continue;
-+            try
-+            {
-+                var record = NadeAuditRecord.Parse(line);
-+                records.Add((lineNumber, line, record));
-+                if (currentMode != null)
-+                {
-+                    if (!modeByRound.TryGetValue(record.Round, out string? existing)) modeByRound[record.Round] = currentMode;
-+                    else if (existing != currentMode) modeByRound[record.Round] = "mixed";
-+                }
-+            }
-+            catch (Exception ex) { throw new FormatException($"Line {lineNumber}: {ex.Message}\n{line}", ex); }
-+        }
-+        if (records.Count == 0) throw new FormatException("No [NadeAudit] records found.");
-+
-+        var violations = new List<string>();
-+        foreach (var group in records.Where(x => x.Record.Emergency == 0).GroupBy(x => (x.Record.Round, x.Record.Bot)))
-+            CheckGaps(group.OrderBy(x => x.Record.Time).ToList(), 5f, "bot", violations);
-+        foreach (var group in records.Where(x => x.Record.Emergency == 0).GroupBy(x => (x.Record.Round, x.Record.Team)))
-+            CheckGaps(group.OrderBy(x => x.Record.Time).ToList(), 0.5f, "team", violations);
-+
-+        var opening = records.Where(x => x.Record.Emergency == 0 && x.Record.FreezeElapsed >= 0f && x.Record.FreezeElapsed < 15f).ToList();
-+        foreach (var g in opening.GroupBy(x => (x.Record.Round, x.Record.Bot)).Where(g => g.Count() > 1)) AddGroupViolation("opening bot > 1", g, violations);
-+        foreach (var g in opening.GroupBy(x => (x.Record.Round, x.Record.Team)).Where(g => g.Count() > g.Min(x => x.Record.TeamOpeningLimit))) AddGroupViolation("opening team exceeds limit", g, violations);
-+        foreach (var g in opening.Where(x => x.Record.Type == "smoke").GroupBy(x => (x.Record.Round, x.Record.Team)).Where(g => g.Count() > g.Min(x => x.Record.TeamOpeningSmokeLimit))) AddGroupViolation("opening smoke exceeds limit", g, violations);
-+
-+        foreach (var g in records.GroupBy(x => (x.Record.Round, x.Record.Bot)))
-+        {
-+            CheckHard(g, "flash", 2, violations); CheckHard(g, "smoke", 1, violations);
-+            CheckHard(g, "he", 1, violations); CheckHard(g, "molotov", 1, violations);
-+        }
-+
-+        var normalPlannedSmokes = records.Where(x => modeByRound.TryGetValue(x.Record.Round, out string? mode)
-+            && mode == "normal" && x.Record.Reason == nameof(ThrowReason.PlannedReplay) && x.Record.Type == "smoke");
-+        foreach (var g in normalPlannedSmokes.GroupBy(x => (x.Record.Round, x.Record.Team)).Where(g => g.Count() > NadePacingPolicy.NormalPlannedSmokeCapPerTeam))
-+            AddGroupViolation("normal planned smoke team > 1", g, violations);
-+
-+        string csvPath = Path.Combine(outputDirectory, "nade-audit-summary.csv");
-+        using (var csv = new StreamWriter(csvPath, false))
-+        {
-+            csv.WriteLine("category,key,count");
-+            foreach (var g in records.GroupBy(x => x.Record.Type).OrderBy(g => g.Key)) csv.WriteLine($"type,{g.Key},{g.Count()}");
-+            foreach (var g in records.GroupBy(x => x.Record.Round).OrderBy(g => g.Key)) csv.WriteLine($"round,{g.Key},{g.Count()}");
-+            foreach (var g in records.GroupBy(x => x.Record.Decision).OrderBy(g => g.Key)) csv.WriteLine($"decision,{g.Key},{g.Count()}");
-+        }
-+        string txtPath = Path.Combine(outputDirectory, "nade-audit-summary.txt");
-+        using (var txt = new StreamWriter(txtPath, false))
-+        {
-+            txt.WriteLine($"records={records.Count}");
-+            foreach (var g in records.GroupBy(x => x.Record.Type).OrderBy(g => g.Key)) txt.WriteLine($"type.{g.Key}={g.Count()}");
-+            foreach (var g in records.GroupBy(x => x.Record.Round).OrderBy(g => g.Key)) txt.WriteLine($"round.{g.Key}={g.Count()}");
-+            foreach (var g in records.GroupBy(x => x.Record.Decision).OrderBy(g => g.Key)) txt.WriteLine($"decision.{g.Key}={g.Count()}");
-+            txt.WriteLine($"violations={violations.Count}");
-+            foreach (string violation in violations) txt.WriteLine(violation);
-+            txt.WriteLine(violations.Count == 0 ? "RESULT=PASS" : "RESULT=FAIL");
-+        }
-+        return violations.Count == 0 ? 0 : 2;
-+    }
-+
-+    private static void CheckGaps(List<(int Line, string Raw, NadeAuditRecord Record)> rows, float minimum, string kind, List<string> violations)
-+    {
-+        for (int i = 1; i < rows.Count; i++)
-+            if (rows[i].Record.Time - rows[i - 1].Record.Time + 0.0001f < minimum)
-+                violations.Add($"{kind}_gap line={rows[i].Line} raw={rows[i].Raw}");
-+    }
-+    private static void CheckHard(IEnumerable<(int Line, string Raw, NadeAuditRecord Record)> rows, string type, int limit, List<string> violations)
-+    {
-+        var matching = rows.Where(x => x.Record.Type == type).ToList();
-+        if (matching.Count > limit) AddGroupViolation($"hard {type} > {limit}", matching, violations);
-+    }
-+    private static void AddGroupViolation(string name, IEnumerable<(int Line, string Raw, NadeAuditRecord Record)> rows, List<string> violations)
-+    {
-+        foreach (var row in rows) violations.Add($"{name} line={row.Line} raw={row.Raw}");
-+    }
-+}
 diff --git a/addons/counterstrikesharp/plugins/NadeSystem/NadePacingPolicy.cs b/addons/counterstrikesharp/plugins/NadeSystem/NadePacingPolicy.cs
 new file mode 100644
-index 0000000..038b379
+index 0000000000000000000000000000000000000000..038b379c282a26318621d0d892f918131dd84aa3
 --- /dev/null
 +++ b/addons/counterstrikesharp/plugins/NadeSystem/NadePacingPolicy.cs
 @@ -0,0 +1,339 @@
@@ -521,7 +344,7 @@ index 0000000..038b379
 +    private static void RemoveValue(Dictionary<int, int> map, int key, int amount) { if (map.TryGetValue(key, out int value) && (value -= amount) > 0) map[key] = value; else map.Remove(key); }
 +}
 diff --git a/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.cs b/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.cs
-index 485da5a..4cf5f8f 100644
+index 485da5a9f3aa67e0dfe5c2d1231df710c14a1ee0..b023896d6b26a231dcdabff60aefe13d6e810e1f 100644
 --- a/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.cs
 +++ b/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.cs
 @@ -9,6 +9,7 @@ using CounterStrikeSharp.API.Modules.Timers;
@@ -709,7 +532,7 @@ index 485da5a..4cf5f8f 100644
      {
          if (_botNadesMode == "off") return;
          // In case the bot has been taken over
-@@ -866,32 +809,60 @@ public class NadeSystemPlugin : BasePlugin
+@@ -866,32 +809,45 @@ public class NadeSystemPlugin : BasePlugin
          // Expensure Limit
          bool deductMoney = alreadySpent < spendCap;
  
@@ -739,13 +562,16 @@ index 485da5a..4cf5f8f 100644
 -            _earlySmokeCountByTeam[bot.TeamNum] = cnt + 1;
 -        }
 -        SpawnProjectile(bot, g);
+-
+-        // Allow bot to throw another grenade after this window
+-        AddTimer(1f, () => _replayBots.Remove((uint)bot.Index));
 +            if (!success)
 +            {
 +                _pacingPolicy.Cancel(reservation);
 +                _replayBots.Remove(botIdx);
 +                return;
 +            }
-+            var audit = _pacingPolicy.Commit(reservation, Server.CurrentTime);
++            _pacingPolicy.Commit(reservation, Server.CurrentTime);
 +            if (deductMoney)
 +            {
 +                money.Account -= cost;
@@ -754,25 +580,8 @@ index 485da5a..4cf5f8f 100644
 +            }
 +            RegisterCooldown(g.Id, gtype);
 +            IncrementCount(gtype, bot.TeamNum);
-+            WriteNadeAudit(reservation, audit, decision);
 +            AddTimer(1f, () => _replayBots.Remove(botIdx));
 +        });
-+    }
- 
--        // Allow bot to throw another grenade after this window
--        AddTimer(1f, () => _replayBots.Remove((uint)bot.Index));
-+    private void WriteNadeAudit(ThrowReservation reservation, PacingAuditSnapshot state, string decision)
-+    {
-+        float now = Server.CurrentTime;
-+        float freezeElapsed = _freezeEndTime > 0f ? now - _freezeEndTime : -1f;
-+        int emergency = reservation.IsNonEmergency ? 0 : 1;
-+        var record = new NadeAuditRecord(
-+            now, _roundSerial, freezeElapsed, reservation.TeamNum, reservation.BotIndex, reservation.GrenadeType,
-+            reservation.Reason.ToString(), emergency, reservation.IsOpening ? 1 : 0, decision,
-+            state.BotGap, state.TeamGap, state.BotOpening, NadePacingPolicy.OpeningThrowsPerBot,
-+            state.TeamOpening, state.OpeningTeamLimit, state.TeamOpeningSmoke, NadePacingPolicy.OpeningSmokeCap,
-+            state.BotFlash, state.BotSmoke, state.BotHE, state.BotMolotov);
-+        Server.PrintToConsole(record.Format());
      }
  
 -    private void SpawnProjectile(CCSPlayerController bot, GrenadeData g)
@@ -790,7 +599,7 @@ index 485da5a..4cf5f8f 100644
          // ── Item definition indices (weapon_def_index) ────────────
          // The native Create() functions require the item def index.
          static ushort GetItemIndex(string t) => t switch
-@@ -927,6 +898,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -927,6 +883,7 @@ public class NadeSystemPlugin : BasePlugin
                  if (botPawn == null || !botPawn.IsValid)
                  {
                      Server.PrintToConsole("[NadeSystem] bot pawn invalid, skipping replay");
@@ -798,7 +607,7 @@ index 485da5a..4cf5f8f 100644
                      return;
                  }
  
-@@ -939,6 +911,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -939,6 +896,7 @@ public class NadeSystemPlugin : BasePlugin
                      if (flash == null)
                      {
                          Server.PrintToConsole("[NadeSystem] flash CreateEntityByName null");
@@ -806,7 +615,7 @@ index 485da5a..4cf5f8f 100644
                          return;
                      }
                      flash.TeamNum             = teamNum;
-@@ -969,6 +942,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -969,6 +927,7 @@ public class NadeSystemPlugin : BasePlugin
                          $"bot=[{bot.PlayerName}] " +
                          $"origin=({origin.X:F0},{origin.Y:F0},{origin.Z:F0}) " +
                          $"vel=({velocity.X:F1},{velocity.Y:F1},{velocity.Z:F1})");
@@ -814,7 +623,7 @@ index 485da5a..4cf5f8f 100644
                      return;
                  }
  
-@@ -979,6 +953,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -979,6 +938,7 @@ public class NadeSystemPlugin : BasePlugin
                      if (decoy == null)
                      {
                          Server.PrintToConsole("[NadeSystem] decoy CreateEntityByName null");
@@ -822,7 +631,7 @@ index 485da5a..4cf5f8f 100644
                          return;
                      }
                      decoy.TeamNum             = teamNum;
-@@ -1001,6 +976,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1001,6 +961,7 @@ public class NadeSystemPlugin : BasePlugin
                          $"[NadeSystem] Replayed [decoy] id={g.Id[..8]}... " +
                          $"bot=[{bot.PlayerName}] " +
                          $"origin=({origin.X:F0},{origin.Y:F0},{origin.Z:F0})");
@@ -830,7 +639,7 @@ index 485da5a..4cf5f8f 100644
                      return;
                  }
  
-@@ -1018,6 +994,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1018,6 +979,7 @@ public class NadeSystemPlugin : BasePlugin
                      if (smoke == null || !smoke.IsValid)
                      {
                          Server.PrintToConsole("[NadeSystem] smoke native Create returned null");
@@ -838,7 +647,7 @@ index 485da5a..4cf5f8f 100644
                          return;
                      }
                      smoke.TeamNum             = teamNum;
-@@ -1029,6 +1006,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1029,6 +991,7 @@ public class NadeSystemPlugin : BasePlugin
                          $"bot=[{bot.PlayerName}] " +
                          $"origin=({origin.X:F0},{origin.Y:F0},{origin.Z:F0}) " +
                          $"vel=({velocity.X:F1},{velocity.Y:F1},{velocity.Z:F1})");
@@ -846,7 +655,7 @@ index 485da5a..4cf5f8f 100644
                      return;
                  }
  
-@@ -1045,6 +1023,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1045,6 +1008,7 @@ public class NadeSystemPlugin : BasePlugin
                      if (he == null || !he.IsValid)
                      {
                          Server.PrintToConsole("[NadeSystem] HE native Create returned null");
@@ -854,7 +663,7 @@ index 485da5a..4cf5f8f 100644
                          return;
                      }
                      he.TeamNum             = teamNum;
-@@ -1056,6 +1035,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1056,6 +1020,7 @@ public class NadeSystemPlugin : BasePlugin
                          $"bot=[{bot.PlayerName}] " +
                          $"origin=({origin.X:F0},{origin.Y:F0},{origin.Z:F0}) " +
                          $"vel=({velocity.X:F1},{velocity.Y:F1},{velocity.Z:F1})");
@@ -862,7 +671,7 @@ index 485da5a..4cf5f8f 100644
                      return;
                  }
  
-@@ -1074,6 +1054,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1074,6 +1039,7 @@ public class NadeSystemPlugin : BasePlugin
                      if (molotov == null || !molotov.IsValid)
                      {
                          Server.PrintToConsole("[NadeSystem] molotov native Create returned null");
@@ -870,7 +679,7 @@ index 485da5a..4cf5f8f 100644
                          return;
                      }
                      molotov.TeamNum             = teamNum;
-@@ -1085,15 +1066,18 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1085,15 +1051,18 @@ public class NadeSystemPlugin : BasePlugin
                          $"bot=[{bot.PlayerName}] " +
                          $"origin=({origin.X:F0},{origin.Y:F0},{origin.Z:F0}) " +
                          $"vel=({velocity.X:F1},{velocity.Y:F1},{velocity.Z:F1})");
@@ -889,7 +698,7 @@ index 485da5a..4cf5f8f 100644
              }
          });
      }
-@@ -1197,9 +1181,11 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1197,9 +1166,11 @@ public class NadeSystemPlugin : BasePlugin
  
      private HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
      {
@@ -901,7 +710,7 @@ index 485da5a..4cf5f8f 100644
          _cooldowns.Clear();
          _replayBots.Clear();
          _smokeCooldownBots.Clear();
-@@ -1208,7 +1194,6 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1208,7 +1179,6 @@ public class NadeSystemPlugin : BasePlugin
          _defuseFlashUsed  = false;
          _plantSmokeUsed   = false;
          _botMolotovDmgStart.Clear();
@@ -909,7 +718,7 @@ index 485da5a..4cf5f8f 100644
          _botInFlashZone.Clear();
          _botFlashRatioWindow.Clear();
          _botFlashImmunityUntil.Clear();
-@@ -1350,7 +1335,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1350,7 +1320,7 @@ public class NadeSystemPlugin : BasePlugin
      {
          var pawn = bot.PlayerPawn?.Value;
          if (pawn == null || !pawn.IsValid) return;
@@ -918,7 +727,7 @@ index 485da5a..4cf5f8f 100644
          {
              // Probability attempt cooldown
              if (g.GrenadeType.Equals("smoke", StringComparison.OrdinalIgnoreCase))
-@@ -1360,13 +1345,14 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1360,13 +1330,14 @@ public class NadeSystemPlugin : BasePlugin
              }
              return;
          }
@@ -935,7 +744,7 @@ index 485da5a..4cf5f8f 100644
          //  He / Molotov decision
          if (gtype is "he" or "molotov")
          {
-@@ -1381,7 +1367,10 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1381,7 +1352,10 @@ public class NadeSystemPlugin : BasePlugin
                      var ep = GetActiveLivePawn(p)?.AbsOrigin;
                      if (ep == null) return false;
                      float dx = ep.X - lx, dy = ep.Y - ly, dz = ep.Z - lz;
@@ -947,7 +756,7 @@ index 485da5a..4cf5f8f 100644
                  })
                  .ToList();
              if (nearbyEnemies.Count == 0) return false;
-@@ -1393,12 +1382,8 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1393,12 +1367,8 @@ public class NadeSystemPlugin : BasePlugin
                  if (!anyInfo)
                  {
                      // No info on any nearby enemy: roll probability.
@@ -962,7 +771,7 @@ index 485da5a..4cf5f8f 100644
                      {
                          RegisterProbFailCooldown(g.Id);
                          return false;
-@@ -1423,6 +1408,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1423,6 +1393,7 @@ public class NadeSystemPlugin : BasePlugin
                      if (ddx*ddx + ddy*ddy + ddz*ddz < 200f * 200f) return false;
                  }
              }
@@ -970,7 +779,7 @@ index 485da5a..4cf5f8f 100644
          }
  
          // Flash decision
-@@ -1432,7 +1418,29 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1432,7 +1403,29 @@ public class NadeSystemPlugin : BasePlugin
  
              // Collect enemies that can actually be blinded by this flash.
              var blindableEnemies = CanBlindAnyEnemy(bot, g, allControllers);
@@ -1001,7 +810,7 @@ index 485da5a..4cf5f8f 100644
  
              // Information gate (normal / more mode): if no blindable enemy has info on this bot,
              if (_botNadesMode == "normal" || _botNadesMode == "more")
-@@ -1449,6 +1457,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1449,6 +1442,7 @@ public class NadeSystemPlugin : BasePlugin
                      }
                  }
              }
@@ -1009,7 +818,7 @@ index 485da5a..4cf5f8f 100644
          }
  
          // Smoke decision
-@@ -1466,13 +1475,6 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1466,13 +1460,6 @@ public class NadeSystemPlugin : BasePlugin
                         && Dist3D(lx, ly, lz, d.LandingPosition.X, d.LandingPosition.Y, d.LandingPosition.Z) < 250f);
              if (tooClose) return false;
  
@@ -1023,7 +832,7 @@ index 485da5a..4cf5f8f 100644
              // Smoke Effective Range
              bool anyEnemyClose = allControllers
                  .Any(p =>
-@@ -1531,6 +1533,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1531,6 +1518,7 @@ public class NadeSystemPlugin : BasePlugin
              if (threshold < 1f && Random.Shared.NextDouble() >= threshold) return false;
          }
  
@@ -1031,7 +840,7 @@ index 485da5a..4cf5f8f 100644
          return true;
      }
      // Nades that only trigger at round start
-@@ -1679,7 +1682,8 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1679,7 +1667,8 @@ public class NadeSystemPlugin : BasePlugin
      //  Special Nades
      // ═══════════════════════════════════════════════════════════
      // Defuse smoke/flash
@@ -1041,7 +850,7 @@ index 485da5a..4cf5f8f 100644
      {
          if (_botNadesMode == "off") return;
          // In case the bot has been taken over
-@@ -1706,13 +1710,12 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1706,13 +1695,12 @@ public class NadeSystemPlugin : BasePlugin
          if (!_roundSpendPerBot.TryGetValue(botIdx, out int alreadySpent))
              alreadySpent = 0;
          bool deduct = alreadySpent < spendCap;
@@ -1061,7 +870,7 @@ index 485da5a..4cf5f8f 100644
  
          var vel = velocity ?? new Vector(0f, 0f, 0f);
          Server.NextFrame(() =>
-@@ -1720,7 +1723,11 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1720,7 +1708,11 @@ public class NadeSystemPlugin : BasePlugin
              try
              {
                  var botPawn = bot.PlayerPawn?.Value;
@@ -1074,7 +883,7 @@ index 485da5a..4cf5f8f 100644
  
                  int teamNum = bot.TeamNum;
  
-@@ -1730,7 +1737,11 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1730,7 +1722,11 @@ public class NadeSystemPlugin : BasePlugin
                          spawnPos.Handle, spawnPos.Handle,
                          vel.Handle, vel.Handle,
                          botPawn.Handle, 45, teamNum);
@@ -1087,7 +896,7 @@ index 485da5a..4cf5f8f 100644
                      smoke.TeamNum             = (byte)teamNum;
                      smoke.Thrower.Raw         = botPawn.EntityHandle.Raw;
                      smoke.OriginalThrower.Raw = botPawn.EntityHandle.Raw;
-@@ -1740,7 +1751,11 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1740,7 +1736,11 @@ public class NadeSystemPlugin : BasePlugin
                  {
                      var flash = Utilities.CreateEntityByName<CFlashbangProjectile>(
                          "flashbang_projectile");
@@ -1100,7 +909,7 @@ index 485da5a..4cf5f8f 100644
                      flash.TeamNum             = (byte)teamNum;
                      flash.Thrower.Raw         = botPawn.EntityHandle.Raw;
                      flash.OriginalThrower.Raw = botPawn.EntityHandle.Raw;
-@@ -1757,9 +1772,25 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1757,9 +1757,24 @@ public class NadeSystemPlugin : BasePlugin
                      flash.DispatchSpawn();
                      flash.Teleport(spawnPos, ang, vel);
                  }
@@ -1110,9 +919,8 @@ index 485da5a..4cf5f8f 100644
 +                    return;
 +                }
 +
-+                var audit = _pacingPolicy.Commit(reservation, Server.CurrentTime);
++                _pacingPolicy.Commit(reservation, Server.CurrentTime);
 +                Server.PrintToConsole($"[NadeSystem] Replayed [{reservation.GrenadeType}] id=instant... bot=[{bot.PlayerName}] special={reason}");
-+                WriteNadeAudit(reservation, audit, "special");
 +                if (deduct)
 +                {
 +                    money.Account -= cost;
@@ -1126,7 +934,7 @@ index 485da5a..4cf5f8f 100644
                  Server.PrintToConsole($"[NadeSystem] TrySpawnInstantGrenade error: {ex.Message}");
              }
          });
-@@ -1794,7 +1825,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1794,7 +1809,7 @@ public class NadeSystemPlugin : BasePlugin
              if (hasDefuser || Random.Shared.NextDouble() < 0.33)
              {
                  _defuseSmokeUsed = true;
@@ -1135,7 +943,7 @@ index 485da5a..4cf5f8f 100644
              }
          }
  
-@@ -1807,7 +1838,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1807,7 +1822,7 @@ public class NadeSystemPlugin : BasePlugin
                  // Don't flash yourself
                  _botFlashImmunityUntil[(uint)bot.Index] = Server.CurrentTime + 2f;
                  var flashVel = new Vector(0f, 0f, -800f);
@@ -1144,7 +952,7 @@ index 485da5a..4cf5f8f 100644
              }
          }
  
-@@ -1835,7 +1866,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1835,7 +1850,7 @@ public class NadeSystemPlugin : BasePlugin
          if (pos == null) return HookResult.Continue;
  
          _plantSmokeUsed = true;
@@ -1153,7 +961,7 @@ index 485da5a..4cf5f8f 100644
          return HookResult.Continue;
      }
  
-@@ -1887,7 +1918,7 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1887,7 +1902,7 @@ public class NadeSystemPlugin : BasePlugin
  
          var pos = pawn.AbsOrigin;
          if (pos == null) return;
@@ -1162,7 +970,7 @@ index 485da5a..4cf5f8f 100644
      }
      // Revenge grenade
      private void HandleRetaliationHE(EventPlayerHurt @event)
-@@ -1927,25 +1958,6 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1927,25 +1942,6 @@ public class NadeSystemPlugin : BasePlugin
              if (_retaliationCooldown.TryGetValue(teamNum, out float cdExpiry)
                  && Server.CurrentTime < cdExpiry) return;
          }
@@ -1188,7 +996,7 @@ index 485da5a..4cf5f8f 100644
          // Build candidate list (single pass: filter then sort)
          // primary  : satisfies both direction and distance check  -> first
          // secondary: nearest projectilePosition to victim         -> ascending
-@@ -1979,8 +1991,6 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1979,8 +1975,6 @@ public class NadeSystemPlugin : BasePlugin
  
          foreach (var g in candidates)
          {
@@ -1197,7 +1005,7 @@ index 485da5a..4cf5f8f 100644
              string gt = g.GrenadeType; // lowercase since LoadDb
  
              if (!costTable.TryGetValue(gt, out int cost)) continue;
-@@ -1988,23 +1998,36 @@ public class NadeSystemPlugin : BasePlugin
+@@ -1988,23 +1982,35 @@ public class NadeSystemPlugin : BasePlugin
  
              if (!_roundSpendPerBot.TryGetValue(botIdx, out int alreadySpent)) alreadySpent = 0;
              bool deduct = alreadySpent < spendCap;
@@ -1228,8 +1036,7 @@ index 485da5a..4cf5f8f 100644
 +                    _pacingPolicy.Cancel(reservation);
 +                    return;
 +                }
-+                var audit = _pacingPolicy.Commit(reservation, Server.CurrentTime);
-+                WriteNadeAudit(reservation, audit, "special");
++                _pacingPolicy.Commit(reservation, Server.CurrentTime);
 +                if (deduct)
 +                {
 +                    money.Account -= cost;
@@ -1250,7 +1057,7 @@ index 485da5a..4cf5f8f 100644
      // ═══════════════════════════════════════════════════════════
      //  Tick
 diff --git a/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.csproj b/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.csproj
-index d3a5d01..2c2ae27 100644
+index 2fee8f1b93a1fd3d4015cbf7181af8428dc6b3b6..4a6ddb1a2b12edea7730475acf4deac8b09c9aa0 100644
 --- a/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.csproj
 +++ b/addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.csproj
 @@ -1,5 +1,4 @@
@@ -1276,10 +1083,10 @@ index d3a5d01..2c2ae27 100644
  </Project>
 diff --git a/addons/counterstrikesharp/plugins/NadeSystem/tests/NadePacingPolicy.Tests.csproj b/addons/counterstrikesharp/plugins/NadeSystem/tests/NadePacingPolicy.Tests.csproj
 new file mode 100644
-index 0000000..c7e37b0
+index 0000000000000000000000000000000000000000..31a9d3a697c0b1137c1507e1993d5d6a94e790dc
 --- /dev/null
 +++ b/addons/counterstrikesharp/plugins/NadeSystem/tests/NadePacingPolicy.Tests.csproj
-@@ -0,0 +1,12 @@
+@@ -0,0 +1,11 @@
 +<Project Sdk="Microsoft.NET.Sdk">
 +  <PropertyGroup>
 +    <OutputType>Exe</OutputType>
@@ -1289,33 +1096,24 @@ index 0000000..c7e37b0
 +  </PropertyGroup>
 +  <ItemGroup>
 +    <Compile Include="..\NadePacingPolicy.cs" Link="NadePacingPolicy.cs" />
-+    <Compile Include="..\NadeAudit.cs" Link="NadeAudit.cs" />
 +  </ItemGroup>
 +</Project>
 diff --git a/addons/counterstrikesharp/plugins/NadeSystem/tests/Program.cs b/addons/counterstrikesharp/plugins/NadeSystem/tests/Program.cs
 new file mode 100644
-index 0000000..5ea8a91
+index 0000000000000000000000000000000000000000..2ab2fe2c98d28f90150704980e4909bc07fe19d8
 --- /dev/null
 +++ b/addons/counterstrikesharp/plugins/NadeSystem/tests/Program.cs
-@@ -0,0 +1,251 @@
+@@ -0,0 +1,187 @@
 +using System;
 +using System.Collections.Generic;
-+using System.IO;
 +using System.Linq;
 +
 +internal static class Program
 +{
 +    private static int _assertions;
 +
-+    private static int Main(string[] args)
++    private static int Main()
 +    {
-+        if (args.Length > 0)
-+        {
-+            if (args.Length > 2) throw new ArgumentException("Usage: dotnet run -c Release -- <log-path> [output-directory]");
-+            string output = args.Length == 2 ? args[1] : Path.GetDirectoryName(Path.GetFullPath(args[0]))!;
-+            return NadeAuditAnalyzer.Analyze(args[0], output);
-+        }
-+
 +        OpeningPerBotLimit();
 +        BotAndTeamGaps();
 +        OpeningTeamAndTypeBudgets();
@@ -1328,11 +1126,8 @@ index 0000000..5ea8a91
 +        EmergencyStillUsesHardLimit();
 +        HardLimitsAndMolotovAlias();
 +        FailedCreationRollsBackReservation();
-+        AuditCommitAndRoundTrip();
-+        AuditParserRejectsMalformedFields();
-+        AuditAnalyzerRequiresExplicitNormalMode();
 +        RoundResetClearsState();
-+        Console.WriteLine($"Nade pacing/audit policy: {_assertions} assertions passed.");
++        Console.WriteLine($"Nade pacing policy: {_assertions} assertions passed.");
 +        return 0;
 +    }
 +
@@ -1479,30 +1274,6 @@ index 0000000..5ea8a91
 +        Reject(special.TryBegin(1, 2, "smoke", ThrowReason.DefuseCover, 2f, 0f, 5), "special smoke remains hard limited per bot");
 +    }
 +
-+    private static void AuditCommitAndRoundTrip()
-+    {
-+        var policy = new NadePacingPolicy();
-+        var cancelled = Begin(policy, 9, 2, "he", ThrowReason.PlannedReplay, 1f, 0f, 5);
-+        policy.Cancel(cancelled);
-+        int emitted = 0;
-+        var first = Begin(policy, 1, 2, "flash", ThrowReason.PlannedReplay, 101f, 100f, 5);
-+        var state = policy.Commit(first, 101f); emitted++;
-+        Equal(-1f, state.BotGap, "first bot gap"); Equal(-1f, state.TeamGap, "first team gap"); Equal(1, emitted, "only commit emits");
-+        var record = new NadeAuditRecord(101f, 7, 1f, 2, 1, "flash", "PlannedReplay", 0, 1, "flash_direct",
-+            state.BotGap, state.TeamGap, state.BotOpening, 1, state.TeamOpening, state.OpeningTeamLimit,
-+            state.TeamOpeningSmoke, NadePacingPolicy.OpeningSmokeCap, state.BotFlash, state.BotSmoke, state.BotHE, state.BotMolotov);
-+        string text = record.Format();
-+        Equal(text, NadeAuditRecord.Parse(text).Format(), "invariant audit round trip");
-+    }
-+
-+    private static void AuditParserRejectsMalformedFields()
-+    {
-+        string valid = new NadeAuditRecord(1, 1, 0, 2, 1, "he", "PlannedReplay", 0, 1, "he_effective", -1, -1, 1, 1, 1, 5, 0, NadePacingPolicy.OpeningSmokeCap, 0, 0, 1, 0).Format();
-+        Throws(() => NadeAuditRecord.Parse(valid + " unknown=1"), "unknown field");
-+        Throws(() => NadeAuditRecord.Parse(valid + " time=2.000"), "duplicate field");
-+        Throws(() => NadeAuditRecord.Parse(valid.Replace(" type=he", " type=bad", StringComparison.Ordinal)), "invalid type");
-+    }
-+
 +    private static void RoundResetClearsState()
 +    {
 +        var policy = new NadePacingPolicy();
@@ -1510,34 +1281,6 @@ index 0000000..5ea8a91
 +        policy.Reset();
 +        Accept(policy.TryBegin(1, 2, "he", ThrowReason.PlannedReplay, 102f, 100f, 5), "reset");
 +    }
-+
-+    private static void AuditAnalyzerRequiresExplicitNormalMode()
-+    {
-+        string root = Path.Combine(Path.GetTempPath(), "nade-audit-mode-" + Guid.NewGuid().ToString("N"));
-+        Directory.CreateDirectory(root);
-+        try
-+        {
-+            string first = AuditSmoke(1f, 8, 2, 1);
-+            string second = AuditSmoke(2f, 8, 2, 2);
-+            string noMode = Path.Combine(root, "no-mode.log");
-+            File.WriteAllLines(noMode, new[] { first, second });
-+            Equal(0, NadeAuditAnalyzer.Analyze(noMode, Path.Combine(root, "no-mode-out")), "missing mode evidence is not normal");
-+
-+            string normal = Path.Combine(root, "normal.log");
-+            File.WriteAllLines(normal, new[] { "bot_nades set to normal", first, second });
-+            Equal(2, NadeAuditAnalyzer.Analyze(normal, Path.Combine(root, "normal-out")), "explicit normal mode enforces team smoke cap");
-+            string report = File.ReadAllText(Path.Combine(root, "normal-out", "nade-audit-summary.txt"));
-+            True(report.Contains("normal planned smoke team > 1", StringComparison.Ordinal), "normal violation includes source rows");
-+        }
-+        finally
-+        {
-+            Directory.Delete(root, true);
-+        }
-+    }
-+
-+    private static string AuditSmoke(float time, int round, int team, uint bot) =>
-+        new NadeAuditRecord(time, round, 20f, team, bot, "smoke", "PlannedReplay", 0, 0, "special",
-+            -1, -1, 0, 1, 0, 5, 0, NadePacingPolicy.OpeningSmokeCap, 0, 1, 0, 0).Format();
 +
 +    private static ThrowReservation Begin(NadePacingPolicy p, uint bot, int team, string type, ThrowReason reason, float now, float freeze, int alive, string mode = "normal") =>
 +        p.TryBegin(bot, team, type, reason, now, freeze, alive, mode) ?? throw new InvalidOperationException($"Expected reservation for {type} at {now}.");
@@ -1547,5 +1290,4 @@ index 0000000..5ea8a91
 +    private static void True(bool value, string message) { _assertions++; if (!value) throw new InvalidOperationException("Expected true: " + message); }
 +    private static void False(bool value, string message) { _assertions++; if (value) throw new InvalidOperationException("Expected false: " + message); }
 +    private static void Equal<T>(T expected, T actual, string message) where T : notnull { _assertions++; if (!EqualityComparer<T>.Default.Equals(expected, actual)) throw new InvalidOperationException($"{message}: expected {expected}, actual {actual}"); }
-+    private static void Throws(Action action, string message) { _assertions++; try { action(); } catch (FormatException) { return; } throw new InvalidOperationException("Expected format error: " + message); }
 +}

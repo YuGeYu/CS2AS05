@@ -43,6 +43,9 @@ docs/dev-log-*
 
 src-tauri/target/
 workspace/runtime/
+workspace/panel-diff/
+workspace/upstream-panel-v1.4.2/
+workspace/local-arena-panel-ref/
 
 # Cypress
 /cypress/videos/

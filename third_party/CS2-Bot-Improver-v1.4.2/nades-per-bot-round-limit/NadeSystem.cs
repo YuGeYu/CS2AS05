@@ -824,7 +824,7 @@ public class NadeSystemPlugin : BasePlugin
                 _replayBots.Remove(botIdx);
                 return;
             }
-            var audit = _pacingPolicy.Commit(reservation, Server.CurrentTime);
+            _pacingPolicy.Commit(reservation, Server.CurrentTime);
             if (deductMoney)
             {
                 money.Account -= cost;
@@ -833,23 +833,8 @@ public class NadeSystemPlugin : BasePlugin
             }
             RegisterCooldown(g.Id, gtype);
             IncrementCount(gtype, bot.TeamNum);
-            WriteNadeAudit(reservation, audit, decision);
             AddTimer(1f, () => _replayBots.Remove(botIdx));
         });
-    }
-
-    private void WriteNadeAudit(ThrowReservation reservation, PacingAuditSnapshot state, string decision)
-    {
-        float now = Server.CurrentTime;
-        float freezeElapsed = _freezeEndTime > 0f ? now - _freezeEndTime : -1f;
-        int emergency = reservation.IsNonEmergency ? 0 : 1;
-        var record = new NadeAuditRecord(
-            now, _roundSerial, freezeElapsed, reservation.TeamNum, reservation.BotIndex, reservation.GrenadeType,
-            reservation.Reason.ToString(), emergency, reservation.IsOpening ? 1 : 0, decision,
-            state.BotGap, state.TeamGap, state.BotOpening, NadePacingPolicy.OpeningThrowsPerBot,
-            state.TeamOpening, state.OpeningTeamLimit, state.TeamOpeningSmoke, NadePacingPolicy.OpeningSmokeCap,
-            state.BotFlash, state.BotSmoke, state.BotHE, state.BotMolotov);
-        Server.PrintToConsole(record.Format());
     }
 
     private void SpawnProjectile(CCSPlayerController bot, GrenadeData g, Action<bool> completed)
@@ -1778,9 +1763,8 @@ public class NadeSystemPlugin : BasePlugin
                     return;
                 }
 
-                var audit = _pacingPolicy.Commit(reservation, Server.CurrentTime);
+                _pacingPolicy.Commit(reservation, Server.CurrentTime);
                 Server.PrintToConsole($"[NadeSystem] Replayed [{reservation.GrenadeType}] id=instant... bot=[{bot.PlayerName}] special={reason}");
-                WriteNadeAudit(reservation, audit, "special");
                 if (deduct)
                 {
                     money.Account -= cost;
@@ -2013,8 +1997,7 @@ public class NadeSystemPlugin : BasePlugin
                     _pacingPolicy.Cancel(reservation);
                     return;
                 }
-                var audit = _pacingPolicy.Commit(reservation, Server.CurrentTime);
-                WriteNadeAudit(reservation, audit, "special");
+                _pacingPolicy.Commit(reservation, Server.CurrentTime);
                 if (deduct)
                 {
                     money.Account -= cost;

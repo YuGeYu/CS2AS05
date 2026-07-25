@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 const tauri = vi.hoisted(() => ({
   check: vi.fn(), discover: vi.fn(), inspect: vi.fn(), diagnostics: vi.fn(), install: vi.fn(), panel: vi.fn(), uninstall: vi.fn(),
 }))
+const panelTauri = vi.hoisted(() => ({ snapshot: vi.fn() }))
 vi.mock('@/services/tauri/cs2', () => ({
   checkCs2Process: tauri.check,
   discoverCs2Roots: tauri.discover,
@@ -14,14 +15,20 @@ vi.mock('@/services/tauri/cs2', () => ({
   openUpstreamPanel: tauri.panel,
   uninstallBotPackage: tauri.uninstall,
 }))
+vi.mock('@/services/tauri/panel', () => ({
+  initializePanelDefaults: vi.fn().mockResolvedValue({ status: 'unchanged', initializedFields: [] }),
+  getPanelSnapshot: panelTauri.snapshot,
+  setPanelMode: vi.fn(), setPanelDifficulty: vi.fn(), setPanelAim: vi.fn(), setPanelNades: vi.fn(),
+  setPanelBotItem: vi.fn(), setPanelDropKnives: vi.fn(), launchPanelCs2: vi.fn(),
+}))
 
-import InstallView from '@/views/InstallView.vue'
+import AppShell from '@/components/AppShell.vue'
 
 function mountView() {
-  return mount(InstallView, {
+  return mount(AppShell, {
     global: {
       plugins: [createPinia()],
-      stubs: { SupportActions: true, Teleport: true },
+      stubs: { OverviewView: true, PresetsView: true, BotItemsView: true, KnivesView: true, CommandsView: true, InstallView: true },
     },
   })
 }
@@ -33,6 +40,8 @@ describe('CS2 process polling', () => {
     Object.values(tauri).forEach((mock) => mock.mockReset())
     tauri.discover.mockResolvedValue([])
     tauri.check.mockResolvedValue(false)
+    panelTauri.snapshot.mockReset()
+    panelTauri.snapshot.mockResolvedValue(null)
   })
 
   it('checks immediately, waits 10 seconds, and tracks process transitions', async () => {

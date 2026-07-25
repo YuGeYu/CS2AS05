@@ -2,45 +2,23 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import { useCs2Store } from '@/stores/cs2'
+import { usePanelStore } from '@/stores/panel'
+import type { ToastMessage } from '@/types/cs2'
 
 const store = useCs2Store()
+const panel = usePanelStore()
 const visible = ref(false)
-const message = ref('')
+const toast = ref<ToastMessage>({ tone: 'info', title: '提示', message: '' })
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-const toastState = computed<'ready' | 'warn' | 'danger' | 'info'>(() => {
-  const text = message.value
-  if (/(失败|错误|无法|异常|未能)/.test(text)) {
-    return 'danger'
-  }
-  if (/(请先|需要|运行中|没有|未选择|未找到|待)/.test(text)) {
-    return 'warn'
-  }
-  if (/(已保存|已复制|已选择|已安装|已删除|已恢复|已读取|成功)/.test(text)) {
-    return 'ready'
-  }
-  return 'info'
-})
+const toastState = computed(() => toast.value.tone)
 
-const toastTitle = computed(() => {
-  if (toastState.value === 'ready') {
-    return '已完成'
-  }
-  if (toastState.value === 'warn') {
-    return '需要处理'
-  }
-  if (toastState.value === 'danger') {
-    return '操作失败'
-  }
-  return '提示'
-})
-
-function showToast(nextMessage: string) {
-  if (!nextMessage.trim()) {
+function showToast(nextToast: ToastMessage) {
+  if (!nextToast.message.trim()) {
     return
   }
 
-  message.value = nextMessage
+  toast.value = nextToast
   visible.value = true
   if (toastTimer) {
     clearTimeout(toastTimer)
@@ -60,6 +38,10 @@ watch(
   },
 )
 
+watch(() => panel.lastError, (error) => {
+  if (error) showToast({ tone: 'danger', title: 'Panel 操作失败', message: error })
+})
+
 onBeforeUnmount(() => {
   if (toastTimer) {
     clearTimeout(toastTimer)
@@ -69,7 +51,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-if="visible" class="global-toast" :data-state="toastState" role="status" aria-live="polite">
-    <div class="floating-toast__title">{{ toastTitle }}</div>
-    <div class="floating-toast__body">{{ message }}</div>
+    <div class="floating-toast__title">{{ toast.title }}</div>
+    <div class="floating-toast__body">{{ toast.message }}</div>
   </div>
 </template>

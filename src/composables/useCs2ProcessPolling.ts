@@ -10,6 +10,7 @@ export function useCs2ProcessPolling(refresh: () => Promise<unknown>) {
   }
 
   onMounted(() => {
+    void refresh()
     timer = setInterval(() => void refresh(), CS2_PROCESS_POLL_INTERVAL_MS)
     window.addEventListener('focus', refreshWhenVisible)
     document.addEventListener('visibilitychange', refreshWhenVisible)

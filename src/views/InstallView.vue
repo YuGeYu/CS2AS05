@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { open } from '@tauri-apps/plugin-dialog'
+import { computed, ref } from 'vue'
 import { FolderOpen, RefreshCw, ShieldCheck, TerminalSquare, Trash2, Wrench } from 'lucide-vue-next'
 
 import SupportActions from '@/components/SupportActions.vue'
-import { useCs2ProcessPolling } from '@/composables/useCs2ProcessPolling'
 import { useCs2Store } from '@/stores/cs2'
 
 const store = useCs2Store()
@@ -20,7 +18,7 @@ const installLabel = computed(() => {
 const installHint = computed(() => {
   if (!store.selectedRoot) return '选择 Counter-Strike Global Offensive 目录后才能安装。'
   if (store.cs2Running) return '检测到 CS2 正在运行，请退出游戏后再继续。'
-  if (store.environment?.baseEnvironmentReady) return '已检测到插件，可直接覆盖更新到 0.5.2 定制包。'
+  if (store.environment?.baseEnvironmentReady) return '已检测到插件，可直接覆盖更新到 0.5.3 定制包。'
   return '将安装基于 CS2-Bot-Improver v1.4.2 的最小定制资源包。'
 })
 const packageState = computed(() => store.environment?.baseEnvironmentReady ? '已安装' : '待安装')
@@ -38,6 +36,7 @@ const processVisualState = computed(() => ({
 }[store.cs2ProcessState]))
 
 async function browse() {
+  const { open } = await import('@tauri-apps/plugin-dialog')
   const result = await open({ directory: true, multiple: false, title: '选择 CS2 游戏目录' })
   if (typeof result === 'string') await store.selectRoot(result)
 }
@@ -72,12 +71,6 @@ async function toggleDiagnostics() {
   if (diagnosticsOpen.value) await store.refreshDiagnostics()
 }
 
-onMounted(async () => {
-  await store.refresh()
-  await store.scanRoots()
-})
-
-useCs2ProcessPolling(store.refreshProcessStatus)
 </script>
 
 <template>
@@ -88,9 +81,9 @@ useCs2ProcessPolling(store.refreshProcessStatus)
         <div>
           <p class="overline">CS2-BOT-IMPROVER</p>
           <h1 id="page-title">CS2 人机增强助手</h1>
-          <p class="subtitle">基于上游 v1.4.2 的最小定制包安装与 Panel 启动入口</p>
+          <p class="subtitle">插件安装、覆盖更新、卸载、诊断与兼容工具</p>
         </div>
-        <span class="version-label">0.5.2</span>
+        <span class="version-label">0.5.3</span>
       </header>
 
       <section class="directory-section" aria-labelledby="directory-title">
@@ -130,7 +123,7 @@ useCs2ProcessPolling(store.refreshProcessStatus)
       <section class="install-section" aria-labelledby="install-title">
         <div>
           <p class="overline">定制资源包</p>
-          <h2 id="install-title">0.5.2 定制资源包</h2>
+          <h2 id="install-title">0.5.3 定制资源包</h2>
           <p>基于上游 CS2-Bot-Improver v1.4.2，仅包含本项目说明的最小定制。</p>
           <p>{{ installHint }}</p>
         </div>
@@ -142,13 +135,13 @@ useCs2ProcessPolling(store.refreshProcessStatus)
 
       <section class="panel-section" aria-labelledby="panel-title">
         <div>
-          <p class="overline">官方控制面板</p>
-          <h2 id="panel-title">Panel v1.4.2</h2>
-          <p>模式、难度、Aim、Nades、队伍、刀具和 Bot 外观均由官方 Panel 管理。</p>
+          <p class="overline">高级兼容入口</p>
+          <h2 id="panel-title">原版 Panel v1.4.2</h2>
+          <p>融合功能异常时可临时打开原版工具；请勿让两个面板同时写入同一目录。</p>
         </div>
         <button class="secondary-button panel-button" type="button" :disabled="store.busy" @click="openPanel">
           <TerminalSquare :size="19" />
-          <span>打开 Panel</span>
+          <span>打开原版 Panel</span>
         </button>
       </section>
 

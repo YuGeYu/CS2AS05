@@ -1,0 +1,65 @@
+{
+  "generatedAt": "2026-07-25T15:51:57.6318397Z",
+  "source": "ed0ard/CS2-Bot-Improver v1.4.2 customized package",
+  "beforeZipSha256": "53455A60422AAB85956AEF288F32F1B30BDA17593BAAAC039DA7FBF6EBE570A0",
+  "afterZipSha256": "55DC504BFF8340ABE6AB317661518B512DB6FFA463F10EE3AF84149B1795C3E9",
+  "panelSha256": "9C3AB83909E506C0D4BD4886C961DFC0E871DA71BB47E1D1BEA7EF2CCFE40AB2",
+  "entries": [
+    {
+      "before": {
+        "name": "overrides/botprofile.vpk",
+        "exists": true,
+        "size": 406110,
+        "sha256": "495FCAE5DFAABB1B47CEDF636FD48E906085823C09BEC4C6D5589A33BEBEF695"
+      },
+      "after": {
+        "name": "overrides/botprofile.vpk",
+        "exists": true,
+        "size": 115353,
+        "sha256": "5EC7F50BCD97E3678C7545306407110E7E87C6E09CBC604DA70CFA56A612206A"
+      }
+    },
+    {
+      "before": {
+        "name": "cfg/my_bot_normal_config.cfg",
+        "exists": true,
+        "size": 4858,
+        "sha256": "051AB2A40D758C44BF19182DE3617E371B353C0C0341803CF0E7051AA6D9473C"
+      },
+      "after": {
+        "name": "cfg/my_bot_normal_config.cfg",
+        "exists": true,
+        "size": 4895,
+        "sha256": "440FDA8A54465A8250E69402D642FBF18956F4108E9E7FB407905DC903D07B83"
+      }
+    },
+    {
+      "before": {
+        "name": "cfg/my_bot_ffa_config.cfg",
+        "exists": true,
+        "size": 3917,
+        "sha256": "C0BC07287CE22D60B143CDCDAC6C1F8AB988F3EDBF595E6CC07DF98754438857"
+      },
+      "after": {
+        "name": "cfg/my_bot_ffa_config.cfg",
+        "exists": true,
+        "size": 3954,
+        "sha256": "F3538D3364A9054817B217046A179D8C15B6D268B7F63B813FBA1E5E864D6A0B"
+      }
+    },
+    {
+      "before": {
+        "name": "addons/counterstrikesharp/plugins/BotRandomizer/bot_randomizer_options.json",
+        "exists": false,
+        "size": 0,
+        "sha256": null
+      },
+      "after": {
+        "name": "addons/counterstrikesharp/plugins/BotRandomizer/bot_randomizer_options.json",
+        "exists": true,
+        "size": 75,
+        "sha256": "925BDDD885B30527AC5334EC9B4F56E854AAC1DAE3E555F99E705BAF68B9EC71"
+      }
+    }
+  ]
+}

@@ -9,6 +9,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
@@ -26,6 +27,7 @@ pub fn run() {
             }
             Ok(())
         })
+        .manage(services::cs2_discovery::ScanCoordinator::default())
         .invoke_handler(tauri::generate_handler![
             commands::cs2::discover_cs2_roots,
             commands::cs2::inspect_cs2_root,
@@ -34,6 +36,17 @@ pub fn run() {
             commands::cs2::uninstall_bot_package,
             commands::cs2::check_cs2_process,
             commands::cs2::get_diagnostics_payload,
+            commands::cs2::guess_cs2_roots,
+            commands::cs2::stop_guess_cs2_roots,
+            commands::panel::get_panel_snapshot,
+            commands::panel::initialize_panel_defaults,
+            commands::panel::set_panel_mode,
+            commands::panel::set_panel_difficulty,
+            commands::panel::set_panel_aim,
+            commands::panel::set_panel_nades,
+            commands::panel::set_panel_bot_item,
+            commands::panel::set_panel_drop_knives,
+            commands::panel::launch_panel_cs2,
             commands::support::open_official_site,
             commands::support::open_idea_page,
             commands::support::open_release_page,

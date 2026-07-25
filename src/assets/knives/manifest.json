@@ -1,0 +1,190 @@
+{
+  "upstream": "ed0ard/CS2-Bot-Improver",
+  "tag": "v1.4.2",
+  "commit": "97fd57d2ee1e14e408ae3ca7b1b0cae596a792cc",
+  "panelFile": "Panel v1.4.2.exe",
+  "panelSha256": "9C3AB83909E506C0D4BD4886C961DFC0E871DA71BB47E1D1BEA7EF2CCFE40AB2",
+  "extraction": "Brotli-decompressed Tauri embedded resources mapped by the numeric asset path",
+  "items": [
+    {
+      "id": 500,
+      "file": "500.png",
+      "sha256": "601029D01D795D1BAF2257EDDF8F0FB10AA24D05368A03369254E146974A5784",
+      "bytes": 67726,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/500-BKswtCUt.png"
+    },
+    {
+      "id": 503,
+      "file": "503.png",
+      "sha256": "69A622EAACCEBBF23C8131B96ED3AB87EC5B066D253CCA1BA15249F3726CC098",
+      "bytes": 69145,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/503-sdv4wYJo.png"
+    },
+    {
+      "id": 505,
+      "file": "505.png",
+      "sha256": "02B27E5AB6CBB67FC6A0E37AA8CD22BEC61B4C36D07CDE4ED5EE296B0CA968C6",
+      "bytes": 55397,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/505-Br3G-jWL.png"
+    },
+    {
+      "id": 506,
+      "file": "506.png",
+      "sha256": "CCB45E35A323E7CD39D131F42D1282AA2A538CB24C18B961A06AA3EBEB3A28C1",
+      "bytes": 64566,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/506-D4N01_Y4.png"
+    },
+    {
+      "id": 507,
+      "file": "507.png",
+      "sha256": "F673FBEEF0D5A125127EDB621AFB5006857D32E4BB89F6C056C1BA7FB2924C2C",
+      "bytes": 58871,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/507-DCFsT_US.png"
+    },
+    {
+      "id": 508,
+      "file": "508.png",
+      "sha256": "6583FF6E4C5513AFD166669DCC244A9A8D4D1ACCB924EF49479D5D0602D9E872",
+      "bytes": 72033,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/508-BxKQZIyO.png"
+    },
+    {
+      "id": 509,
+      "file": "509.png",
+      "sha256": "826EE06B78968503F627CEC2EF140D75E99A4477DD5C550862D1E550473D829E",
+      "bytes": 50653,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/509-BJBFmupj.png"
+    },
+    {
+      "id": 512,
+      "file": "512.png",
+      "sha256": "7D79B3C0317E547EF1B25023D6419595FF1F72DB8891074D15C442B4DAC84AA8",
+      "bytes": 50748,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/512-D87kgCqM.png"
+    },
+    {
+      "id": 514,
+      "file": "514.png",
+      "sha256": "20F9F1568566C529FC2CEDD8879D82B9D833080C7EAED8C1B439E27647FA0E89",
+      "bytes": 52829,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/514-CeHKomc3.png"
+    },
+    {
+      "id": 515,
+      "file": "515.png",
+      "sha256": "305C2C08506D8863E5E53EB4859B95CA9746D9AA09E92418FC412D01B32A5A9E",
+      "bytes": 46158,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/515-DrzqOd2m.png"
+    },
+    {
+      "id": 516,
+      "file": "516.png",
+      "sha256": "2953CC86171A3A4D8A5BE6EB7229AB56D42E086A23A351613FC051485AB382D3",
+      "bytes": 78251,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/516-uONSAF4X.png"
+    },
+    {
+      "id": 517,
+      "file": "517.png",
+      "sha256": "FBF19C970F529899824B9E47B6349AE0071D998D3B6EA900F0A9A5F7AC52AA07",
+      "bytes": 64111,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/517-Br-grYKH.png"
+    },
+    {
+      "id": 518,
+      "file": "518.png",
+      "sha256": "683F6E3512EB00271299A26FE619E5B4C6DDBC21B39D441B0B0740A43EF0E5BD",
+      "bytes": 57160,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/518-pEq81KNT.png"
+    },
+    {
+      "id": 519,
+      "file": "519.png",
+      "sha256": "125201AF74C06EF982FCFD14F23AC6F36EF59AF35DFB3B863DFDDDF4CE66E38A",
+      "bytes": 54301,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/519-6ytRlVWg.png"
+    },
+    {
+      "id": 520,
+      "file": "520.png",
+      "sha256": "85313C7DF73808FBB99A093665CD4C19F180B78C90E3A80FB0DE268C291412EA",
+      "bytes": 50365,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/520-DmibQjrZ.png"
+    },
+    {
+      "id": 521,
+      "file": "521.png",
+      "sha256": "34872A5AAEC63627416B4FCE253F78950DA0D0C96EB5F275F1ED2759BD545FB5",
+      "bytes": 46783,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/521-cMs5-Orc.png"
+    },
+    {
+      "id": 522,
+      "file": "522.png",
+      "sha256": "3C56DD9723D81F5AF8BA52C943D17D0BD9891175F613B45A50555984B17C357B",
+      "bytes": 45175,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/522-DORaOLGu.png"
+    },
+    {
+      "id": 523,
+      "file": "523.png",
+      "sha256": "144CDEC102511AC37367D66AC27CF881E5AD41655EE03618C8BC421AC1821003",
+      "bytes": 77820,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/523-Ct9YawQc.png"
+    },
+    {
+      "id": 525,
+      "file": "525.png",
+      "sha256": "2B99CED49E5E268FA86B71B97EC3FFEAD417665D2597EA697FF44A04F3F9074C",
+      "bytes": 36613,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/525-B5R7N9fK.png"
+    },
+    {
+      "id": 526,
+      "file": "526.png",
+      "sha256": "F7237B0CCD0834279ACD3116C3DEC438378C512BB73690320FCCB1BDB10C1F7D",
+      "bytes": 69472,
+      "width": 512,
+      "height": 384,
+      "source": "Panel v1.4.2.exe embedded resource /assets/526-qlTJ7JDk.png"
+    }
+  ]
+}

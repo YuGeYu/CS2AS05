@@ -5,12 +5,14 @@ import {
   checkCs2Process,
   discoverCs2Roots,
   getDiagnosticsPayload,
+  guessCs2Roots,
   inspectCs2Root,
   installBotPackage,
   openUpstreamPanel,
   uninstallBotPackage,
+  stopGuessCs2Roots,
 } from '@/services/tauri/cs2'
-import type { Cs2EnvironmentStatus, Cs2RootCandidate, DiagnosticsPayload } from '@/types/cs2'
+import type { Cs2EnvironmentStatus, Cs2RootCandidate, Cs2RootScanEvent, Cs2RootScanSummary, Cs2SuggestedRoot, DiagnosticsPayload, ToastMessage } from '@/types/cs2'
 import type { Cs2ProcessState } from '@/types/cs2'
 
 const ROOT_STORAGE_KEY = 'cs2-bot-improver.selected-root.v1'
@@ -28,8 +30,9 @@ export const useCs2Store = defineStore('cs2', () => {
   const cs2ProcessState = ref<Cs2ProcessState>('checking')
   const cs2Running = computed(() => cs2ProcessState.value === 'running')
   const diagnostics = ref<DiagnosticsPayload | null>(null)
-  const message = ref('')
+  const message = ref<ToastMessage | null>(null)
   const busy = ref(false)
+  const rootScan = ref<{ running: boolean; elapsedMs: number; checkedLocations: number; currentLocation: string; candidates: Cs2SuggestedRoot[]; summary: Cs2RootScanSummary | null }>({ running: false, elapsedMs: 0, checkedLocations: 0, currentLocation: '', candidates: [], summary: null })
   let processCheckInFlight: Promise<void> | null = null
 
   async function selectRoot(rootPath: string) {
@@ -45,9 +48,11 @@ export const useCs2Store = defineStore('cs2', () => {
     try {
       candidates.value = dedupe(await discoverCs2Roots())
       if (!selectedRoot.value && candidates.value[0]) await selectRoot(candidates.value[0].path)
-      message.value = candidates.value.length ? '已完成目录扫描。' : '没有自动找到 CS2 目录，请手动选择。'
+      message.value = candidates.value.length
+        ? { tone: 'ready', title: '扫描完成', message: '已完成目录扫描。' }
+        : { tone: 'warn', title: '未找到目录', message: '没有自动找到 CS2 目录，请手动选择。' }
     } catch (error) {
-      message.value = normalizeError(error)
+      message.value = failure(error)
     } finally {
       busy.value = false
     }
@@ -67,7 +72,7 @@ export const useCs2Store = defineStore('cs2', () => {
     try {
       if (selectedRoot.value) environment.value = await inspectCs2Root(selectedRoot.value)
     } catch (error) {
-      message.value = normalizeError(error)
+      message.value = failure(error)
     }
   }
 
@@ -76,10 +81,10 @@ export const useCs2Store = defineStore('cs2', () => {
     busy.value = true
     try {
       const result = await installBotPackage(selectedRoot.value)
-      message.value = result.message
+      message.value = { tone: 'ready', title: '安装完成', message: result.message }
       await refresh()
     } catch (error) {
-      message.value = normalizeError(error)
+      message.value = failure(error)
       throw error
     } finally {
       busy.value = false
@@ -90,9 +95,9 @@ export const useCs2Store = defineStore('cs2', () => {
     busy.value = true
     try {
       const result = await openUpstreamPanel()
-      message.value = result.message
+      message.value = { tone: 'ready', title: '原版 Panel 已启动', message: result.message }
     } catch (error) {
-      message.value = normalizeError(error)
+      message.value = failure(error)
       throw error
     } finally {
       busy.value = false
@@ -104,10 +109,10 @@ export const useCs2Store = defineStore('cs2', () => {
     busy.value = true
     try {
       const result = await uninstallBotPackage(selectedRoot.value)
-      message.value = result.message
+      message.value = { tone: 'ready', title: '卸载完成', message: result.message }
       await refresh()
     } catch (error) {
-      message.value = normalizeError(error)
+      message.value = failure(error)
       throw error
     } finally {
       busy.value = false
@@ -119,18 +124,60 @@ export const useCs2Store = defineStore('cs2', () => {
     try {
       diagnostics.value = await getDiagnosticsPayload(selectedRoot.value || undefined)
     } catch (error) {
-      message.value = normalizeError(error)
+      message.value = failure(error)
     } finally {
       busy.value = false
     }
   }
 
-  return { candidates, selectedRoot, environment, cs2ProcessState, cs2Running, diagnostics, message, busy, selectRoot, scanRoots, refreshProcessStatus, refresh, install, openPanel, uninstall, refreshDiagnostics }
+  async function scanSuggestedRoots(onEvent?: (event: Cs2RootScanEvent) => void) {
+    if (rootScan.value.running) return rootScan.value.summary
+    rootScan.value = { running: true, elapsedMs: 0, checkedLocations: 0, currentLocation: '', candidates: [], summary: null }
+    try {
+      const summary = await guessCs2Roots((event) => {
+        rootScan.value.elapsedMs = event.elapsedMs
+        rootScan.value.checkedLocations = event.checkedLocations
+        rootScan.value.currentLocation = event.currentLocation ?? ''
+        if (event.kind === 'candidate' && event.candidate) {
+          rootScan.value.candidates = mergeSuggested(rootScan.value.candidates, event.candidate)
+        }
+        onEvent?.(event)
+      })
+      rootScan.value.summary = summary
+      rootScan.value.candidates = summary.candidates
+      candidates.value = dedupe([
+        ...summary.candidates.map(candidate => ({ path: candidate.path, source: candidate.source })),
+        ...candidates.value,
+      ])
+      return summary
+    } finally {
+      rootScan.value.running = false
+    }
+  }
+
+  async function stopSuggestedRoots() {
+    if (!rootScan.value.running) return false
+    return stopGuessCs2Roots()
+  }
+
+  return { candidates, selectedRoot, environment, cs2ProcessState, cs2Running, diagnostics, message, busy, rootScan, selectRoot, scanRoots, refreshProcessStatus, refresh, install, openPanel, uninstall, refreshDiagnostics, scanSuggestedRoots, stopSuggestedRoots }
 })
 
 function dedupe(candidates: Cs2RootCandidate[]) {
-  return candidates.filter((candidate, index, list) => list.findIndex((item) => item.path === candidate.path) === index)
+  return candidates.filter((candidate, index, list) => list.findIndex((item) => canonicalPath(item.path) === canonicalPath(candidate.path)) === index)
 }
+
+function mergeSuggested(candidates: Cs2SuggestedRoot[], candidate: Cs2SuggestedRoot) {
+  const existing = candidates.findIndex((item) => canonicalPath(item.path) === canonicalPath(candidate.path))
+  if (existing < 0) return [...candidates, candidate].slice(0, 3)
+  const copy = [...candidates]
+  const previous = copy[existing]
+  if (!previous) return copy
+  copy[existing] = { ...previous, ...candidate, evidence: [...new Set([...previous.evidence, ...candidate.evidence])] }
+  return copy
+}
+
+function canonicalPath(path: string) { return path.replaceAll('/', '\\').toLowerCase() }
 
 function getStorage() {
   try {
@@ -138,4 +185,8 @@ function getStorage() {
   } catch {
     return undefined
   }
+}
+
+function failure(error: unknown): ToastMessage {
+  return { tone: 'danger', title: '操作失败', message: normalizeError(error) }
 }

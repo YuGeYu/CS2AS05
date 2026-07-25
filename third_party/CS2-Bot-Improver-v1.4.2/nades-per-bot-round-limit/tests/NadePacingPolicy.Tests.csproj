@@ -7,6 +7,5 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\NadePacingPolicy.cs" Link="NadePacingPolicy.cs" />
-    <Compile Include="..\NadeAudit.cs" Link="NadeAudit.cs" />
   </ItemGroup>
 </Project>
