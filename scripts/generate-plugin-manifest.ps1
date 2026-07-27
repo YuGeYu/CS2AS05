@@ -8,7 +8,7 @@ $workspace = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $zip = (Resolve-Path (Join-Path $workspace $ZipPath)).Path
 $version = (Get-Content (Join-Path $workspace 'package.json') -Raw | ConvertFrom-Json).version
 $markerName = 'addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json'
-$panelName = 'Panel v1.4.2.exe'
+$panelName = 'Panel v1.4.3.exe'
 $temporary = "$zip.tmp-$([guid]::NewGuid().ToString('N'))"
 $backup = "$zip.before-plugin-manifest-$((Get-Date).ToString('yyyyMMdd-HHmmss')).bak"
 
@@ -42,6 +42,8 @@ function Get-FileSha256([string]$Path) {
 }
 
 Copy-Item -LiteralPath $zip -Destination $temporary -Force
+(Get-Item -LiteralPath $zip).IsReadOnly = $false
+(Get-Item -LiteralPath $temporary).IsReadOnly = $false
 try {
   $archive = [IO.Compression.ZipFile]::Open($temporary, [IO.Compression.ZipArchiveMode]::Update)
   try {
@@ -54,10 +56,10 @@ try {
       version = $version
       payloadSha256 = $payload.sha256
       payloadEntries = $payload.entries
-      generatedFrom = 'CS2-Bot-Improver-v1.4.2'
+      generatedFrom = 'CS2-Bot-Improver-v1.4.3'
     } | ConvertTo-Json -Depth 4
     $entry = $archive.CreateEntry($markerName, [IO.Compression.CompressionLevel]::Optimal)
-    $entry.LastWriteTime = [DateTimeOffset]::new(2026, 7, 25, 0, 0, 0, [TimeSpan]::Zero)
+    $entry.LastWriteTime = [DateTimeOffset]::new(2026, 7, 26, 0, 0, 0, [TimeSpan]::Zero)
     $writer = [IO.StreamWriter]::new($entry.Open(), [Text.UTF8Encoding]::new($false))
     try { $writer.Write($manifest) } finally { $writer.Dispose() }
   } finally { $archive.Dispose() }

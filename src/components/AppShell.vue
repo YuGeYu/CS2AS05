@@ -20,6 +20,8 @@ const nav = [
   { key: 'commands', label: '命令', icon: ScrollText }, { key: 'install', label: '安装与诊断', icon: Settings },
 ] as const
 const view = computed(() => ({ overview: OverviewView, presets: PresetsView, items: BotItemsView, knives: KnivesView, commands: CommandsView, install: InstallView })[current.value])
+const activeNavIndex = computed(() => nav.findIndex(item => item.key === current.value))
+function selectView(key: ViewKey) { if (key !== current.value) current.value = key }
 function visibleRefresh() { if (!document.hidden && current.value !== 'commands' && current.value !== 'install') void panel.refresh(cs2.selectedRoot, true) }
 function visibilityChanged() { if (!document.hidden) visibleRefresh() }
 watch(() => cs2.selectedRoot, root => { panel.resetRoot(root); if (root) void panel.refresh(root) })
@@ -28,4 +30,4 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); document.removeEventLis
 useCs2ProcessPolling(cs2.refreshProcessStatus)
 </script>
 
-<template><div class="workspace-shell"><aside class="sidebar"><div class="sidebar-brand"><span><PackageCheck :size="20" /></span><div><strong>CS2 助手</strong><small>0.5.3</small></div></div><nav aria-label="主导航"><button v-for="item in nav" :key="item.key" type="button" :title="item.label" :aria-label="item.label" :aria-current="current === item.key ? 'page' : undefined" @click="current = item.key"><component :is="item.icon" :size="18" /><span>{{ item.label }}</span></button></nav></aside><div class="workspace-main"><StatusStrip /><main class="view-container"><component :is="view" /></main></div></div></template>
+<template><div class="workspace-shell"><aside class="sidebar"><div class="sidebar-brand"><span><PackageCheck :size="20" /></span><div><strong>CS2 助手</strong><small>0.5.4</small></div></div><nav aria-label="主导航" :style="{ '--nav-index': activeNavIndex }"><span class="nav-cursor" aria-hidden="true" /><button v-for="item in nav" :key="item.key" type="button" :title="item.label" :aria-label="item.label" :aria-current="current === item.key ? 'page' : undefined" @click="selectView(item.key)"><component :is="item.icon" :size="18" /><span>{{ item.label }}</span></button></nav></aside><div class="workspace-main"><StatusStrip /><main class="view-container" :data-current-view="current"><Transition name="view-swap" mode="out-in"><div :key="current" class="view-swap-frame"><component :is="view" /></div></Transition></main></div></div></template>

@@ -1,0 +1,31 @@
+{
+  "panelSha256": "3FD93DC7AF2702C50B9A7E4FCF1BB11387B107ABC863EE8A3067255022408CCD",
+  "source": "E:/破解/Panel-v1.4.3-recovered (cross-validation only)",
+  "verifyCommand": "powershell -ExecutionPolicy Bypass -File E:/破解/Panel-v1.4.3-recovered/verify-recovery.ps1",
+  "verifyOutput": "OK target_sha256=3FD93DC7AF2702C50B9A7E4FCF1BB11387B107ABC863EE8A3067255022408CCD ipc=20 bot_items=8 nades=5",
+  "items": [
+    {"name": "profiles", "coreKey": "bot_hider github.com/XBribo all", "default": true},
+    {"name": "agents", "coreKey": "bot_randomizer github.com/ed0ard agents", "default": true},
+    {"name": "music", "coreKey": "bot_randomizer github.com/ed0ard music", "default": true},
+    {"name": "weapons", "coreKey": "bot_randomizer github.com/ed0ard weapons", "default": true},
+    {"name": "knives", "coreKey": "bot_randomizer github.com/ed0ard knives", "default": true},
+    {"name": "gloves", "coreKey": "bot_randomizer github.com/ed0ard gloves", "default": true},
+    {"name": "stickers", "coreKey": "bot_randomizer github.com/ed0ard stickers", "default": true},
+    {"name": "charms", "coreKey": "bot_randomizer github.com/ed0ard charms", "default": true}
+  ],
+  "productDefaults": {
+    "mode": "bots",
+    "difficulty": "Low",
+    "aim": "mixed",
+    "nades": "less",
+    "dropKnives": [507, 508, 515, 519, 525]
+  },
+  "jsonBehavior": {
+    "missingManagedKeyReadsAs": true,
+    "managedValuesAreBoolean": true,
+    "unknownFieldsPreserved": true,
+    "before": {"unknown": {"futureOption": 42}, "managed": "missing keys read true"},
+    "after": {"unknown": {"futureOption": 42}, "managed": "eight core keys written as booleans"}
+  },
+  "scope": "Evidence only; recovered source is not bundled, merged, or treated as official source."
+}

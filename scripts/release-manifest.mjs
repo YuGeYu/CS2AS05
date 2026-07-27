@@ -1,4 +1,5 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 // 发布事故记录：2026-06-01 升级 0.3.7 时，曾因跨文件批量替换版本号误改 Cargo.lock
@@ -11,13 +12,32 @@ const projectId = process.env.PROJECT_ID ?? process.env.VITE_DEFAULT_PROJECT_ID 
 const outDir = resolve(process.cwd(), 'dist-release', projectId)
 const outFile = resolve(outDir, `updater-${channel}.json`)
 
+const nsisDir = resolve(process.cwd(), 'src-tauri', 'target', 'release', 'bundle', 'nsis')
+const files = await readdir(nsisDir)
+const installerName = files.find((name) => name.endsWith('_x64-setup.exe') && name.includes(version))
+if (!installerName) throw new Error(`signed NSIS installer for ${version} was not found in ${nsisDir}`)
+const installerPath = resolve(nsisDir, installerName)
+const signaturePath = `${installerPath}.sig`
+const [installerBytes, signature, installerStat] = await Promise.all([
+  readFile(installerPath),
+  readFile(signaturePath, 'utf8'),
+  stat(installerPath),
+])
+
 const manifest = {
   version,
   channel,
   projectId,
   notes: `Release manifest generated for ${channel}.`,
   pub_date: new Date().toISOString(),
-  platforms: {},
+  platforms: {
+    'windows-x86_64': {
+      installer: installerPath,
+      signature: signature.trim(),
+      sha256: createHash('sha256').update(installerBytes).digest('hex').toUpperCase(),
+      size: installerStat.size,
+    },
+  },
 }
 
 await mkdir(outDir, { recursive: true })

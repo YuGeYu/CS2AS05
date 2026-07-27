@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
 
-describe('0.5.3 integrated Panel contract', () => {
+describe('0.5.4 integrated Panel contract', () => {
   it('uses the application shell and retains the upstream Panel compatibility action', () => {
     expect(read('src/App.vue')).toContain("import AppShell from '@/components/AppShell.vue'")
     expect(read('src/App.vue')).toContain("import AppTitlebar from '@/components/AppTitlebar.vue'")
@@ -18,9 +18,10 @@ describe('0.5.3 integrated Panel contract', () => {
     expect(service).toContain('const CUSTOM_ZIP_SHA256')
     expect(service).toContain('verify_custom_zip(&zip_path)?')
     expect(service).toContain('最小定制')
-    expect(read('src/views/InstallView.vue')).toContain('0.5.3')
-    expect(read('src/views/InstallView.vue')).toContain('0.5.3 定制资源包')
-    expect(read('src/views/InstallView.vue')).toContain('CS2-Bot-Improver v1.4.2')
+    expect(read('src/views/InstallView.vue')).toContain('0.5.4')
+    expect(read('src/views/InstallView.vue')).toContain('0.5.4 定制资源包')
+    expect(read('src/views/InstallView.vue')).toContain('CS2-Bot-Improver v1.4.3')
+    expect(read('src-tauri/src/services/cs2.rs')).not.toContain('bot_randomizer_options.json')
   })
 
   it('keeps support and sources in the installation diagnostics view', () => {

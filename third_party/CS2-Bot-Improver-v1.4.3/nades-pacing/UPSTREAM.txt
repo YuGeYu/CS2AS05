@@ -1,0 +1,32 @@
+Upstream project: https://github.com/ed0ard/CS2-Bot-Improver
+Upstream tag: v1.4.3
+Upstream commit: d1d83982db88fbdb686b2bf13aa8c6f9d65a4604
+Official Windows asset: CS2BotImprover.zip
+Official ZIP SHA256: F4330B13F6154A36EEB2820FB79AF015014397C7E06C7791AE0AF51F762A3652
+Official NadeSystem module version: 1.1.7
+Official source files:
+  addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.cs
+  SHA256 7D1D287E70970187E6E2A00BF0A967A3AFA81DE1B72717BCF97DA19FCA548543
+  addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.csproj
+  SHA256 B8D1338E9D814760D7667FB4365794B36A91A87D9207422FA23A0B9F5AB087BF
+RayTraceApi.dll build reference source:
+  addons/counterstrikesharp/plugins/RayTraceImpl/RayTraceApi.dll
+  SHA256 ADFE79B62EBE119FFB03F268A8E00D2AC6BF675C692F5728E843CF65592E0CA8
+
+Build commands:
+  dotnet restore NadeSystem.csproj
+  dotnet build NadeSystem.csproj -c Release
+  dotnet run --project tests/NadePacingPolicy.Tests.csproj -c Release
+
+Downstream strategy:
+  Keep official v1.4.3 / NadeSystem module 1.1.7 and its less mode semantics.
+  Add the project's transactional NadePacingPolicy to planned replay, instant
+  special, and retaliation entry points. Entity creation commits hard limits,
+  pacing, money, team/less counters, and cooldown; failures cancel reservations.
+  The policy preserves less per-type limits and the four-throws total cap,
+  opening/team pacing, 450-unit HE/molotov checks, deterministic candidates,
+  and the scheduled flash fallback without adding audit log lines.
+
+Built DLL:
+  SHA256 87E68BF9C0B4C46845F36A16981C7F4A0A5754ECDA9A1D5CCC016F73C1AF490A
+  ModuleVersion 1.1.7

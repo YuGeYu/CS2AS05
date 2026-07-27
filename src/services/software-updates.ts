@@ -2,6 +2,7 @@ import { appConfig } from '@/config/app'
 import type {
   SoftwareRelease,
   SoftwareReleaseDownload,
+  SoftwareReleaseSelfUpdate,
   SoftwareUpdatePayload,
   SoftwareUpdateSeverity,
   UpdateCheckResult,
@@ -99,6 +100,21 @@ function parseRelease(value: unknown): SoftwareRelease | null {
     isActive: value.isActive,
     publishedAt: value.publishedAt as string,
     download,
+    selfUpdate: parseSelfUpdate(value.selfUpdate),
+  }
+}
+
+function parseSelfUpdate(value: unknown): SoftwareReleaseSelfUpdate {
+  if (!isRecord(value)) return { available: false, reason: 'artifact_not_ready', target: 'windows', arch: 'x86_64', size: 0, sha256: '' }
+  const reasons = new Set(['available', 'r2_disabled', 'artifact_not_ready', 'unsupported_platform'])
+  const reason = typeof value.reason === 'string' && reasons.has(value.reason) ? value.reason as SoftwareReleaseSelfUpdate['reason'] : 'artifact_not_ready'
+  return {
+    available: value.available === true,
+    reason,
+    target: typeof value.target === 'string' ? value.target : 'windows',
+    arch: typeof value.arch === 'string' ? value.arch : 'x86_64',
+    size: typeof value.size === 'number' && Number.isFinite(value.size) ? Math.max(0, value.size) : 0,
+    sha256: typeof value.sha256 === 'string' ? value.sha256 : '',
   }
 }
 

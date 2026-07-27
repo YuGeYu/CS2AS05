@@ -19,6 +19,7 @@ const release = {
   title: '更新', summary: '摘要', items: ['A'], severity: 'normal', isCritical: false,
   isActive: true, publishedAt: '2026-07-21T00:00:00Z',
   download: { type: 'quark', label: '下载', url: 'https://pan.quark.cn/s/abc', code: '1234' },
+  selfUpdate: { available: true, reason: 'available', target: 'windows', arch: 'x86_64', size: 123, sha256: 'A'.repeat(64) },
 } as const
 
 function response(body: unknown, status = 200) {

@@ -14,7 +14,7 @@ describe('application brand', () => {
 
   it('shows only the release version below the sidebar brand', () => {
     const shell = read('src/components/AppShell.vue')
-    expect(shell).toContain('<strong>CS2 助手</strong><small>0.5.3</small>')
-    expect(shell).not.toContain('Panel 0.5.3')
+    expect(shell).toContain('<strong>CS2 助手</strong><small>0.5.4</small>')
+    expect(shell).not.toContain('Panel 0.5.4')
   })
 })

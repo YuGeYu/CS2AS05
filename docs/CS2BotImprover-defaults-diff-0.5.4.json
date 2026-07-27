@@ -1,0 +1,46 @@
+{
+  "generatedAt": "2026-07-26T12:14:45.4399799Z",
+  "source": "ed0ard/CS2-Bot-Improver v1.4.3 official Windows package",
+  "beforeZipSha256": "F4330B13F6154A36EEB2820FB79AF015014397C7E06C7791AE0AF51F762A3652",
+  "afterZipSha256": "862021C84EECD32D2E332430E82CD921C56D93015A27DED4156A32FE373F2637",
+  "panelSha256": "3FD93DC7AF2702C50B9A7E4FCF1BB11387B107ABC863EE8A3067255022408CCD",
+  "panelDefaults": {
+    "mode": "bots",
+    "difficulty": "Low",
+    "aim": "mixed",
+    "nades": "less",
+    "botItems": ["profiles", "agents", "music", "weapons", "knives", "gloves", "stickers", "charms"],
+    "dropKnives": {"bindKey": "\\", "selected": [507, 508, 515, 519, 525]},
+    "upgradePreservesExplicit": ["normal nades", "all bot items off", "empty knives"]
+  },
+  "entries": [
+    {
+      "before": {
+        "name": "cfg/my_bot_normal_config.cfg",
+        "exists": true,
+        "size": 4858,
+        "sha256": "051AB2A40D758C44BF19182DE3617E371B353C0C0341803CF0E7051AA6D9473C"
+      },
+      "after": {
+        "name": "cfg/my_bot_normal_config.cfg",
+        "exists": true,
+        "size": 4895,
+        "sha256": "440FDA8A54465A8250E69402D642FBF18956F4108E9E7FB407905DC903D07B83"
+      }
+    },
+    {
+      "before": {
+        "name": "cfg/my_bot_ffa_config.cfg",
+        "exists": true,
+        "size": 3917,
+        "sha256": "C0BC07287CE22D60B143CDCDAC6C1F8AB988F3EDBF595E6CC07DF98754438857"
+      },
+      "after": {
+        "name": "cfg/my_bot_ffa_config.cfg",
+        "exists": true,
+        "size": 3954,
+        "sha256": "F3538D3364A9054817B217046A179D8C15B6D268B7F63B813FBA1E5E864D6A0B"
+      }
+    }
+  ]
+}

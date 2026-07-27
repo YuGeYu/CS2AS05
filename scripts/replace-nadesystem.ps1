@@ -1,21 +1,21 @@
 param(
   [string]$ZipPath = 'src-tauri/resources/CS2BotImprover.zip',
-  [string]$DllPath = 'third_party/CS2-Bot-Improver-v1.4.2/nades-per-bot-round-limit/bin/Release/net10.0/NadeSystem.dll',
+  [string]$DllPath = 'third_party/CS2-Bot-Improver-v1.4.3/nades-pacing/bin/Release/net10.0/NadeSystem.dll',
   [string]$ReportDirectory = 'workspace/runtime/nadesystem-replacement'
 )
 
 $ErrorActionPreference = 'Stop'
 $entryName = 'addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll'
-$panelName = 'Panel v1.4.2.exe'
-$panelSha256 = '9C3AB83909E506C0D4BD4886C961DFC0E871DA71BB47E1D1BEA7EF2CCFE40AB2'
-$panelSize = 5839872
+$panelName = 'Panel v1.4.3.exe'
+$panelSha256 = '3FD93DC7AF2702C50B9A7E4FCF1BB11387B107ABC863EE8A3067255022408CCD'
+$panelSize = 5844480
 
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $zip = (Resolve-Path (Join-Path $workspace $ZipPath)).Path
 $dll = (Resolve-Path (Join-Path $workspace $DllPath)).Path
 $reportRoot = Join-Path $workspace $ReportDirectory
 $temporary = "$zip.tmp-$([guid]::NewGuid().ToString('N'))"
-$backup = "$zip.before-nadeaudit-removal-$((Get-Date).ToString('yyyyMMdd-HHmmss')).bak"
+$backup = "$zip.before-nades-pacing-1.1.7-$((Get-Date).ToString('yyyyMMdd-HHmmss')).bak"
 
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -55,6 +55,8 @@ function Get-ZipManifest([string]$Path) {
 New-Item -ItemType Directory -Path $reportRoot -Force | Out-Null
 $before = Get-ZipManifest $zip
 Copy-Item -LiteralPath $zip -Destination $temporary -Force
+(Get-Item -LiteralPath $zip).IsReadOnly = $false
+(Get-Item -LiteralPath $temporary).IsReadOnly = $false
 
 try {
   $archive = [System.IO.Compression.ZipFile]::Open($temporary, [System.IO.Compression.ZipArchiveMode]::Update)
@@ -65,6 +67,7 @@ try {
     }
     $matches[0].Delete()
     $replacement = $archive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+    $replacement.LastWriteTime = [DateTimeOffset]::new(2026, 7, 26, 0, 0, 0, [TimeSpan]::Zero)
     $input = [System.IO.File]::OpenRead($dll)
     $output = $replacement.Open()
     try {
@@ -97,7 +100,7 @@ try {
 
   $panel = $afterByName[$panelName]
   if (-not $panel -or $panel.size -ne $panelSize -or $panel.sha256 -ne $panelSha256) {
-    throw 'Panel v1.4.2.exe integrity check failed.'
+    throw 'Panel v1.4.3.exe integrity check failed.'
   }
   if ($afterByName[$entryName].sha256 -ne (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash) {
     throw 'Replacement DLL hash does not match the ZIP entry.'

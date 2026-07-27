@@ -16,10 +16,12 @@ BOT NADE THROWING
 bot_nades normal
 bot_nades more
 bot_nades max
+bot_nades less
 bot_nades off
 
 BOT MANAGEMENT
 
+br_reroll
 bot_kick
 bot_kick t
 bot_kick ct

@@ -17,7 +17,7 @@ describe('about sources modal', () => {
 
     await wrapper.get('.source-link').trigger('click')
     expect(wrapper.text()).toContain('ed0ard/CS2-Bot-Improver')
-    expect(wrapper.text()).toContain('v1.4.2')
+    expect(wrapper.text()).toContain('v1.4.3')
     expect(wrapper.text()).toContain('GNU Affero General Public License')
     await wrapper.get('.source-link').trigger('click')
     expect(openUpstream).toHaveBeenCalledOnce()

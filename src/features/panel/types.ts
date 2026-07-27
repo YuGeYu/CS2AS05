@@ -1,8 +1,8 @@
 export type PanelMode = 'online' | 'bots'
 export type Difficulty = 'Low' | 'Medium' | 'High'
 export type AimValue = 'head' | 'mixed' | 'body'
-export type NadesValue = 'max' | 'more' | 'normal' | 'off'
-export type BotItem = 'skins' | 'profiles' | 'agents' | 'music'
+export type NadesValue = 'max' | 'more' | 'normal' | 'less' | 'off'
+export type BotItem = 'profiles' | 'agents' | 'music' | 'weapons' | 'knives' | 'gloves' | 'stickers' | 'charms'
 
 export interface PanelSnapshot {
   rootPath: string

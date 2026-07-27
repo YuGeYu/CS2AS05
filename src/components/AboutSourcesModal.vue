@@ -68,7 +68,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
         <div v-else class="about-content">
           <dl class="source-list">
             <div><dt>参考项目</dt><dd>ed0ard/CS2-Bot-Improver</dd></div>
-            <div><dt>上游版本</dt><dd>v1.4.2</dd></div>
+            <div><dt>上游版本</dt><dd>v1.4.3</dd></div>
             <div><dt>许可</dt><dd>GNU Affero General Public License v3.0 或更高版本</dd></div>
           </dl>
           <p>本项目保留上游版权、许可证和来源说明，仅对 NadeSystem 做已公开源码的最小定制。</p>

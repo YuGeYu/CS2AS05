@@ -1,5 +1,4 @@
-// Compatibility behavior is based on ed0ard/CS2-Bot-Improver v1.4.2 and the
-// public Local-Arena panel backend at 568031ee, adapted for this application's root model.
+// Compatibility behavior follows the released ed0ard/CS2-Bot-Improver v1.4.3 Panel.
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fs::{self, OpenOptions};
@@ -25,10 +24,20 @@ const KNIVES: [u16; 20] = [
     500, 503, 505, 506, 507, 508, 509, 512, 514, 515, 516, 517, 518, 519, 520, 521, 522, 523, 525,
     526,
 ];
+const DEFAULT_KNIVES: [u16; 5] = [507, 508, 515, 519, 525];
 const CFG_FILES: [&str; 2] = ["cfg/my_bot_normal_config.cfg", "cfg/my_bot_ffa_config.cfg"];
 const PANEL_STATE_FILE: &str = "cfg/cs2as05-panel-state.json";
-const BOT_ITEMS_FILE: &str =
-    "addons/counterstrikesharp/plugins/BotRandomizer/bot_randomizer_options.json";
+const CORE_CONFIG_FILE: &str = "addons/counterstrikesharp/configs/core.json";
+const BOT_ITEM_KEYS: [(&str, &str); 8] = [
+    ("profiles", "bot_hider github.com/XBribo all"),
+    ("agents", "bot_randomizer github.com/ed0ard agents"),
+    ("music", "bot_randomizer github.com/ed0ard music"),
+    ("weapons", "bot_randomizer github.com/ed0ard weapons"),
+    ("knives", "bot_randomizer github.com/ed0ard knives"),
+    ("gloves", "bot_randomizer github.com/ed0ard gloves"),
+    ("stickers", "bot_randomizer github.com/ed0ard stickers"),
+    ("charms", "bot_randomizer github.com/ed0ard charms"),
+];
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,6 +56,8 @@ pub(crate) struct PanelPreferences {
     nades: Option<PreferenceValue<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     bot_items: Option<BotItemsPreference>,
+    #[serde(skip)]
+    bot_items_unknown: Map<String, Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     drop_knives: Option<DropKnivesPreference>,
 }
@@ -61,12 +72,22 @@ struct PreferenceValue<T> {
 #[serde(rename_all = "camelCase")]
 struct BotItemsPreference {
     initialized: bool,
-    skins: bool,
+    #[serde(default)]
     profiles: bool,
+    #[serde(default)]
     agents: bool,
+    #[serde(default)]
     music: bool,
-    #[serde(default, skip_serializing_if = "Map::is_empty")]
-    extra: Map<String, Value>,
+    #[serde(default)]
+    weapons: bool,
+    #[serde(default)]
+    knives: bool,
+    #[serde(default)]
+    gloves: bool,
+    #[serde(default)]
+    stickers: bool,
+    #[serde(default)]
+    charms: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -108,7 +129,8 @@ impl PanelPreferences {
             field.initialized && ["head", "mixed", "body"].contains(&field.value.as_str())
         });
         self.nades = self.nades.filter(|field| {
-            field.initialized && ["max", "more", "normal", "off"].contains(&field.value.as_str())
+            field.initialized
+                && ["max", "more", "normal", "less", "off"].contains(&field.value.as_str())
         });
         self.bot_items = self.bot_items.filter(|field| field.initialized);
         self.drop_knives = self.drop_knives.filter(|field| {
@@ -191,9 +213,18 @@ fn initialize_panel_defaults_at_with_running(
             initialized_fields.push("aim".into());
         }
         if preferences.nades.is_none() {
-            let value = managed_value(&normal_cfg, "bot_nades", &["max", "more", "normal", "off"])
-                .unwrap_or_else(|| "normal".into());
-            if managed_value(&normal_cfg, "bot_nades", &["max", "more", "normal", "off"]).is_none()
+            let value = managed_value(
+                &normal_cfg,
+                "bot_nades",
+                &["max", "more", "normal", "less", "off"],
+            )
+            .unwrap_or_else(|| "less".into());
+            if managed_value(
+                &normal_cfg,
+                "bot_nades",
+                &["max", "more", "normal", "less", "off"],
+            )
+            .is_none()
             {
                 write_preset_at(&csgo, "bot_nades", &value)?;
             }
@@ -201,30 +232,17 @@ fn initialize_panel_defaults_at_with_running(
             initialized_fields.push("nades".into());
         }
         if preferences.bot_items.is_none() {
-            let path = csgo.join(BOT_ITEMS_FILE);
-            let items = if path.is_file() {
-                read_bot_items_or_archive(&path)?
-            } else {
-                let items = BotItemsState {
-                    skins: true,
-                    profiles: true,
-                    agents: true,
-                    music: true,
-                    writable: false,
-                };
-                write_bot_items_at(&path, &items)?;
-                items
-            };
+            let path = csgo.join(CORE_CONFIG_FILE);
+            let items = read_bot_items_strict(&path)?;
             preferences.bot_items = Some(bot_items_preference_at(&path, &items));
             initialized_fields.push("botItems".into());
         }
         if preferences.drop_knives.is_none() {
-            let cfg_exists = csgo.join(CFG_FILES[0]).is_file();
             let parsed = parse_drop_knives_optional(&normal_cfg);
             let had_managed_bind = parsed.is_some();
             let (bind_key, selected) = parsed.unwrap_or_else(|| {
-                if new_install || !cfg_exists {
-                    ("\\".into(), KNIVES.to_vec())
+                if new_install {
+                    ("\\".into(), DEFAULT_KNIVES.to_vec())
                 } else {
                     ("\\".into(), Vec::new())
                 }
@@ -272,15 +290,21 @@ pub(crate) fn capture_panel_preferences(csgo: &Path) -> Result<PanelPreferences,
     captured.nades = captured.nades.or_else(|| {
         normal_cfg
             .as_deref()
-            .and_then(|cfg| managed_value(cfg, "bot_nades", &["max", "more", "normal", "off"]))
+            .and_then(|cfg| {
+                managed_value(cfg, "bot_nades", &["max", "more", "normal", "less", "off"])
+            })
             .map(preference)
     });
     if captured.bot_items.is_none() {
-        let path = csgo.join(BOT_ITEMS_FILE);
+        let path = csgo.join(CORE_CONFIG_FILE);
         if path.is_file() {
             let items = read_bot_items_strict(&path)?;
             captured.bot_items = Some(bot_items_preference_at(&path, &items));
         }
+    }
+    let core_path = csgo.join(CORE_CONFIG_FILE);
+    if core_path.is_file() {
+        captured.bot_items_unknown = read_bot_item_unknown_fields(&core_path)?;
     }
     if captured.drop_knives.is_none() {
         captured.drop_knives = normal_cfg.as_deref().map(|cfg| {
@@ -315,13 +339,17 @@ pub(crate) fn restore_panel_preferences(
     }
     if let Some(field) = &preferences.bot_items {
         write_bot_items_preference_at(
-            &csgo.join(BOT_ITEMS_FILE),
-            field,
+            &csgo.join(CORE_CONFIG_FILE),
+            &preferences.bot_items_unknown,
             &BotItemsState {
-                skins: field.skins,
                 profiles: field.profiles,
                 agents: field.agents,
                 music: field.music,
+                weapons: field.weapons,
+                knives: field.knives,
+                gloves: field.gloves,
+                stickers: field.stickers,
+                charms: field.charms,
                 writable: false,
             },
         )?;
@@ -430,60 +458,54 @@ fn archive_corrupt(path: &Path) -> Result<PathBuf, AppError> {
 }
 
 fn bot_items_preference_at(path: &Path, items: &BotItemsState) -> BotItemsPreference {
-    let mut extra = fs::read(path)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-        .and_then(|value| value.as_object().cloned())
-        .unwrap_or_default();
-    for key in ["skins", "profiles", "agents", "music"] {
-        extra.remove(key);
-    }
+    let _ = path;
     BotItemsPreference {
         initialized: true,
-        skins: items.skins,
         profiles: items.profiles,
         agents: items.agents,
         music: items.music,
-        extra,
+        weapons: items.weapons,
+        knives: items.knives,
+        gloves: items.gloves,
+        stickers: items.stickers,
+        charms: items.charms,
     }
 }
 
 fn read_bot_items_strict(path: &Path) -> Result<BotItemsState, AppError> {
-    let bytes =
-        fs::read(path).map_err(|error| io_context("读取 BotRandomizer 配置", path, error))?;
+    let bytes = fs::read(path)
+        .map_err(|error| io_context("读取 CounterStrikeSharp core.json", path, error))?;
     let value = serde_json::from_slice::<Value>(&bytes).map_err(|error| {
         invalid(format!(
-            "[PANEL_BOT_ITEM_CORRUPT] BotRandomizer 配置损坏：{}\n{error}",
+            "[PANEL_BOT_ITEM_CORRUPT] CounterStrikeSharp core.json 损坏：{}\n{error}",
             path.display()
         ))
     })?;
-    let object = value
-        .as_object()
-        .ok_or_else(|| invalid("[PANEL_BOT_ITEM_SCHEMA] BotRandomizer 配置不是 JSON 对象。"))?;
-    let read = |key: &str| {
-        object.get(key).and_then(Value::as_bool).ok_or_else(|| {
-            invalid(format!(
-                "[PANEL_BOT_ITEM_SCHEMA] BotRandomizer 缺少布尔字段 {key}。"
-            ))
-        })
+    let object = value.as_object().ok_or_else(|| {
+        invalid("[PANEL_BOT_ITEM_SCHEMA] CounterStrikeSharp core.json 不是 JSON 对象。")
+    })?;
+    let read = |item: &str| -> Result<bool, AppError> {
+        let key = bot_item_core_key(item).expect("managed Bot Item key");
+        match object.get(key) {
+            None => Ok(true),
+            Some(value) => value.as_bool().ok_or_else(|| {
+                invalid(format!(
+                    "[PANEL_BOT_ITEM_SCHEMA] core.json 字段 {key} 必须为布尔值。"
+                ))
+            }),
+        }
     };
     Ok(BotItemsState {
-        skins: read("skins")?,
         profiles: read("profiles")?,
         agents: read("agents")?,
         music: read("music")?,
+        weapons: read("weapons")?,
+        knives: read("knives")?,
+        gloves: read("gloves")?,
+        stickers: read("stickers")?,
+        charms: read("charms")?,
         writable: false,
     })
-}
-
-fn read_bot_items_or_archive(path: &Path) -> Result<BotItemsState, AppError> {
-    match read_bot_items_strict(path) {
-        Ok(items) => Ok(items),
-        Err(error) => {
-            archive_corrupt(path)?;
-            Err(error)
-        }
-    }
 }
 
 fn write_bot_items_at(path: &Path, items: &BotItemsState) -> Result<(), AppError> {
@@ -500,21 +522,60 @@ fn write_bot_items_at(path: &Path, items: &BotItemsState) -> Result<(), AppError
 
 fn write_bot_items_preference_at(
     path: &Path,
-    preference: &BotItemsPreference,
+    unknown: &Map<String, Value>,
     items: &BotItemsState,
 ) -> Result<(), AppError> {
-    let mut object = preference.extra.clone();
+    let mut object = fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    object.extend(unknown.clone());
     set_bot_item_values(&mut object, items);
     let bytes = serde_json::to_vec_pretty(&object)
         .map_err(|error| invalid(format!("[PANEL_JSON_WRITE] 无法序列化 Bot 配置：{error}")))?;
     atomic_write(path, &bytes)
 }
 
+fn read_bot_item_unknown_fields(path: &Path) -> Result<Map<String, Value>, AppError> {
+    let bytes = fs::read(path)
+        .map_err(|error| io_context("读取 CounterStrikeSharp core.json", path, error))?;
+    let value = serde_json::from_slice::<Value>(&bytes).map_err(|error| {
+        invalid(format!(
+            "[PANEL_BOT_ITEM_CORRUPT] CounterStrikeSharp core.json 损坏：{}\n{error}",
+            path.display()
+        ))
+    })?;
+    let mut object = value.as_object().cloned().ok_or_else(|| {
+        invalid("[PANEL_BOT_ITEM_SCHEMA] CounterStrikeSharp core.json 不是 JSON 对象。")
+    })?;
+    for (_, key) in BOT_ITEM_KEYS {
+        object.remove(key);
+    }
+    Ok(object)
+}
+
 fn set_bot_item_values(object: &mut Map<String, Value>, items: &BotItemsState) {
-    object.insert("skins".into(), Value::Bool(items.skins));
-    object.insert("profiles".into(), Value::Bool(items.profiles));
-    object.insert("agents".into(), Value::Bool(items.agents));
-    object.insert("music".into(), Value::Bool(items.music));
+    for (item, key) in BOT_ITEM_KEYS {
+        let enabled = match item {
+            "profiles" => items.profiles,
+            "agents" => items.agents,
+            "music" => items.music,
+            "weapons" => items.weapons,
+            "knives" => items.knives,
+            "gloves" => items.gloves,
+            "stickers" => items.stickers,
+            "charms" => items.charms,
+            _ => unreachable!(),
+        };
+        object.insert(key.into(), Value::Bool(enabled));
+    }
+}
+
+fn bot_item_core_key(item: &str) -> Option<&'static str> {
+    BOT_ITEM_KEYS
+        .iter()
+        .find_map(|(managed, key)| (*managed == item).then_some(*key))
 }
 
 fn write_mode_at(csgo: &Path, mode: &str) -> Result<(), AppError> {
@@ -562,7 +623,7 @@ fn panel_transaction<T>(
         "overrides/botprofile.vpk",
         CFG_FILES[0],
         CFG_FILES[1],
-        BOT_ITEMS_FILE,
+        CORE_CONFIG_FILE,
         PANEL_STATE_FILE,
     ];
     let original = paths
@@ -666,7 +727,11 @@ fn snapshot_at(root: &Path) -> Result<PanelSnapshot, AppError> {
 
     let normal_cfg = read_text(&csgo.join(CFG_FILES[0])).unwrap_or_default();
     let aim = managed_value(&normal_cfg, "bot_aim", &["head", "mixed", "body"]);
-    let nades = managed_value(&normal_cfg, "bot_nades", &["max", "more", "normal", "off"]);
+    let nades = managed_value(
+        &normal_cfg,
+        "bot_nades",
+        &["max", "more", "normal", "less", "off"],
+    );
     let (bind_key, selected) = parse_drop_knives_optional(&normal_cfg)
         .or_else(|| {
             load_preferences(&csgo)
@@ -676,8 +741,7 @@ fn snapshot_at(root: &Path) -> Result<PanelSnapshot, AppError> {
                 .map(|field| (field.bind_key, field.selected))
         })
         .unwrap_or_else(|| ("\\".into(), Vec::new()));
-    let bot_items_path =
-        csgo.join("addons/counterstrikesharp/plugins/BotRandomizer/bot_randomizer_options.json");
+    let bot_items_path = csgo.join(CORE_CONFIG_FILE);
     let bot_items = read_bot_items(&bot_items_path);
 
     Ok(PanelSnapshot {
@@ -747,7 +811,7 @@ pub fn set_difficulty(root_path: &str, level: &str) -> Result<PanelSnapshot, App
 pub fn set_preset(root_path: &str, command: &str, value: &str) -> Result<PanelSnapshot, AppError> {
     let allowed = match command {
         "bot_aim" => &["head", "mixed", "body"][..],
-        "bot_nades" => &["max", "more", "normal", "off"][..],
+        "bot_nades" => &["max", "more", "normal", "less", "off"][..],
         _ => return Err(invalid("[PANEL_PRESET_INVALID] 未知预设类型。")),
     };
     if !allowed.contains(&value) {
@@ -769,12 +833,12 @@ pub fn set_preset(root_path: &str, command: &str, value: &str) -> Result<PanelSn
 }
 
 pub fn set_bot_item(root_path: &str, item: &str, enabled: bool) -> Result<PanelSnapshot, AppError> {
-    if !["skins", "profiles", "agents", "music"].contains(&item) {
+    if bot_item_core_key(item).is_none() {
         return Err(invalid("[PANEL_BOT_ITEM_INVALID] 未知 Bot 物品开关。"));
     }
     let root = cs2::normalize_root(root_path)?;
     let csgo = root.join("game/csgo");
-    let path = csgo.join(BOT_ITEMS_FILE);
+    let path = csgo.join(CORE_CONFIG_FILE);
     let mut preferences = load_preferences(&csgo)?;
     panel_transaction(&csgo, || {
         let mut items = if path.is_file() {
@@ -783,10 +847,14 @@ pub fn set_bot_item(root_path: &str, item: &str, enabled: bool) -> Result<PanelS
             BotItemsState::default()
         };
         match item {
-            "skins" => items.skins = enabled,
             "profiles" => items.profiles = enabled,
             "agents" => items.agents = enabled,
             "music" => items.music = enabled,
+            "weapons" => items.weapons = enabled,
+            "knives" => items.knives = enabled,
+            "gloves" => items.gloves = enabled,
+            "stickers" => items.stickers = enabled,
+            "charms" => items.charms = enabled,
             _ => unreachable!(),
         }
         write_bot_items_at(&path, &items)?;
@@ -1024,10 +1092,11 @@ fn managed_value(text: &str, command: &str, allowed: &[&str]) -> Option<String> 
 }
 
 fn read_bot_items(path: &Path) -> BotItemsState {
-    fs::read(path)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
+    if path.is_file() {
+        read_bot_items_strict(path).unwrap_or_default()
+    } else {
+        BotItemsState::default()
+    }
 }
 
 fn validate_bind_key(key: &str) -> Result<(), AppError> {
@@ -1234,11 +1303,9 @@ mod tests {
         for relative in CFG_FILES {
             fs::write(csgo.join(relative), cfg).unwrap();
         }
-        if let Some(json) = bot_items {
-            let path = csgo.join(BOT_ITEMS_FILE);
-            fs::create_dir_all(path.parent().unwrap()).unwrap();
-            fs::write(path, json).unwrap();
-        }
+        let path = csgo.join(CORE_CONFIG_FILE);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bot_items.unwrap_or("{}")).unwrap();
     }
 
     #[test]
@@ -1263,16 +1330,16 @@ mod tests {
 
     #[test]
     fn bot_plugin_gate_installs_old_keeps_valid_new_and_blocks_untrusted_new() {
-        let current = Version::parse("0.5.3").unwrap();
+        let current = Version::parse("0.5.4").unwrap();
         assert_eq!(
             plugin_gate_decision(
                 cs2::PluginVersionStatus::Valid {
-                    version: Version::parse("0.5.3-test.1").unwrap()
+                    version: Version::parse("0.5.4-test.1").unwrap()
                 },
                 &current
             )
             .unwrap(),
-            PluginGateDecision::Unchanged("0.5.3-test.1".into())
+            PluginGateDecision::Unchanged("0.5.4-test.1".into())
         );
         assert_eq!(
             plugin_gate_decision(cs2::PluginVersionStatus::Missing, &current).unwrap(),
@@ -1281,7 +1348,7 @@ mod tests {
         assert_eq!(
             plugin_gate_decision(
                 cs2::PluginVersionStatus::Valid {
-                    version: Version::parse("0.5.2").unwrap()
+                    version: Version::parse("0.5.3").unwrap()
                 },
                 &current
             )
@@ -1346,6 +1413,8 @@ mod tests {
         for relative in CFG_FILES {
             fs::write(csgo.join(relative), initial_cfg).unwrap();
         }
+        fs::create_dir_all(csgo.join("addons/counterstrikesharp/configs")).unwrap();
+        fs::write(csgo.join(CORE_CONFIG_FILE), b"{}").unwrap();
 
         let root_text = root.to_string_lossy();
         set_mode(&root_text, "bots").unwrap();
@@ -1378,34 +1447,32 @@ mod tests {
     #[test]
     fn fresh_defaults_are_written_once_and_are_idempotent() {
         let root = test_root("fresh-defaults");
-        let all_knives = KNIVES
-            .iter()
-            .map(|id| format!("subclass_create {id}"))
-            .collect::<Vec<_>>()
-            .join(";");
-        create_panel_environment(
-            &root,
-            "bots",
-            "Low",
-            &format!("echo template\nbind \\ \"{all_knives}\"\n"),
-            None,
-        );
+        create_panel_environment(&root, "bots", "Low", "echo template\n", None);
 
-        let result = initialize_panel_defaults_at_with_running(&root, false, false).unwrap();
+        let result = initialize_panel_defaults_at_with_running(&root, true, false).unwrap();
         assert_eq!(result.status, "initialized");
         assert_eq!(result.initialized_fields.len(), 6);
         let snapshot = snapshot_at(&root).unwrap();
         assert_eq!(snapshot.mode.current.as_deref(), Some("bots"));
         assert_eq!(snapshot.difficulty.current.as_deref(), Some("Low"));
         assert_eq!(snapshot.presets.aim.as_deref(), Some("mixed"));
-        assert_eq!(snapshot.presets.nades.as_deref(), Some("normal"));
+        assert_eq!(snapshot.presets.nades.as_deref(), Some("less"));
         assert!(
-            snapshot.bot_items.skins
-                && snapshot.bot_items.profiles
+            snapshot.bot_items.profiles
                 && snapshot.bot_items.agents
                 && snapshot.bot_items.music
+                && snapshot.bot_items.weapons
+                && snapshot.bot_items.knives
+                && snapshot.bot_items.gloves
+                && snapshot.bot_items.stickers
+                && snapshot.bot_items.charms
         );
-        assert_eq!(snapshot.drop_knives.selected, KNIVES);
+        assert_eq!(snapshot.drop_knives.selected, DEFAULT_KNIVES);
+        for relative in CFG_FILES {
+            let cfg = fs::read_to_string(root.join("game/csgo").join(relative)).unwrap();
+            assert!(cfg.contains("subclass_create 507;subclass_create 508;subclass_create 515;subclass_create 519;subclass_create 525"));
+            assert_eq!(cfg.matches("bot_nades less").count(), 1);
+        }
         let state_path = root.join("game/csgo").join(PANEL_STATE_FILE);
         let state_before = fs::read(&state_path).unwrap();
         let backups_before = fs::read_dir(root.join("game/csgo/cfg"))
@@ -1434,26 +1501,112 @@ mod tests {
             &root,
             "online",
             "High",
-            "echo user\nbot_aim head\nbot_nades off\n",
-            Some(r#"{"skins":false,"profiles":false,"agents":false,"music":false}"#),
+            "echo user\nbot_aim head\nbot_nades normal\n",
+            Some(
+                r#"{"bot_hider github.com/XBribo all":false,"bot_randomizer github.com/ed0ard agents":false,"bot_randomizer github.com/ed0ard music":false,"bot_randomizer github.com/ed0ard weapons":false,"bot_randomizer github.com/ed0ard knives":false,"bot_randomizer github.com/ed0ard gloves":false,"bot_randomizer github.com/ed0ard stickers":false,"bot_randomizer github.com/ed0ard charms":false}"#,
+            ),
         );
         initialize_panel_defaults_at_with_running(&root, false, false).unwrap();
         let snapshot = snapshot_at(&root).unwrap();
         assert_eq!(snapshot.mode.current.as_deref(), Some("online"));
         assert_eq!(snapshot.difficulty.current.as_deref(), Some("High"));
         assert_eq!(snapshot.presets.aim.as_deref(), Some("head"));
-        assert_eq!(snapshot.presets.nades.as_deref(), Some("off"));
+        assert_eq!(snapshot.presets.nades.as_deref(), Some("normal"));
         assert!(
-            !snapshot.bot_items.skins
-                && !snapshot.bot_items.profiles
+            !snapshot.bot_items.profiles
                 && !snapshot.bot_items.agents
                 && !snapshot.bot_items.music
+                && !snapshot.bot_items.weapons
+                && !snapshot.bot_items.knives
+                && !snapshot.bot_items.gloves
+                && !snapshot.bot_items.stickers
+                && !snapshot.bot_items.charms
         );
         assert!(snapshot.drop_knives.selected.is_empty());
         let preferences = load_preferences(&root.join("game/csgo")).unwrap();
         assert!(preferences
             .drop_knives
             .is_some_and(|field| field.selected.is_empty()));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn less_roundtrips_to_both_cfg_files_and_rejects_untrusted_values() {
+        let root = test_root("less-roundtrip");
+        create_panel_environment(
+            &root,
+            "bots",
+            "Low",
+            "bot_aim mixed\nbot_nades normal\nbot_nades max\n",
+            Some("{}"),
+        );
+        let root_text = root.to_string_lossy();
+        let snapshot = set_preset(&root_text, "bot_nades", "less").unwrap();
+        assert_eq!(snapshot.presets.nades.as_deref(), Some("less"));
+        for relative in CFG_FILES {
+            let cfg = fs::read_to_string(root.join("game/csgo").join(relative)).unwrap();
+            assert_eq!(cfg.matches("bot_nades less").count(), 1);
+            assert_eq!(
+                cfg.lines()
+                    .filter(|line| line.starts_with("bot_nades "))
+                    .count(),
+                1
+            );
+        }
+        assert_eq!(
+            snapshot_at(&root).unwrap().presets.nades.as_deref(),
+            Some("less")
+        );
+        let before = fs::read(root.join("game/csgo").join(CFG_FILES[0])).unwrap();
+        let error = set_preset(&root_text, "bot_nades", "less;quit")
+            .unwrap_err()
+            .into_string();
+        assert!(error.contains("PANEL_PRESET_INVALID"));
+        assert_eq!(
+            fs::read(root.join("game/csgo").join(CFG_FILES[0])).unwrap(),
+            before
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn legacy_four_item_state_with_skins_loads_without_startup_failure() {
+        let root = test_root("legacy-state");
+        create_panel_environment(
+            &root,
+            "bots",
+            "Low",
+            "bot_aim mixed\nbot_nades normal\n",
+            Some("{}"),
+        );
+        let state = serde_json::json!({
+            "schema": 1,
+            "initializedBy": "0.5.3",
+            "botItems": {
+                "initialized": true,
+                "skins": true,
+                "profiles": false,
+                "agents": true,
+                "music": false
+            }
+        });
+        fs::write(
+            root.join("game/csgo").join(PANEL_STATE_FILE),
+            serde_json::to_vec(&state).unwrap(),
+        )
+        .unwrap();
+        let preferences = load_preferences(&root.join("game/csgo")).unwrap();
+        let items = preferences
+            .bot_items
+            .expect("legacy Bot Items must deserialize");
+        assert!(!items.profiles && items.agents && !items.music);
+        assert!(
+            !items.weapons && !items.knives && !items.gloves && !items.stickers && !items.charms
+        );
+        assert!(!fs::read_dir(root.join("game/csgo/cfg"))
+            .unwrap()
+            .flatten()
+            .any(|entry| entry.file_name().to_string_lossy().contains("corrupt-")));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1465,7 +1618,9 @@ mod tests {
             "online",
             "High",
             "bot_aim body\nbot_nades max\n",
-            Some(r#"{"skins":true,"profiles":false,"agents":true,"music":false}"#),
+            Some(
+                r#"{"futureOption":42,"bot_hider github.com/XBribo all":true,"bot_randomizer github.com/ed0ard agents":false,"bot_randomizer github.com/ed0ard music":true}"#,
+            ),
         );
         let csgo = root.join("game/csgo");
         fs::write(csgo.join(PANEL_STATE_FILE), b"{broken").unwrap();
@@ -1484,7 +1639,7 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_bot_items_are_archived_reported_and_not_overwritten() {
+    fn corrupt_core_json_is_reported_and_not_overwritten() {
         let root = test_root("corrupt-items");
         create_panel_environment(
             &root,
@@ -1498,11 +1653,7 @@ mod tests {
             .unwrap_err()
             .into_string();
         assert!(error.contains("PANEL_BOT_ITEM_CORRUPT"));
-        assert_eq!(fs::read(csgo.join(BOT_ITEMS_FILE)).unwrap(), b"{broken");
-        assert!(fs::read_dir(csgo.join(BOT_ITEMS_FILE).parent().unwrap())
-            .unwrap()
-            .flatten()
-            .any(|entry| entry.file_name().to_string_lossy().contains("corrupt-")));
+        assert_eq!(fs::read(csgo.join(CORE_CONFIG_FILE)).unwrap(), b"{broken");
         fs::remove_dir_all(root).unwrap();
     }
 

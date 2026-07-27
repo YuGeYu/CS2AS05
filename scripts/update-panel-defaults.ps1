@@ -1,18 +1,16 @@
 param(
     [string]$ZipPath = "src-tauri/resources/CS2BotImprover.zip",
-    [string]$ReportPath = "docs/CS2BotImprover-defaults-diff-0.5.3.json"
+    [string]$ReportPath = "docs/CS2BotImprover-defaults-diff-0.5.4.json"
 )
 
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$PanelHash = "9C3AB83909E506C0D4BD4886C961DFC0E871DA71BB47E1D1BEA7EF2CCFE40AB2"
+$PanelHash = "3FD93DC7AF2702C50B9A7E4FCF1BB11387B107ABC863EE8A3067255022408CCD"
 $Targets = @(
-    "overrides/botprofile.vpk",
     "cfg/my_bot_normal_config.cfg",
-    "cfg/my_bot_ffa_config.cfg",
-    "addons/counterstrikesharp/plugins/BotRandomizer/bot_randomizer_options.json"
+    "cfg/my_bot_ffa_config.cfg"
 )
 
 function Get-EntryBytes($Archive, [string]$Name) {
@@ -43,6 +41,7 @@ function Set-EntryBytes($Archive, [string]$Name, [byte[]]$Bytes) {
     $existing = $Archive.GetEntry($Name)
     if ($existing) { $existing.Delete() }
     $entry = $Archive.CreateEntry($Name, [IO.Compression.CompressionLevel]::Optimal)
+    $entry.LastWriteTime = [DateTimeOffset]::new(2026, 7, 26, 0, 0, 0, [TimeSpan]::Zero)
     $stream = $entry.Open()
     try { $stream.Write($Bytes, 0, $Bytes.Length) } finally { $stream.Dispose() }
 }
@@ -52,7 +51,7 @@ function Set-ManagedCfgDefaults([byte[]]$Bytes) {
     $newline = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
     $lines = $text -split "`r?`n" | Where-Object {
         $_ -notmatch '^\s*bot_aim\s+(head|mixed|body)\s*$' -and
-        $_ -notmatch '^\s*bot_nades\s+(max|more|normal|off)\s*$'
+        $_ -notmatch '^\s*bot_nades\s+(max|more|normal|less|off)\s*$'
     }
     $aliasIndex = [Array]::FindIndex([string[]]$lines, [Predicate[string]]{ param($line) $line -match '^alias\s+bot_aim_' })
     if ($aliasIndex -lt 0) { $aliasIndex = $lines.Count }
@@ -63,37 +62,35 @@ function Set-ManagedCfgDefaults([byte[]]$Bytes) {
 $resolved = (Resolve-Path $ZipPath).Path
 $temporary = "$resolved.tmp-$PID"
 Copy-Item -LiteralPath $resolved -Destination $temporary
+(Get-Item -LiteralPath $resolved).IsReadOnly = $false
+(Get-Item -LiteralPath $temporary).IsReadOnly = $false
 
 $beforeArchive = [IO.Compression.ZipFile]::OpenRead($resolved)
 try {
     $before = @($Targets | ForEach-Object { Get-EntryInfo $beforeArchive $_ })
-    $panelBefore = Get-EntryBytes $beforeArchive "Panel v1.4.2.exe"
+    $panelBefore = Get-EntryBytes $beforeArchive "Panel v1.4.3.exe"
 } finally { $beforeArchive.Dispose() }
 
 try {
     $archive = [IO.Compression.ZipFile]::Open($temporary, [IO.Compression.ZipArchiveMode]::Update)
     try {
-        $low = Get-EntryBytes $archive "overrides/Low/botprofile.vpk"
-        Set-EntryBytes $archive "overrides/botprofile.vpk" $low
         foreach ($cfg in @("cfg/my_bot_normal_config.cfg", "cfg/my_bot_ffa_config.cfg")) {
             Set-EntryBytes $archive $cfg (Set-ManagedCfgDefaults (Get-EntryBytes $archive $cfg))
         }
-        $items = [Text.UTF8Encoding]::new($false).GetBytes("{`n  `"skins`": true,`n  `"profiles`": true,`n  `"agents`": true,`n  `"music`": true`n}`n")
-        Set-EntryBytes $archive $Targets[3] $items
     } finally { $archive.Dispose() }
 
     $afterArchive = [IO.Compression.ZipFile]::OpenRead($temporary)
     try {
         $after = @($Targets | ForEach-Object { Get-EntryInfo $afterArchive $_ })
-        $panelAfter = Get-EntryBytes $afterArchive "Panel v1.4.2.exe"
+        $panelAfter = Get-EntryBytes $afterArchive "Panel v1.4.3.exe"
         if ((Get-BytesHash $panelBefore) -ne $PanelHash -or (Get-BytesHash $panelAfter) -ne $PanelHash) {
-            throw "Panel v1.4.2.exe changed or did not match the pinned SHA256"
+            throw "Panel v1.4.3.exe changed or did not match the pinned SHA256"
         }
     } finally { $afterArchive.Dispose() }
 
     $report = [ordered]@{
         generatedAt = (Get-Date).ToUniversalTime().ToString("o")
-        source = "ed0ard/CS2-Bot-Improver v1.4.2 customized package"
+        source = "ed0ard/CS2-Bot-Improver v1.4.3 official Windows package"
         beforeZipSha256 = (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash
         afterZipSha256 = (Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash
         panelSha256 = $PanelHash

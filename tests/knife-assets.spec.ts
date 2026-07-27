@@ -84,7 +84,7 @@ describe('knife image contract', () => {
       mode: { current: 'bots', insecure: true, writable: true },
       difficulty: { current: 'Low', available: ['Low', 'Medium', 'High'] },
       presets: { aim: 'mixed', nades: 'normal', writable: true },
-      botItems: { skins: true, profiles: true, agents: true, music: true, writable: true },
+      botItems: { profiles: true, agents: true, music: true, weapons: true, knives: true, gloves: true, stickers: true, charms: true, writable: true },
       dropKnives: { bindKey: '\\', selected: KNIVES.map(knife => knife.id), writable: true },
     }
     const wrapper = mount(KnivesView, { global: { plugins: [pinia] } })

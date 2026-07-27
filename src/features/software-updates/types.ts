@@ -7,6 +7,17 @@ export interface SoftwareReleaseDownload {
   code: string
 }
 
+export type SoftwareSelfUpdateReason = 'available' | 'r2_disabled' | 'artifact_not_ready' | 'unsupported_platform'
+
+export interface SoftwareReleaseSelfUpdate {
+  available: boolean
+  reason: SoftwareSelfUpdateReason
+  target: string
+  arch: string
+  size: number
+  sha256: string
+}
+
 export interface SoftwareRelease {
   id: string
   projectId: string
@@ -20,6 +31,7 @@ export interface SoftwareRelease {
   isActive: boolean
   publishedAt: string
   download: SoftwareReleaseDownload
+  selfUpdate: SoftwareReleaseSelfUpdate
 }
 
 export interface SoftwareUpdatePayload {

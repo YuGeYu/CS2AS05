@@ -29,10 +29,10 @@ use crate::services::panel;
 
 const CS2_FOLDER_NAME: &str = "Counter-Strike Global Offensive";
 const BUNDLED_ZIP_NAME: &str = "CS2BotImprover.zip";
-const CUSTOM_ZIP_SHA256: &str = "55DC504BFF8340ABE6AB317661518B512DB6FFA463F10EE3AF84149B1795C3E9";
-const PANEL_FILE_NAME: &str = "Panel v1.4.2.exe";
-const PANEL_SHA256: &str = "9C3AB83909E506C0D4BD4886C961DFC0E871DA71BB47E1D1BEA7EF2CCFE40AB2";
-const PANEL_SIZE: u64 = 5_839_872;
+const CUSTOM_ZIP_SHA256: &str = "862021C84EECD32D2E332430E82CD921C56D93015A27DED4156A32FE373F2637";
+const PANEL_FILE_NAME: &str = "Panel v1.4.3.exe";
+const PANEL_SHA256: &str = "3FD93DC7AF2702C50B9A7E4FCF1BB11387B107ABC863EE8A3067255022408CCD";
+const PANEL_SIZE: u64 = 5_844_480;
 const PLUGIN_MARKER: &str = "addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json";
 const PLUGIN_PRODUCT: &str = "cs2-bot-improver";
 const PLUGIN_ID: &str = "cs2as05-custom-package";
@@ -45,7 +45,6 @@ const REQUIRED_ZIP_ENTRIES: &[&str] = &[
     "addons/",
     "cfg/",
     "overrides/",
-    "addons/counterstrikesharp/plugins/BotRandomizer/bot_randomizer_options.json",
     PLUGIN_MARKER,
 ];
 
@@ -234,14 +233,14 @@ pub fn install_bot_package(app: &AppHandle, root_path: &str) -> Result<Operation
     write_log(
         "INFO",
         &format!(
-            "基于上游 v1.4.2 的最小定制插件包已安装到 {}。",
+            "基于上游 v1.4.3 的最小定制插件包已安装到 {}。",
             destination.display()
         ),
     );
     Ok(OperationResult {
         success: true,
         message: format!(
-            "基于上游 CS2-Bot-Improver v1.4.2 的最小定制包已安装。\n目标目录：{}\n已保留可识别的模式、难度、Aim、Nades、外观和刀具选择。",
+            "基于上游 CS2-Bot-Improver v1.4.3 的最小定制包已安装。\n目标目录：{}\n已保留可识别的模式、难度、Aim、Nades、Bot 物品和刀具选择。",
             destination.display()
         ),
     })
@@ -255,7 +254,7 @@ pub fn open_upstream_panel(app: &AppHandle) -> Result<OperationResult, AppError>
         .app_local_data_dir()
         .map_err(|error| AppError::runtime(format!("无法确定应用数据目录：{error}")))?
         .join("tools")
-        .join("official-panel-v1.4.2");
+        .join("official-panel-v1.4.3");
     let panel_path = tool_dir.join(PANEL_FILE_NAME);
     if !panel_is_valid(&panel_path)? {
         extract_panel_atomically(&zip_path, &tool_dir, &panel_path)?;
@@ -276,7 +275,7 @@ pub fn open_upstream_panel(app: &AppHandle) -> Result<OperationResult, AppError>
     );
     Ok(OperationResult {
         success: true,
-        message: format!("已启动官方 Panel v1.4.2。\n{}", panel_path.display()),
+        message: format!("已启动官方 Panel v1.4.3。\n{}", panel_path.display()),
     })
 }
 
@@ -668,7 +667,7 @@ fn extract_panel_atomically(
     panel_path: &Path,
 ) -> Result<(), AppError> {
     fs::create_dir_all(tool_dir).map_err(io_error)?;
-    let temporary = tool_dir.join("Panel-v1.4.2.tmp");
+    let temporary = tool_dir.join("Panel-v1.4.3.tmp");
     let file = File::open(zip_path).map_err(io_error)?;
     let mut archive = ZipArchive::new(file)
         .map_err(|error| AppError::runtime(format!("无法读取资源包：{error}")))?;
@@ -931,7 +930,7 @@ mod tests {
 
     #[test]
     fn plugin_marker_accepts_current_prerelease_and_higher_core_versions() {
-        for version in ["0.5.3", "0.5.3-test.1", "0.5.4-beta.1", "0.6.0-test"] {
+        for version in ["0.5.4", "0.5.4-test.1", "0.5.5-beta.1", "0.6.0-test"] {
             let root = std::env::temp_dir().join(format!("plugin-marker-{version}"));
             let csgo = root.join("game/csgo");
             write_test_marker(&csgo, version);
@@ -981,7 +980,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock must be after Unix epoch")
             .as_nanos();
-        let fake_root = std::env::temp_dir().join(format!("ai-pc-fac-0.5.3-{nonce}"));
+        let fake_root = std::env::temp_dir().join(format!("ai-pc-fac-0.5.4-{nonce}"));
         let csgo = fake_root.join("game").join("csgo");
         fs::create_dir_all(&csgo).expect("fake CS2 root must be creatable");
         extract_game_files(&zip_path, &csgo)
@@ -1003,7 +1002,7 @@ mod tests {
                 .is_file(),
             !csgo.join(PANEL_FILE_NAME).exists(),
             sha256_file(&dll).expect("custom NadeSystem DLL must be readable"),
-            matches!(&marker_status, PluginVersionStatus::Valid { version } if version == &Version::parse("0.5.3").unwrap()),
+            matches!(&marker_status, PluginVersionStatus::Valid { version } if version == &Version::parse("0.5.4").unwrap()),
         );
         fs::remove_dir_all(&fake_root).expect("fake CS2 root must be removable");
 
@@ -1012,7 +1011,7 @@ mod tests {
         assert!(assertions.2, "Panel must not be installed into game files");
         assert_eq!(
             assertions.3,
-            "922CA83CA8967D7383BAEF27AE664068176C9FF3185AF49DA707F6797358A781"
+            "87E68BF9C0B4C46845F36A16981C7F4A0A5754ECDA9A1D5CCC016F73C1AF490A"
         );
         assert!(
             assertions.4,
@@ -1035,7 +1034,7 @@ mod tests {
             b"keep"
         );
         assert!(
-            matches!(inspect_bot_plugin_version_at(&csgo).unwrap(), PluginVersionStatus::Valid { version } if version == Version::parse("0.5.3").unwrap())
+            matches!(inspect_bot_plugin_version_at(&csgo).unwrap(), PluginVersionStatus::Valid { version } if version == Version::parse("0.5.4").unwrap())
         );
         fs::remove_dir_all(root).unwrap();
     }
@@ -1056,19 +1055,20 @@ mod tests {
         let csgo = root.join("game/csgo");
         fs::create_dir_all(&csgo).unwrap();
         install_game_files_transactionally(&zip_path, &csgo).unwrap();
-        let bot_items_path = csgo
-            .join("addons/counterstrikesharp/plugins/BotRandomizer/bot_randomizer_options.json");
+        let bot_items_path = csgo.join("addons/counterstrikesharp/configs/core.json");
         fs::write(
             &bot_items_path,
-            br#"{"skins":true,"profiles":true,"agents":true,"music":true,"futureOption":42}"#,
+            br#"{"bot_hider github.com/XBribo all":true,"bot_randomizer github.com/ed0ard agents":true,"bot_randomizer github.com/ed0ard music":true,"bot_randomizer github.com/ed0ard weapons":true,"bot_randomizer github.com/ed0ard knives":true,"bot_randomizer github.com/ed0ard gloves":true,"bot_randomizer github.com/ed0ard stickers":true,"bot_randomizer github.com/ed0ard charms":true,"futureOption":42}"#,
         )
         .unwrap();
         let root_text = root.to_string_lossy();
         panel::set_mode(&root_text, "online").unwrap();
         panel::set_difficulty(&root_text, "High").unwrap();
         panel::set_preset(&root_text, "bot_aim", "head").unwrap();
-        panel::set_preset(&root_text, "bot_nades", "off").unwrap();
-        for item in ["skins", "profiles", "agents", "music"] {
+        panel::set_preset(&root_text, "bot_nades", "less").unwrap();
+        for item in [
+            "profiles", "agents", "music", "weapons", "knives", "gloves", "stickers", "charms",
+        ] {
             panel::set_bot_item(&root_text, item, false).unwrap();
         }
         panel::set_drop_knives(&root_text, "f8", &[]).unwrap();
@@ -1078,12 +1078,16 @@ mod tests {
         assert_eq!(snapshot.mode.current.as_deref(), Some("online"));
         assert_eq!(snapshot.difficulty.current.as_deref(), Some("High"));
         assert_eq!(snapshot.presets.aim.as_deref(), Some("head"));
-        assert_eq!(snapshot.presets.nades.as_deref(), Some("off"));
+        assert_eq!(snapshot.presets.nades.as_deref(), Some("less"));
         assert!(
-            !snapshot.bot_items.skins
-                && !snapshot.bot_items.profiles
+            !snapshot.bot_items.profiles
                 && !snapshot.bot_items.agents
                 && !snapshot.bot_items.music
+                && !snapshot.bot_items.weapons
+                && !snapshot.bot_items.knives
+                && !snapshot.bot_items.gloves
+                && !snapshot.bot_items.stickers
+                && !snapshot.bot_items.charms
         );
         assert_eq!(snapshot.drop_knives.bind_key, "f8");
         assert!(snapshot.drop_knives.selected.is_empty());

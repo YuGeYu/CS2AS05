@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "CS2人机增强助手",
   "mainBinaryName": "CS2BotImproverAssistant",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "identifier": "com.aipc.cs2botimprover",
   "build": {
     "frontendDist": "../dist",
@@ -32,6 +32,7 @@
   "bundle": {
     "active": true,
     "targets": "nsis",
+    "createUpdaterArtifacts": true,
     "windows": {
       "nsis": {
         "installerHooks": "nsis-hooks.nsh"
@@ -51,5 +52,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVFN0ZEMTNFRDEzQzA4OTgKUldTWUNEelJQdEYvWG16NFFnd2trVnVEM3hySVlNTHhXbFBUOTY5ZHR6RTl6Tnc3T216YnFIVloK",
+      "endpoints": [
+        "https://cs2as.600318.xyz/api/software-updater/cs2-bot-improver/prod/{{target}}/{{arch}}/{{current_version}}"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

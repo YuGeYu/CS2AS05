@@ -1,10 +1,10 @@
 # CS2 人机增强助手
 
-当前版本为 `0.5.3`。本仓库是基于 [ed0ard/CS2-Bot-Improver v1.4.2](https://github.com/ed0ard/CS2-Bot-Improver/releases/tag/v1.4.2) 开发的独立下游桌面项目，并非上游官方发行版。
+当前候选版本为 `0.5.4`。本仓库是基于 [ed0ard/CS2-Bot-Improver v1.4.3](https://github.com/ed0ard/CS2-Bot-Improver/releases/tag/v1.4.3) 开发的独立下游桌面项目，并非上游官方发行版。
 
 - 本项目：[YuGeYu/CS2AS05](https://github.com/YuGeYu/CS2AS05)
 - 上游项目：[ed0ard/CS2-Bot-Improver](https://github.com/ed0ard/CS2-Bot-Improver)
-- 上游基线：[v1.4.2 / `97fd57d2`](https://github.com/ed0ard/CS2-Bot-Improver/tree/97fd57d2ee1e14e408ae3ca7b1b0cae596a792cc)
+- 上游基线：[v1.4.3 / `d1d83982`](https://github.com/ed0ard/CS2-Bot-Improver/tree/d1d83982db88fbdb686b2bf13aa8c6f9d65a4604)
 
 本程序提供以下操作：
 
@@ -12,7 +12,7 @@
 - 安装或覆盖更新内置的定制 `CS2BotImprover.zip`。
 - 原生管理在线/BOT 模式、难度、Aim、Nades、Bot 物品和丢刀配置，并按当前模式启动 CS2；启动期间显示最长 30 秒的可关闭状态特效。
 - 提供 40 支队伍预设、完整命令搜索与可靠剪贴板复制。
-- 在高级兼容区域安全提取并打开原版 `Panel v1.4.2.exe`。
+- 在高级兼容区域安全提取并打开原版 `Panel v1.4.3.exe`。
 - 卸载定制插件文件与读取基础诊断信息。
 - 启动时与手动检查官网更新，并在系统默认浏览器打开官网、意见页和更新下载地址。
 - 每 10 秒轻量刷新 CS2 运行状态；通过“关于与来源”查看上游项目与许可信息。
@@ -29,6 +29,14 @@
 
 0.5.3 刀具图片本地化、首次默认值与覆盖安装时保留用户选择的完整方案，见 [`docs/knife-images-and-panel-defaults-plan-0.5.3.md`](./docs/knife-images-and-panel-defaults-plan-0.5.3.md)。
 
+0.5.3 主导航、分段控件、Bot 物品、刀具、命令复制反馈及全局科技感 UI 优化方案，见 [`docs/technology-motion-ui-plan-0.5.3.md`](./docs/technology-motion-ui-plan-0.5.3.md)。
+
+基于上游 `v1.4.3` Windows 整包开发 `0.5.4`、对齐八项 Bot Items、加入 `bot_nades less`、重放道具投掷节奏并保留现有安装/签名/关闭链路的完整交接方案，见 [`docs/upstream-v1.4.3-release-plan-0.5.4.md`](./docs/upstream-v1.4.3-release-plan-0.5.4.md)。
+
+0.5.4 发布收尾、首次默认值调整、Panel 恢复源码评估和探员模型/丢刀兼容性限制说明，见 [`docs/release-readiness-plan-0.5.4-defaults-recovery-20260727.md`](./docs/release-readiness-plan-0.5.4-defaults-recovery-20260727.md)。
+
+最终签名构建、自动化重跑、真实 CS2 验收、D1/R2/GitHub 发布顺序和停止条件，见 [`docs/final-release-execution-plan-0.5.4-20260727.md`](./docs/final-release-execution-plan-0.5.4-20260727.md)。
+
 ## 构建
 
 ```powershell
@@ -38,15 +46,15 @@ cargo test --manifest-path src-tauri/Cargo.toml
 npm run bundle:desktop
 ```
 
-桌面安装包依赖仓库内的 `src-tauri/resources/CS2BotImprover.zip`。该文件是基于上游 `v1.4.2` 的最小定制包，SHA256：
+桌面安装包依赖仓库内的 `src-tauri/resources/CS2BotImprover.zip`。该文件是基于上游 `v1.4.3` 的最小定制包，SHA256：
 
 ```text
-55DC504BFF8340ABE6AB317661518B512DB6FFA463F10EE3AF84149B1795C3E9
+862021C84EECD32D2E332430E82CD921C56D93015A27DED4156A32FE373F2637
 ```
 
 ## 相对上游的修改
 
-定制 ZIP 相对上游官方 ZIP 替换 `addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll`，新增仅供助手验证版本和 payload 完整性的 `CS2AS05.plugin.json`，并将首次 Panel 默认值固化为 BOT / Low / mixed / normal / Bot 物品全开 / 20 刀全选。资源差异见 [`docs/CS2BotImprover-defaults-diff-0.5.3.json`](./docs/CS2BotImprover-defaults-diff-0.5.3.json)：
+定制 ZIP 相对上游官方 ZIP 仅修改两个 BOT cfg、替换 `addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll`，并新增供助手验证版本和 payload 完整性的 `CS2AS05.plugin.json`。首次 Panel 默认值为 BOT / Low / mixed / less / 八项 Bot 物品全开 / 刀具 `507、508、515、519、525`。覆盖升级会保留用户已经明确选择的合法值，包括 `normal` Nades、全关 Bot Items 和空刀具；仅缺失或未初始化字段使用新默认。资源差异见 [`docs/CS2BotImprover-defaults-diff-0.5.4.json`](./docs/CS2BotImprover-defaults-diff-0.5.4.json)：
 
 - 每个 BOT 每回合由 NadeSystem 调度的闪光最多 2 次，高爆、烟雾、燃烧瓶/燃烧弹各最多 1 次。
 - 非紧急投掷使用开局 15 秒预算、同 BOT 5 秒间隔和同队 0.5 秒间隔；开局每队最多 1 颗烟雾和 3 颗进攻道具。
@@ -54,9 +62,11 @@ npm run bundle:desktop
 - 硬上限、节奏、经济、队伍计数和冷却只在投掷物实体创建成功后提交，创建失败会取消预留。
 - 不再生成 `[NadeAudit]` 控制台行；原有 `[NadeSystem]` 加载、命令用法、实体创建和投掷物错误诊断保持不变。
 
-修改后的源码、策略测试、补丁和基线说明位于 [`third_party/CS2-Bot-Improver-v1.4.2/nades-per-bot-round-limit/`](./third_party/CS2-Bot-Improver-v1.4.2/nades-per-bot-round-limit/)。这些限制只覆盖 NadeSystem 调度的投掷，不覆盖 CS2 原生 AI 或其他第三方插件。
+修改后的源码、策略测试和基线说明位于 [`third_party/CS2-Bot-Improver-v1.4.3/nades-pacing/`](./third_party/CS2-Bot-Improver-v1.4.3/nades-pacing/)。`less` 保留上游 `1.1.7` 的四次总上限，并与计划投掷、紧急投掷和反击投掷共用事务式硬上限。这些限制只覆盖 NadeSystem 调度的投掷，不覆盖 CS2 原生 AI 或其他第三方插件。
 
-安装、卸载和模式切换前请退出 CS2。应用会校验定制资源摘要和必要 ZIP 条目，再以事务方式覆盖程序文件；覆盖前会捕获可识别的 Panel 选择，安装后恢复并回读，失败则回滚。首次迁移状态保存在 `game/csgo/cfg/cs2as05-panel-state.json`，已有 online、中高难度、Aim/Nades、Bot 物品全关和空刀具等合法值均优先保留。原版 Panel 仅提取到应用本地数据目录，不会写入 CS2 游戏目录。
+安装、卸载和模式切换前请退出 CS2。应用会校验定制资源摘要和必要 ZIP 条目，再以事务方式覆盖程序文件；覆盖前会捕获可识别的 Panel 选择，安装后恢复并回读，失败则回滚。首次迁移状态保存在 `game/csgo/cfg/cs2as05-panel-state.json`，八项 Bot 物品读写上游 `addons/counterstrikesharp/configs/core.json` 并保留未知字段；旧 `bot_randomizer_options.json` 可残留但不再参与状态。已有 online、中高难度、Aim/Nades、Bot 物品全关和空刀具等合法值均优先保留。原版 Panel 仅提取到应用本地数据目录，不会写入 CS2 游戏目录。当前契约见 [`docs/panel-v1.4.3-contract.md`](./docs/panel-v1.4.3-contract.md)。
+
+兼容性提示：部分用户的 CS2/插件环境可能无法在游戏内应用“探员模型”和“丢刀/刀具”开关。官方 Panel 在相同环境也可能出现相同限制。助手仍会按契约写入并回读配置；本提示不代表每台电脑都能得到对应的游戏内效果。
 
 ## 授权与来源
 

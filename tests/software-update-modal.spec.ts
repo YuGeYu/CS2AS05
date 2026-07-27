@@ -9,6 +9,7 @@ const baseRelease: SoftwareRelease = {
   id: '1', projectId: 'cs2-bot-improver', channel: 'prod', version: '0.6.0', title: '新版',
   summary: '摘要', items: ['更新项'], severity: 'normal', isCritical: false, isActive: true,
   publishedAt: '2026-07-21', download: { type: 'quark', label: '下载更新', url: 'https://pan.quark.cn/s/abc', code: '' },
+  selfUpdate: { available: true, reason: 'available', target: 'windows', arch: 'x86_64', size: 123, sha256: 'A'.repeat(64) },
 }
 
 const mountModal = (release = baseRelease, props = {}) => mount(SoftwareUpdateModal, {
@@ -58,5 +59,26 @@ describe('software update modal', () => {
   it('shows the fixed release-page fallback after download failure', () => {
     const wrapper = mountModal(baseRelease, { downloadError: true })
     expect(wrapper.text()).toContain('打开官网更新日志')
+  })
+
+  it('shows convenient self-update and Quark in the same dialog', () => {
+    const wrapper = mountModal()
+    expect(wrapper.text()).toContain('便捷自更新')
+    expect(wrapper.text()).toContain('使用夸克更新')
+    expect(wrapper.text()).toContain('不会向你收费')
+  })
+
+  it('keeps Quark actionable when direct self-update is disabled', () => {
+    const wrapper = mountModal({ ...baseRelease, selfUpdate: { ...baseRelease.selfUpdate, available: false, reason: 'r2_disabled' } })
+    expect(wrapper.text()).not.toContain('便捷自更新')
+    expect(wrapper.text()).toContain('使用夸克更新')
+    expect(wrapper.text()).toContain('当前已暂停')
+  })
+
+  it('asks again after a verified download without installing optimistically', () => {
+    const wrapper = mountModal(baseRelease, { phase: 'downloaded', downloadedBytes: 123, totalBytes: 123 })
+    expect(wrapper.text()).toContain('通过签名检查')
+    expect(wrapper.text()).toContain('安装并重启')
+    expect(wrapper.text()).toContain('稍后安装')
   })
 })

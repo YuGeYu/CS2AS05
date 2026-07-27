@@ -41,13 +41,21 @@ pub struct PresetsState {
 #[serde(rename_all = "camelCase")]
 pub struct BotItemsState {
     #[serde(default)]
-    pub skins: bool,
-    #[serde(default)]
     pub profiles: bool,
     #[serde(default)]
     pub agents: bool,
     #[serde(default)]
     pub music: bool,
+    #[serde(default)]
+    pub weapons: bool,
+    #[serde(default)]
+    pub knives: bool,
+    #[serde(default)]
+    pub gloves: bool,
+    #[serde(default)]
+    pub stickers: bool,
+    #[serde(default)]
+    pub charms: bool,
     #[serde(skip_deserializing)]
     pub writable: bool,
 }
