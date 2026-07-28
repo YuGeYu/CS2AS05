@@ -12,9 +12,11 @@ describe('application brand', () => {
     expect(titlebar).not.toContain('<span class="titlebar-mark">CS2</span>')
   })
 
-  it('shows only the release version below the sidebar brand', () => {
+  it('uses the release version as the accessible easter egg button', () => {
     const shell = read('src/components/AppShell.vue')
-    expect(shell).toContain('<strong>CS2 助手</strong><small>0.5.4</small>')
-    expect(shell).not.toContain('Panel 0.5.4')
+    expect(shell).toContain('class="version-easter-egg"')
+    expect(shell).toContain('{{ appConfig.appVersion }}</button>')
+    expect(shell).not.toContain('<strong>CS2 助手</strong>')
+    expect(shell).not.toContain('Panel {{ appConfig.appVersion }}')
   })
 })

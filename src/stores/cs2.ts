@@ -14,6 +14,7 @@ import {
 } from '@/services/tauri/cs2'
 import type { Cs2EnvironmentStatus, Cs2RootCandidate, Cs2RootScanEvent, Cs2RootScanSummary, Cs2SuggestedRoot, DiagnosticsPayload, ToastMessage } from '@/types/cs2'
 import type { Cs2ProcessState } from '@/types/cs2'
+import { ensureDefaultDemoRoot } from '@/services/tauri/demo'
 
 const ROOT_STORAGE_KEY = 'cs2-bot-improver.selected-root.v1'
 
@@ -37,6 +38,7 @@ export const useCs2Store = defineStore('cs2', () => {
 
   async function selectRoot(rootPath: string) {
     const status = await inspectCs2Root(rootPath)
+    await ensureDefaultDemoRoot(status.rootPath)
     selectedRoot.value = status.rootPath
     environment.value = status
     getStorage()?.setItem(ROOT_STORAGE_KEY, status.rootPath)

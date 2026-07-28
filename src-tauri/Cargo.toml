@@ -2,7 +2,7 @@
 name = "ai_pc_fac"
 # 发布事故记录：2026-06-01 升级 0.3.7 时，曾因批量替换误改 Cargo.lock 中第三方依赖版本。
 # 改版本号时只能改本 package 版本，并让 Cargo 维护锁文件；禁止全局替换依赖版本。
-version = "0.5.4"
+version = "0.5.5"
 description = "CS2人机增强助手"
 authors = ["YuGeYu"]
 license = "AGPL-3.0-or-later"
@@ -36,6 +36,10 @@ dunce = "1.0"
 semver = "1.0"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
+reqwest = { version = "=0.12.15", default-features = false, features = ["json", "rustls-tls"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+notify = "7.0"
+cs2-demoparser = { package = "parser", path = "../third_party/demoparser/parser" }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"

@@ -43,6 +43,7 @@ docs/dev-log-*
 
 src-tauri/target/
 workspace/runtime/
+workspace/release-evidence/
 workspace/panel-diff/
 workspace/upstream-panel-v1.4.2/
 workspace/local-arena-panel-ref/
@@ -71,9 +72,12 @@ src-tauri/resources/webview2-fixed/
 /.claude/
 /.codex/
 /backups/
+/workspace/
 /cleanup-*.txt
 /问题截图（一般是过期问题，除非指定）/
 /docs/handoff-*.md
 third_party/**/bin/
 third_party/**/obj/
+third_party/**/target/
 third_party/**/workspace/
+third_party/**/*.dem

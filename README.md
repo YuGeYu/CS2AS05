@@ -1,6 +1,6 @@
 # CS2 人机增强助手
 
-当前候选版本为 `0.5.4`。本仓库是基于 [ed0ard/CS2-Bot-Improver v1.4.3](https://github.com/ed0ard/CS2-Bot-Improver/releases/tag/v1.4.3) 开发的独立下游桌面项目，并非上游官方发行版。
+当前候选版本为 `0.5.5`。本仓库是基于 [ed0ard/CS2-Bot-Improver v1.4.3](https://github.com/ed0ard/CS2-Bot-Improver/releases/tag/v1.4.3) 开发的独立下游桌面项目，并非上游官方发行版。
 
 - 本项目：[YuGeYu/CS2AS05](https://github.com/YuGeYu/CS2AS05)
 - 上游项目：[ed0ard/CS2-Bot-Improver](https://github.com/ed0ard/CS2-Bot-Improver)
@@ -12,12 +12,16 @@
 - 安装或覆盖更新内置的定制 `CS2BotImprover.zip`。
 - 原生管理在线/BOT 模式、难度、Aim、Nades、Bot 物品和丢刀配置，并按当前模式启动 CS2；启动期间显示最长 30 秒的可关闭状态特效。
 - 提供 40 支队伍预设、完整命令搜索与可靠剪贴板复制。
+- 提供本地 Demo 目录扫描、手动导入、SQLite 录像库，以及基于可靠事件字段的回合、击杀和炸弹时间线。
+- 可为助手启动的 BOT/本地托管对局写入 `tv_enable` / `tv_autorecord`；官方匹配是否提供 Demo 仍由服务器或平台决定。
 - 在高级兼容区域安全提取并打开原版 `Panel v1.4.3.exe`。
 - 卸载定制插件文件与读取基础诊断信息。
 - 启动时与手动检查官网更新，并在系统默认浏览器打开官网、意见页和更新下载地址。
 - 每 10 秒轻量刷新 CS2 运行状态；通过“关于与来源”查看上游项目与许可信息。
 
-界面仅提供简体中文。应用不提供 AI 聊天、真人饰品编辑、Demo 管理、比赛管理或第三方品牌展示。
+界面仅提供简体中文。应用不提供 AI 聊天、真人饰品编辑、比赛管理、视频剪辑、云端 Demo 上传或第三方品牌展示。
+
+Demo 录像库数据库位于应用数据目录的 `demo-review/demo-review-v1.sqlite3`。程序只读用户明确添加或手动选择的 `.dem` 文件，不移动、不重命名、不删除原录像；解析结果缺失时显示 `--`，不会推测玩家或比分数据。
 
 ## Panel 融合调查
 
@@ -37,6 +41,8 @@
 
 最终签名构建、自动化重跑、真实 CS2 验收、D1/R2/GitHub 发布顺序和停止条件，见 [`docs/final-release-execution-plan-0.5.4-20260727.md`](./docs/final-release-execution-plan-0.5.4-20260727.md)。
 
+0.5.5 自定义 Steam 安装目录启动修复、“安装与诊断”页进页即检查更新、版本/插件 marker 一致性及签名发布的完整交接方案，见 [`docs/version-0.5.5-steam-launch-and-update-entry-plan-20260727.md`](./docs/version-0.5.5-steam-launch-and-update-entry-plan-20260727.md)。
+
 ## 构建
 
 ```powershell
@@ -49,12 +55,12 @@ npm run bundle:desktop
 桌面安装包依赖仓库内的 `src-tauri/resources/CS2BotImprover.zip`。该文件是基于上游 `v1.4.3` 的最小定制包，SHA256：
 
 ```text
-862021C84EECD32D2E332430E82CD921C56D93015A27DED4156A32FE373F2637
+ACC5E0B73626A86F3C07ECDAE04B164F806F7D5A30DDC692C3C8C864FF73F4AB
 ```
 
 ## 相对上游的修改
 
-定制 ZIP 相对上游官方 ZIP 仅修改两个 BOT cfg、替换 `addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll`，并新增供助手验证版本和 payload 完整性的 `CS2AS05.plugin.json`。首次 Panel 默认值为 BOT / Low / mixed / less / 八项 Bot 物品全开 / 刀具 `507、508、515、519、525`。覆盖升级会保留用户已经明确选择的合法值，包括 `normal` Nades、全关 Bot Items 和空刀具；仅缺失或未初始化字段使用新默认。资源差异见 [`docs/CS2BotImprover-defaults-diff-0.5.4.json`](./docs/CS2BotImprover-defaults-diff-0.5.4.json)：
+定制 ZIP 相对上游官方 ZIP 仅修改两个 BOT cfg、替换 `addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll`，并新增供助手验证版本和 payload 完整性的 `CS2AS05.plugin.json`。首次 Panel 默认值为 BOT / Low / mixed / less / 八项 Bot 物品全开 / 刀具 `507、508、515、519、525`。覆盖升级会保留用户已经明确选择的合法值，包括 `normal` Nades、全关 Bot Items 和空刀具；仅缺失或未初始化字段使用新默认。资源差异见 [`docs/CS2BotImprover-defaults-diff-0.5.4.json`](./docs/CS2BotImprover-defaults-diff-0.5.4.json)，0.5.5 marker 证据见 [`docs/CS2BotImprover-marker-diff-0.5.5.json`](./docs/CS2BotImprover-marker-diff-0.5.5.json)：
 
 - 每个 BOT 每回合由 NadeSystem 调度的闪光最多 2 次，高爆、烟雾、燃烧瓶/燃烧弹各最多 1 次。
 - 非紧急投掷使用开局 15 秒预算、同 BOT 5 秒间隔和同队 0.5 秒间隔；开局每队最多 1 颗烟雾和 3 颗进攻道具。

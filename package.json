@@ -1,6 +1,6 @@
 {
   "name": "cs2-bot-improver-assistant",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "license": "AGPL-3.0-or-later",
   "homepage": "https://github.com/YuGeYu/CS2AS05#readme",
   "repository": {
@@ -40,6 +40,7 @@
     "@tauri-apps/plugin-updater": "^2.10.1",
     "lucide-vue-next": "^0.468.0",
     "pinia": "^3.0.4",
+    "three": "^0.185.1",
     "vue": "^3.5.31"
   },
   "devDependencies": {
@@ -47,6 +48,7 @@
     "@tsconfig/node24": "^24.0.4",
     "@types/jsdom": "^28.0.1",
     "@types/node": "^24.12.0",
+    "@types/three": "^0.185.0",
     "@vitejs/plugin-vue": "^6.0.5",
     "@vitest/eslint-plugin": "^1.6.13",
     "@vue/eslint-config-typescript": "^14.7.0",

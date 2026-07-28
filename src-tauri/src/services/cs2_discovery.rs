@@ -82,9 +82,10 @@ struct Probe {
 }
 
 fn discover_locations() -> Vec<Probe> {
-    let mut steam_roots = registry_steam_roots();
-    steam_roots.extend(running_steam_roots());
-    steam_roots.extend(common_steam_roots());
+    let mut steam_roots: Vec<PathBuf> = steam_executable_candidates(None)
+        .into_iter()
+        .filter_map(|path| path.parent().map(Path::to_path_buf))
+        .collect();
     dedupe_paths(&mut steam_roots);
 
     let mut probes = registry_cs2_locations();
@@ -156,61 +157,132 @@ fn common_steam_roots() -> Vec<PathBuf> {
     roots
 }
 
-fn running_steam_roots() -> Vec<PathBuf> {
+pub(crate) fn find_steam_executable(root_hint: Option<&Path>) -> Option<PathBuf> {
+    select_steam_executable_from_sources(steam_executable_sources(root_hint), Path::is_file)
+}
+
+fn steam_executable_candidates(root_hint: Option<&Path>) -> Vec<PathBuf> {
+    steam_executable_sources(root_hint)
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+fn steam_executable_sources(root_hint: Option<&Path>) -> [Vec<PathBuf>; 4] {
+    let root_hint = root_hint
+        .and_then(steam_library_from_cs2_root)
+        .map(|root| vec![root.join("steam.exe")])
+        .unwrap_or_default();
+    let common = common_steam_roots()
+        .into_iter()
+        .map(|root| root.join("steam.exe"))
+        .collect();
+    [
+        running_steam_executables(),
+        registry_steam_executables(),
+        root_hint,
+        common,
+    ]
+}
+
+fn select_steam_executable_from_sources(
+    sources: [Vec<PathBuf>; 4],
+    is_file: impl FnMut(&Path) -> bool,
+) -> Option<PathBuf> {
+    select_steam_executable(sources.into_iter().flatten(), is_file)
+}
+
+fn select_steam_executable(
+    candidates: impl IntoIterator<Item = PathBuf>,
+    mut is_file: impl FnMut(&Path) -> bool,
+) -> Option<PathBuf> {
+    let mut seen = HashSet::new();
+    candidates.into_iter().find(|path| {
+        path.file_name()
+            .is_some_and(|name| name.eq_ignore_ascii_case("steam.exe"))
+            && seen.insert(canonical_key(path))
+            && is_file(path)
+    })
+}
+
+fn steam_library_from_cs2_root(root: &Path) -> Option<PathBuf> {
+    let common = root.parent()?;
+    if !common
+        .file_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case("common"))
+    {
+        return None;
+    }
+    let steamapps = common.parent()?;
+    if !steamapps
+        .file_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case("steamapps"))
+    {
+        return None;
+    }
+    steamapps.parent().map(Path::to_path_buf)
+}
+
+fn running_steam_executables() -> Vec<PathBuf> {
     let system = System::new_all();
     system
         .processes()
         .values()
         .filter(|process| process.name().eq_ignore_ascii_case("steam.exe"))
         .filter_map(|process| process.exe())
-        .filter_map(Path::parent)
         .map(Path::to_path_buf)
         .collect()
 }
 
 #[cfg(windows)]
-fn registry_steam_roots() -> Vec<PathBuf> {
+fn registry_steam_executables() -> Vec<PathBuf> {
     use winreg::enums::{
         HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY,
     };
     use winreg::RegKey;
 
-    let mut roots = Vec::new();
+    let mut candidates = Vec::new();
     let locations = [
-        (HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamPath"),
-        (HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamExe"),
-        (HKEY_LOCAL_MACHINE, r"Software\Valve\Steam", "InstallPath"),
+        (HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamExe", true),
+        (
+            HKEY_CURRENT_USER,
+            r"Software\Valve\Steam",
+            "SteamPath",
+            false,
+        ),
+        (
+            HKEY_LOCAL_MACHINE,
+            r"Software\Valve\Steam",
+            "InstallPath",
+            false,
+        ),
         (
             HKEY_LOCAL_MACHINE,
             r"Software\Wow6432Node\Valve\Steam",
             "InstallPath",
+            false,
         ),
     ];
-    for view in [KEY_READ | KEY_WOW64_32KEY, KEY_READ | KEY_WOW64_64KEY] {
-        for (hive, key, value) in locations {
+    for (hive, key, value, executable) in locations {
+        for view in [KEY_READ | KEY_WOW64_32KEY, KEY_READ | KEY_WOW64_64KEY] {
             let hive = RegKey::predef(hive);
             if let Ok(key) = hive.open_subkey_with_flags(key, view) {
                 if let Ok(path) = key.get_value::<String, _>(value) {
-                    let path = PathBuf::from(path.replace('/', "\\"));
-                    roots.push(
-                        if path
-                            .extension()
-                            .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
-                        {
-                            path.parent().unwrap_or(&path).to_path_buf()
-                        } else {
-                            path
-                        },
-                    );
+                    let path = PathBuf::from(path.trim().trim_matches('"').replace('/', "\\"));
+                    candidates.push(if executable {
+                        path
+                    } else {
+                        path.join("steam.exe")
+                    });
                 }
             }
         }
     }
-    roots
+    candidates
 }
 
 #[cfg(not(windows))]
-fn registry_steam_roots() -> Vec<PathBuf> {
+fn registry_steam_executables() -> Vec<PathBuf> {
     Vec::new()
 }
 
@@ -579,6 +651,7 @@ fn confidence_rank(confidence: &str) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use std::sync::atomic::AtomicBool;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -684,6 +757,108 @@ mod tests {
             canonical_key(Path::new(r"D:\Steam\CS2")),
             canonical_key(Path::new("d:/steam/cs2"))
         );
+    }
+
+    #[test]
+    fn steam_resolver_selects_the_first_valid_custom_candidate() {
+        let root = temp_root("steam-custom", false);
+        let missing = root.join("missing/steam.exe");
+        let custom = root.join("custom/steam.exe");
+        fs::create_dir_all(custom.parent().unwrap()).unwrap();
+        fs::write(&custom, "test").unwrap();
+
+        assert_eq!(
+            select_steam_executable(vec![missing, custom.clone()], Path::is_file),
+            Some(custom)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn steam_resolver_derives_the_library_from_a_cs2_root() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let library = std::env::temp_dir().join(format!("steam-library-{unique}"));
+        let root = library.join("steamapps/common").join(CS2_FOLDER_NAME);
+        let steam = library.join("steam.exe");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(&steam, "test").unwrap();
+
+        assert_eq!(steam_library_from_cs2_root(&root), Some(library.clone()));
+        assert_eq!(
+            select_steam_executable(vec![library.join("steam.exe")], Path::is_file),
+            Some(steam)
+        );
+        fs::remove_dir_all(library).unwrap();
+    }
+
+    #[test]
+    fn steam_resolver_rejects_other_executables_and_missing_candidates() {
+        let root = temp_root("steam-invalid", false);
+        let other = root.join("steam-client.exe");
+        fs::write(&other, "test").unwrap();
+        assert_eq!(
+            select_steam_executable(vec![other, root.join("steam.exe")], Path::is_file),
+            None
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn steam_resolver_dedupes_candidates_without_changing_priority() {
+        let first = PathBuf::from(r"D:\Steam\steam.exe");
+        let duplicate = PathBuf::from("d:/steam/steam.exe");
+        let second = PathBuf::from(r"E:\CustomSteam\steam.exe");
+        let mut checks = HashMap::<String, usize>::new();
+        let selected =
+            select_steam_executable(vec![first.clone(), duplicate, second.clone()], |path| {
+                *checks.entry(canonical_key(path)).or_default() += 1;
+                path == second
+            });
+        assert_eq!(selected, Some(second));
+        assert_eq!(checks.get(&canonical_key(&first)), Some(&1));
+    }
+
+    #[test]
+    fn steam_resolver_keeps_running_process_ahead_of_all_fallback_sources() {
+        let root = temp_root("steam-source-priority", false);
+        let running = root.join("running/steam.exe");
+        let registry = root.join("registry/steam.exe");
+        let root_hint = root.join("library/steam.exe");
+        let common = root.join("common/steam.exe");
+        for path in [&running, &registry, &root_hint, &common] {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, "test").unwrap();
+        }
+
+        let selected = select_steam_executable_from_sources(
+            [
+                vec![running.clone()],
+                vec![registry],
+                vec![root_hint],
+                vec![common],
+            ],
+            Path::is_file,
+        );
+        assert_eq!(selected, Some(running));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn steam_resolver_falls_back_when_process_path_is_unreadable() {
+        let root = temp_root("steam-process-unreadable", false);
+        let registry = root.join("registry/steam.exe");
+        fs::create_dir_all(registry.parent().unwrap()).unwrap();
+        fs::write(&registry, "test").unwrap();
+
+        let selected = select_steam_executable_from_sources(
+            [Vec::new(), vec![registry.clone()], Vec::new(), Vec::new()],
+            Path::is_file,
+        );
+        assert_eq!(selected, Some(registry));
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

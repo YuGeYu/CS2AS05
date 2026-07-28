@@ -30,6 +30,7 @@ export interface ToastMessage {
   tone: 'ready' | 'warn' | 'danger' | 'info'
   title: string
   message: string
+  durationMs?: number
 }
 
 export interface Cs2EnvironmentStatus {

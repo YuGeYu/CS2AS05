@@ -10,11 +10,14 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     watch: {
-      ignored: ['**/src-tauri/target/**'],
+      ignored: ['**/target/**'],
     },
   },
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
+  },
+  test: {
+    exclude: ['**/node_modules/**', '**/dist/**', '**/workspace/**', '**/third_party/**'],
   },
   resolve: {
     alias: {

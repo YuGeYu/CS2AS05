@@ -23,6 +23,17 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true }))
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => mocks.appWindow }))
+vi.mock('@/features/software-updates/coordinator', () => ({
+  closeSoftwareUpdate: vi.fn(),
+  deferSoftwareUpdateInstall: vi.fn(),
+  installSoftwareUpdate: vi.fn(),
+  openSoftwareUpdateDownload: vi.fn(),
+  openSoftwareUpdateReleasePage: vi.fn(),
+  showPendingSoftwareUpdate: vi.fn(),
+  softwareUpdateCoordinatorState: { activeRelease: null, downloadError: false },
+  startSoftwareUpdateCoordinator: vi.fn(async () => undefined),
+  startSoftwareUpdateDownload: vi.fn(),
+}))
 vi.mock('@/features/software-updates/updater-state', () => ({
   hasPendingDownloadedUpdate: () => mocks.runtime.pending,
   prepareDeferredUpdateForExit: mocks.prepareExit,

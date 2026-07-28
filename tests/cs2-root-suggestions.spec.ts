@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 const cs2Tauri = vi.hoisted(() => ({ guess: vi.fn(), stop: vi.fn(), inspect: vi.fn() }))
 const panelTauri = vi.hoisted(() => ({ snapshot: vi.fn() }))
+const demoTauri = vi.hoisted(() => ({ ensureRoot: vi.fn() }))
 
 vi.mock('@/services/tauri/cs2', () => ({
   checkCs2Process: vi.fn(), discoverCs2Roots: vi.fn(), inspectCs2Root: cs2Tauri.inspect,
@@ -15,6 +16,9 @@ vi.mock('@/services/tauri/panel', () => ({
   getPanelSnapshot: panelTauri.snapshot, launchPanelCs2: vi.fn(),
   setPanelMode: vi.fn(), setPanelDifficulty: vi.fn(), setPanelAim: vi.fn(), setPanelNades: vi.fn(),
   setPanelBotItem: vi.fn(), setPanelDropKnives: vi.fn(),
+}))
+vi.mock('@/services/tauri/demo', () => ({
+  ensureDefaultDemoRoot: demoTauri.ensureRoot,
 }))
 
 import Cs2RootSuggestionsDialog from '@/components/Cs2RootSuggestionsDialog.vue'
@@ -28,8 +32,10 @@ describe('CS2 root suggestions', () => {
     cs2Tauri.stop.mockReset()
     cs2Tauri.inspect.mockReset()
     panelTauri.snapshot.mockReset()
+    demoTauri.ensureRoot.mockReset()
     cs2Tauri.inspect.mockResolvedValue({ rootPath: candidate.path })
     panelTauri.snapshot.mockResolvedValue(null)
+    demoTauri.ensureRoot.mockResolvedValue({ path: candidate.path, scanDepth: 5, origin: 'selected_cs2_root' })
   })
 
   it('stops the active scan before applying the selected candidate', async () => {

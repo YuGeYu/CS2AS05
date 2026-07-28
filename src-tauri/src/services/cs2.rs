@@ -29,7 +29,7 @@ use crate::services::panel;
 
 const CS2_FOLDER_NAME: &str = "Counter-Strike Global Offensive";
 const BUNDLED_ZIP_NAME: &str = "CS2BotImprover.zip";
-const CUSTOM_ZIP_SHA256: &str = "862021C84EECD32D2E332430E82CD921C56D93015A27DED4156A32FE373F2637";
+const CUSTOM_ZIP_SHA256: &str = "ACC5E0B73626A86F3C07ECDAE04B164F806F7D5A30DDC692C3C8C864FF73F4AB";
 const PANEL_FILE_NAME: &str = "Panel v1.4.3.exe";
 const PANEL_SHA256: &str = "3FD93DC7AF2702C50B9A7E4FCF1BB11387B107ABC863EE8A3067255022408CCD";
 const PANEL_SIZE: u64 = 5_844_480;
@@ -980,7 +980,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock must be after Unix epoch")
             .as_nanos();
-        let fake_root = std::env::temp_dir().join(format!("ai-pc-fac-0.5.4-{nonce}"));
+        let fake_root =
+            std::env::temp_dir().join(format!("ai-pc-fac-{}-{nonce}", env!("CARGO_PKG_VERSION")));
         let csgo = fake_root.join("game").join("csgo");
         fs::create_dir_all(&csgo).expect("fake CS2 root must be creatable");
         extract_game_files(&zip_path, &csgo)
@@ -1002,7 +1003,7 @@ mod tests {
                 .is_file(),
             !csgo.join(PANEL_FILE_NAME).exists(),
             sha256_file(&dll).expect("custom NadeSystem DLL must be readable"),
-            matches!(&marker_status, PluginVersionStatus::Valid { version } if version == &Version::parse("0.5.4").unwrap()),
+            matches!(&marker_status, PluginVersionStatus::Valid { version } if version == &Version::parse(env!("CARGO_PKG_VERSION")).unwrap()),
         );
         fs::remove_dir_all(&fake_root).expect("fake CS2 root must be removable");
 
@@ -1034,7 +1035,7 @@ mod tests {
             b"keep"
         );
         assert!(
-            matches!(inspect_bot_plugin_version_at(&csgo).unwrap(), PluginVersionStatus::Valid { version } if version == Version::parse("0.5.4").unwrap())
+            matches!(inspect_bot_plugin_version_at(&csgo).unwrap(), PluginVersionStatus::Valid { version } if version == Version::parse(env!("CARGO_PKG_VERSION")).unwrap())
         );
         fs::remove_dir_all(root).unwrap();
     }

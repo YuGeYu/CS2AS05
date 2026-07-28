@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { FolderOpen, RefreshCw, ShieldCheck, TerminalSquare, Trash2, Wrench } from 'lucide-vue-next'
 
 import SupportActions from '@/components/SupportActions.vue'
+import { appConfig } from '@/config/app'
 import { useCs2Store } from '@/stores/cs2'
 
 const store = useCs2Store()
@@ -18,7 +19,7 @@ const installLabel = computed(() => {
 const installHint = computed(() => {
   if (!store.selectedRoot) return '选择 Counter-Strike Global Offensive 目录后才能安装。'
   if (store.cs2Running) return '检测到 CS2 正在运行，请退出游戏后再继续。'
-  if (store.environment?.baseEnvironmentReady) return '已检测到插件，可直接覆盖更新到 0.5.4 定制包。'
+  if (store.environment?.baseEnvironmentReady) return `已检测到插件，可直接覆盖更新到 ${appConfig.appVersion} 定制包。`
   return '将安装基于 CS2-Bot-Improver v1.4.3 的最小定制资源包。'
 })
 const packageState = computed(() => store.environment?.baseEnvironmentReady ? '已安装' : '待安装')
@@ -83,8 +84,10 @@ async function toggleDiagnostics() {
           <h1 id="page-title">CS2 人机增强助手</h1>
           <p class="subtitle">插件安装、覆盖更新、卸载、诊断与兼容工具</p>
         </div>
-        <span class="version-label">0.5.4</span>
+        <span class="version-label">{{ appConfig.appVersion }}</span>
       </header>
+
+      <SupportActions />
 
       <section class="directory-section" aria-labelledby="directory-title">
         <div class="section-heading">
@@ -123,7 +126,7 @@ async function toggleDiagnostics() {
       <section class="install-section" aria-labelledby="install-title">
         <div>
           <p class="overline">定制资源包</p>
-          <h2 id="install-title">0.5.4 定制资源包</h2>
+          <h2 id="install-title">{{ appConfig.appVersion }} 定制资源包</h2>
           <p>基于上游 CS2-Bot-Improver v1.4.3，仅包含本项目说明的最小定制。</p>
           <p>{{ installHint }}</p>
         </div>
@@ -144,8 +147,6 @@ async function toggleDiagnostics() {
           <span>打开原版 Panel</span>
         </button>
       </section>
-
-      <SupportActions />
 
       <section class="utility-section">
         <button class="text-button" type="button" :aria-expanded="diagnosticsOpen" @click="toggleDiagnostics">

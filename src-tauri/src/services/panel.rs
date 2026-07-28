@@ -14,11 +14,14 @@ use serde_json::{Map, Value};
 use tauri::AppHandle;
 
 use crate::errors::AppError;
+use crate::models::demo::DemoRecordingSettings;
 use crate::models::panel::{
     BotItemsState, DifficultyState, DropKnivesState, LaunchResult, ModeState,
     PanelInitializationResult, PanelSnapshot, PresetsState,
 };
 use crate::services::cs2;
+use crate::services::cs2_discovery;
+use crate::services::demo;
 
 const KNIVES: [u16; 20] = [
     500, 503, 505, 506, 507, 508, 509, 512, 514, 515, 516, 517, 518, 519, 520, 521, 522, 523, 525,
@@ -614,6 +617,105 @@ fn write_drop_knives_at(csgo: &Path, bind_key: &str, selected: &[u16]) -> Result
     Ok(())
 }
 
+const DEMO_RECORDING_BEGIN: &str = "// CS2AS05 DEMO RECORDING BEGIN";
+const DEMO_RECORDING_END: &str = "// CS2AS05 DEMO RECORDING END";
+
+fn replace_demo_recording_block(path: &Path, enabled: bool) -> Result<(), AppError> {
+    let text = read_text(path).map_err(|e| io_context("读取 cfg", path, e))?;
+    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let has_bom = text.starts_with('\u{feff}');
+    let mut lines = Vec::new();
+    let mut in_block = false;
+    for original in text.trim_start_matches('\u{feff}').lines() {
+        let line = original.trim();
+        if line == DEMO_RECORDING_BEGIN {
+            in_block = true;
+            continue;
+        }
+        if line == DEMO_RECORDING_END {
+            in_block = false;
+            continue;
+        }
+        if !in_block {
+            lines.push(original.to_string());
+        }
+    }
+    while lines.last().is_some_and(|line| line.trim().is_empty()) {
+        lines.pop();
+    }
+    let value = if enabled { 1 } else { 0 };
+    lines.extend([
+        DEMO_RECORDING_BEGIN.to_string(),
+        format!("tv_enable {value}"),
+        format!("tv_autorecord {value}"),
+        DEMO_RECORDING_END.to_string(),
+    ]);
+    let mut output = format!("{}{newline}", lines.join(newline));
+    if has_bom {
+        output.insert(0, '\u{feff}');
+    }
+    atomic_write(path, output.as_bytes())
+}
+
+fn cfg_demo_recording_applied(path: &Path, enabled: bool) -> bool {
+    let Ok(text) = read_text(path) else {
+        return false;
+    };
+    let expected = if enabled { "1" } else { "0" };
+    let mut in_block = false;
+    let mut tv_enable = false;
+    let mut tv_autorecord = false;
+    for line in text.lines().map(str::trim) {
+        if line == DEMO_RECORDING_BEGIN {
+            in_block = true;
+            continue;
+        }
+        if line == DEMO_RECORDING_END {
+            in_block = false;
+            continue;
+        }
+        if in_block {
+            tv_enable |= line == format!("tv_enable {expected}");
+            tv_autorecord |= line == format!("tv_autorecord {expected}");
+        }
+    }
+    tv_enable && tv_autorecord
+}
+
+pub fn apply_demo_recording(root_path: &str, enabled: bool) -> Result<(), AppError> {
+    if cs2::check_cs2_process()? {
+        return Err(invalid(
+            "[DEMO_RECORDING_CS2_RUNNING] CS2 运行中不能修改自动录制设置。",
+        ));
+    }
+    let root = cs2::normalize_root(root_path)?;
+    let csgo = root.join("game/csgo");
+    panel_transaction(&csgo, || {
+        for relative in CFG_FILES {
+            replace_demo_recording_block(&csgo.join(relative), enabled)?;
+        }
+        Ok(())
+    })
+}
+
+pub fn demo_recording_state(
+    root_path: &str,
+    desired: bool,
+) -> Result<DemoRecordingSettings, AppError> {
+    let root = cs2::normalize_root(root_path)?;
+    let csgo = root.join("game/csgo");
+    let normal = cfg_demo_recording_applied(&csgo.join(CFG_FILES[0]), desired);
+    let ffa = cfg_demo_recording_applied(&csgo.join(CFG_FILES[1]), desired);
+    Ok(DemoRecordingSettings {
+        desired_enabled: desired,
+        normal_cfg_applied: normal,
+        ffa_cfg_applied: ffa,
+        drifted: !normal || !ffa,
+        writable: !cs2::check_cs2_process()?,
+        scope: "bots-only",
+    })
+}
+
 fn panel_transaction<T>(
     csgo: &Path,
     operation: impl FnOnce() -> Result<T, AppError>,
@@ -920,11 +1022,13 @@ fn launch_cs2_inner(
     } else {
         None
     };
-    if cs2::check_cs2_process()? {
-        return Err(invalid("[CS2_RUNNING] CS2 已在运行。"));
+    let (root, steam) = prepare_launch_paths(root_path, cs2::check_cs2_process, |root| {
+        cs2_discovery::find_steam_executable(Some(root))
+    })?;
+    if mode == "bots" && demo::recording_desired(app)? {
+        apply_demo_recording(root_path, true)?;
     }
     if mode == "bots" {
-        let root = cs2::normalize_root(root_path)?;
         initialize_panel_defaults_at(&root, false)?;
     }
     let (plugin_action, plugin_version) = if mode == "bots" {
@@ -941,17 +1045,35 @@ fn launch_cs2_inner(
     if insecure {
         options.extend(["-insecure", "-console", "-condebug"]);
     }
-    let steam = find_steam().ok_or_else(|| invalid("[STEAM_NOT_FOUND] 未找到 steam.exe。"))?;
+    cs2::write_runtime_log("INFO", &format!("使用 Steam 客户端：{}", steam.display()));
     Command::new(&steam)
         .args(&options)
         .spawn()
         .map_err(|e| io_context("启动 Steam", &steam, e))?;
+    demo::observe_assistant_launch(app.clone(), chrono::Utc::now().timestamp_millis());
     Ok(LaunchResult {
         options: options[2..].join(" "),
         insecure,
         plugin_action,
         plugin_version,
     })
+}
+
+fn prepare_launch_paths(
+    root_path: &str,
+    check_cs2_running: impl FnOnce() -> Result<bool, AppError>,
+    resolve_steam: impl FnOnce(&Path) -> Option<PathBuf>,
+) -> Result<(PathBuf, PathBuf), AppError> {
+    if check_cs2_running()? {
+        return Err(invalid("[CS2_RUNNING] CS2 已在运行。"));
+    }
+    let root = cs2::normalize_root(root_path)?;
+    let steam = resolve_steam(&root).ok_or_else(|| {
+        invalid(
+            "[STEAM_NOT_FOUND] 未找到 Steam 客户端。请确认 Steam 已安装，或先启动一次 Steam 后重试。",
+        )
+    })?;
+    Ok((root, steam))
 }
 
 fn launch_coordinator() -> &'static Mutex<()> {
@@ -1214,18 +1336,6 @@ fn read_text(path: &Path) -> std::io::Result<String> {
     fs::read_to_string(path)
 }
 
-fn find_steam() -> Option<PathBuf> {
-    let candidates = [
-        std::env::var_os("PROGRAMFILES(X86)")
-            .map(PathBuf::from)
-            .map(|p| p.join("Steam/steam.exe")),
-        std::env::var_os("PROGRAMFILES")
-            .map(PathBuf::from)
-            .map(|p| p.join("Steam/steam.exe")),
-    ];
-    candidates.into_iter().flatten().find(|path| path.is_file())
-}
-
 fn invalid(message: impl Into<String>) -> AppError {
     AppError::runtime(message)
 }
@@ -1330,16 +1440,16 @@ mod tests {
 
     #[test]
     fn bot_plugin_gate_installs_old_keeps_valid_new_and_blocks_untrusted_new() {
-        let current = Version::parse("0.5.4").unwrap();
+        let current = Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
         assert_eq!(
             plugin_gate_decision(
                 cs2::PluginVersionStatus::Valid {
-                    version: Version::parse("0.5.4-test.1").unwrap()
+                    version: Version::parse("0.5.5-test.1").unwrap()
                 },
                 &current
             )
             .unwrap(),
-            PluginGateDecision::Unchanged("0.5.4-test.1".into())
+            PluginGateDecision::Unchanged("0.5.5-test.1".into())
         );
         assert_eq!(
             plugin_gate_decision(cs2::PluginVersionStatus::Missing, &current).unwrap(),
@@ -1348,7 +1458,7 @@ mod tests {
         assert_eq!(
             plugin_gate_decision(
                 cs2::PluginVersionStatus::Valid {
-                    version: Version::parse("0.5.3").unwrap()
+                    version: Version::parse("0.5.4").unwrap()
                 },
                 &current
             )
@@ -1375,6 +1485,59 @@ mod tests {
         .unwrap_err()
         .into_string();
         assert!(error.contains("BOT_PLUGIN_HIGHER_VERSION_UNTRUSTED"));
+    }
+
+    #[test]
+    fn steam_resolution_precedes_launch_mutations() {
+        let source = include_str!("panel.rs");
+        let launch = &source[source.find("fn launch_cs2_inner").unwrap()
+            ..source.find("fn launch_coordinator").unwrap()];
+        let steam = launch.find("find_steam_executable").unwrap();
+        for mutation in [
+            "initialize_panel_defaults_at",
+            "ensure_current_bot_plugin",
+            "set_mode",
+        ] {
+            assert!(
+                steam < launch.find(mutation).unwrap(),
+                "Steam must be resolved before {mutation}"
+            );
+        }
+    }
+
+    #[test]
+    fn missing_steam_does_not_change_gameinfo_panel_state_or_plugin_marker() {
+        let root = test_root("missing-steam-no-writes");
+        let csgo = root.join("game/csgo");
+        let protected = [
+            (csgo.join("gameinfo.gi"), b"gameinfo-before".as_slice()),
+            (
+                csgo.join(PANEL_STATE_FILE),
+                b"panel-state-before".as_slice(),
+            ),
+            (
+                csgo.join("addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json"),
+                b"plugin-marker-before".as_slice(),
+            ),
+        ];
+        for (path, bytes) in &protected {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, bytes).unwrap();
+        }
+        let before: Vec<Vec<u8>> = protected
+            .iter()
+            .map(|(path, _)| fs::read(path).unwrap())
+            .collect();
+
+        let error = prepare_launch_paths(root.to_str().unwrap(), || Ok(false), |_| None)
+            .unwrap_err()
+            .into_string();
+
+        assert!(error.contains("STEAM_NOT_FOUND"));
+        for ((path, _), expected) in protected.iter().zip(before) {
+            assert_eq!(fs::read(path).unwrap(), expected);
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1664,6 +1827,38 @@ mod tests {
         let result = initialize_panel_defaults_at_with_running(&root, false, true).unwrap();
         assert_eq!(result.status, "deferred");
         assert!(!root.join("game/csgo").join(PANEL_STATE_FILE).exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn demo_recording_block_preserves_unknown_lines_and_converges_duplicates() {
+        let root = test_root("demo-recording-block");
+        fs::create_dir_all(&root).unwrap();
+        let cfg = root.join("managed.cfg");
+        fs::write(&cfg, "echo before\r\n// CS2AS05 DEMO RECORDING BEGIN\r\ntv_enable 0\r\n// CS2AS05 DEMO RECORDING END\r\necho after\r\n// CS2AS05 DEMO RECORDING BEGIN\r\ntv_autorecord 0\r\n// CS2AS05 DEMO RECORDING END\r\n").unwrap();
+        replace_demo_recording_block(&cfg, true).unwrap();
+        let text = fs::read_to_string(&cfg).unwrap();
+        assert!(text.contains("echo before\r\n"));
+        assert!(text.contains("echo after\r\n"));
+        assert_eq!(text.matches(DEMO_RECORDING_BEGIN).count(), 1);
+        assert_eq!(text.matches("tv_enable 1").count(), 1);
+        assert_eq!(text.matches("tv_autorecord 1").count(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn demo_recording_block_preserves_utf8_bom_and_supports_disabled_state() {
+        let root = test_root("demo-recording-bom");
+        fs::create_dir_all(&root).unwrap();
+        let cfg = root.join("managed.cfg");
+        fs::write(&cfg, "\u{feff}echo custom\n").unwrap();
+        replace_demo_recording_block(&cfg, false).unwrap();
+        let bytes = fs::read(&cfg).unwrap();
+        assert!(bytes.starts_with(&[0xef, 0xbb, 0xbf]));
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(text.contains("echo custom\n"));
+        assert!(text.contains("tv_enable 0\n"));
+        assert!(text.contains("tv_autorecord 0\n"));
         fs::remove_dir_all(root).unwrap();
     }
 

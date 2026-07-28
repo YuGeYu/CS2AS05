@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
 
-describe('0.5.4 integrated Panel contract', () => {
+describe('0.5.5 integrated Panel contract', () => {
   it('uses the application shell and retains the upstream Panel compatibility action', () => {
     expect(read('src/App.vue')).toContain("import AppShell from '@/components/AppShell.vue'")
     expect(read('src/App.vue')).toContain("import AppTitlebar from '@/components/AppTitlebar.vue'")
@@ -18,8 +18,7 @@ describe('0.5.4 integrated Panel contract', () => {
     expect(service).toContain('const CUSTOM_ZIP_SHA256')
     expect(service).toContain('verify_custom_zip(&zip_path)?')
     expect(service).toContain('最小定制')
-    expect(read('src/views/InstallView.vue')).toContain('0.5.4')
-    expect(read('src/views/InstallView.vue')).toContain('0.5.4 定制资源包')
+    expect(read('src/views/InstallView.vue')).toContain('appConfig.appVersion')
     expect(read('src/views/InstallView.vue')).toContain('CS2-Bot-Improver v1.4.3')
     expect(read('src-tauri/src/services/cs2.rs')).not.toContain('bot_randomizer_options.json')
   })
@@ -29,6 +28,7 @@ describe('0.5.4 integrated Panel contract', () => {
     const support = read('src/components/SupportActions.vue')
     const rust = read('src-tauri/src/lib.rs')
     expect(installView).toContain('<SupportActions />')
+    expect(installView.indexOf('<SupportActions />')).toBeLessThan(installView.indexOf('class="directory-section"'))
     for (const label of ['检查更新', '打开官网', '查看/编辑意见', '关于与来源']) expect(support).toContain(label)
     for (const command of ['open_official_site', 'open_idea_page', 'open_release_page', 'open_upstream_project', 'open_update_download']) {
       expect(rust).toContain(`commands::support::${command}`)

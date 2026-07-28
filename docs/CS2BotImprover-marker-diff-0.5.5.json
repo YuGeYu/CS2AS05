@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "fromVersion": "0.5.4",
+  "toVersion": "0.5.5",
+  "archive": {
+    "path": "src-tauri/resources/CS2BotImprover.zip",
+    "beforeSize": 67802954,
+    "beforeSha256": "862021C84EECD32D2E332430E82CD921C56D93015A27DED4156A32FE373F2637",
+    "afterSize": 67811702,
+    "afterSha256": "ACC5E0B73626A86F3C07ECDAE04B164F806F7D5A30DDC692C3C8C864FF73F4AB",
+    "entryCount": 651
+  },
+  "payload": {
+    "entryCount": 51,
+    "sha256": "9435A14E08F852FFE695DF1125310B623B7FF445CA7612A66D59AFE727317723",
+    "changed": false
+  },
+  "changedEntries": [
+    {
+      "path": "addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json",
+      "beforeSha256": "86C9DC40D26FC2FC4F5B84586FC9EC185AD2EE5E52BCB12596A8CFEA7B1CB4BC",
+      "afterSha256": "0C4A737E4AA7D40B938733E74DD184EBD39BA8598CF47657FDFB00A4656E14B0",
+      "change": "marker version only"
+    }
+  ],
+  "marker": {
+    "version": "0.5.5",
+    "generatedFrom": "CS2-Bot-Improver-v1.4.3"
+  }
+}

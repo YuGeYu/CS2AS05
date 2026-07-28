@@ -30,7 +30,8 @@ describe('support actions', () => {
   it('maps update, official-site, and idea buttons to their commands', async () => {
     const wrapper = mount(SupportActions, { global: { stubs: { Teleport: true } } })
     await flushPromises()
-    expect(wrapper.text()).toContain('当前 0.5.4 已是最新版本')
+    expect(mocks.check).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('启动后自动检查更新')
     const buttons = wrapper.findAll('.support-actions button')
     await buttons[0]?.trigger('click')
     await buttons[1]?.trigger('click')
@@ -43,10 +44,10 @@ describe('support actions', () => {
 
   it('disables duplicate checks and exposes a keyboard-accessible about entry', async () => {
     let resolve!: (value: unknown) => void
-    mocks.check.mockReturnValueOnce(new Promise((done) => { resolve = done }))
+    mocks.check.mockReturnValue(new Promise((done) => { resolve = done }))
     const wrapper = mount(SupportActions, { global: { stubs: { Teleport: true } } })
-    await flushPromises()
     const checkButton = wrapper.findAll('.support-actions button')[0]
+    await checkButton?.trigger('click')
     expect(checkButton?.attributes('disabled')).toBeDefined()
     expect(wrapper.get('.about-trigger').element.tagName).toBe('BUTTON')
     resolve({ status: 'current', payload: {} })
@@ -56,7 +57,10 @@ describe('support actions', () => {
   it('shows a recoverable failure message', async () => {
     mocks.check.mockResolvedValue({ status: 'failed', message: '暂时无法连接官网' })
     const wrapper = mount(SupportActions, { global: { stubs: { Teleport: true } } })
+    await wrapper.findAll('.support-actions button')[0]?.trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('暂时无法连接官网')
+    expect(wrapper.text()).toContain('打开官网')
+    expect(wrapper.text()).toContain('查看/编辑意见')
   })
 })

@@ -27,10 +27,26 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            services::demo::initialize(app.handle()).map_err(|error| error.into_string())?;
+            services::demo::refresh_watcher(app.handle()).map_err(|error| error.into_string())?;
             Ok(())
         })
         .manage(services::cs2_discovery::ScanCoordinator::default())
+        .manage(services::demo::DemoWatcherState::default())
         .invoke_handler(tauri::generate_handler![
+            commands::intro::get_intro_public_data,
+            commands::demo::list_demo_roots,
+            commands::demo::add_demo_root,
+            commands::demo::ensure_default_demo_root,
+            commands::demo::update_demo_root,
+            commands::demo::remove_demo_root,
+            commands::demo::scan_demo_roots,
+            commands::demo::import_demo_file,
+            commands::demo::list_demos,
+            commands::demo::get_demo_report,
+            commands::demo::retry_demo_parse,
+            commands::demo::get_demo_settings,
+            commands::demo::set_demo_recording_enabled,
             commands::cs2::discover_cs2_roots,
             commands::cs2::inspect_cs2_root,
             commands::cs2::install_bot_package,
