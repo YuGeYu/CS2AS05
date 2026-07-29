@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true }))
+vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true, invoke: vi.fn(async () => undefined) }))
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => mocks.appWindow }))
 vi.mock('@/features/software-updates/coordinator', () => ({
   closeSoftwareUpdate: vi.fn(),

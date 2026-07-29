@@ -56,7 +56,7 @@ async function choose(path: string) {
   try {
     await stopOnce()
     await cs2.selectRoot(path)
-    await panel.refresh(path)
+    await panel.refresh(path, false, cs2.environment?.baseEnvironmentReady ?? false)
     emit('close')
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : String(reason)

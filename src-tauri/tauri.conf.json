@@ -23,6 +23,20 @@
         "decorations": false,
         "shadow": true,
         "fullscreen": false
+      },
+      {
+        "label": "scoreboard",
+        "title": "本局战报",
+        "url": "scoreboard.html",
+        "visible": false,
+        "width": 1100,
+        "height": 720,
+        "minWidth": 860,
+        "minHeight": 600,
+        "resizable": true,
+        "decorations": true,
+        "shadow": true,
+        "fullscreen": false
       }
     ],
     "security": {

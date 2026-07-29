@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { isTauri } from '@tauri-apps/api/core'
+import { invoke, isTauri } from '@tauri-apps/api/core'
 import { getCurrentWindow, type CloseRequestedEvent } from '@tauri-apps/api/window'
 import AppTitlebar from '@/components/AppTitlebar.vue'
 import AppShell from '@/components/AppShell.vue'
@@ -20,8 +20,12 @@ const StartupIntro = defineAsyncComponent(() => import('@/components/intro/Start
 const EasterEggGame = defineAsyncComponent(() => import('@/components/easter-egg/EasterEggGame.vue'))
 
 async function onCloseRequested(event: CloseRequestedEvent) {
-  if (!hasPendingDownloadedUpdate()) return
+  if (!hasPendingDownloadedUpdate()) {
+    await invoke('destroy_scoreboard').catch(() => undefined)
+    return
+  }
   event.preventDefault()
+  await invoke('hide_scoreboard').catch(() => undefined)
   exitConfirmOpen.value = true
 }
 
@@ -33,6 +37,7 @@ function returnToInstall() {
 async function exitAnyway() {
   exiting.value = true
   await prepareDeferredUpdateForExit()
+  await invoke('destroy_scoreboard').catch(() => undefined)
   await getCurrentWindow().destroy()
 }
 

@@ -25,9 +25,14 @@ export const usePanelStore = defineStore('panel', () => {
     lastError.value = ''
   }
 
-  async function refresh(root: string, silent = false) {
+  async function refresh(root: string, silent = false, environmentReady = true) {
     resetRoot(root)
     if (!root || refreshInFlight) return refreshInFlight
+    if (!environmentReady) {
+      snapshot.value = null
+      lastError.value = ''
+      return
+    }
     loading.value = !silent
     refreshInFlight = initializePanelDefaults(root)
       .then(() => getPanelSnapshot(root))

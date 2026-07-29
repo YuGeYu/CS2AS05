@@ -234,9 +234,6 @@ select:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px
 .sidebar-brand { position: relative; display: flex; min-height: 66px; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
 .sidebar-brand::after { position: absolute; right: 10px; bottom: -1px; width: 22px; height: 2px; background: var(--tech-accent); content: ''; }
 .sidebar-brand > span { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 6px; background: var(--primary); color: var(--primary-contrast); }
-.sidebar-brand > div { display: grid; min-width: 0; gap: 2px; }
-.sidebar-brand strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-brand small { color: var(--text-muted); font-size: 11px; }
 .sidebar nav { position: relative; display: grid; gap: 3px; padding: 10px 8px; }
 .sidebar nav button { position: relative; z-index: 1; display: flex; min-height: 44px; align-items: center; gap: 10px; padding: 0 11px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 700; text-align: left; transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease; }
 .sidebar nav button:hover { background: var(--surface-muted); color: var(--text); }
@@ -270,6 +267,10 @@ select:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px
 .control-band, .launch-band { position: relative; padding: 18px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface-raised); }
 .control-band::after, .launch-band::after { position: absolute; top: -1px; right: 18px; width: 28px; height: 2px; background: var(--tech-accent); content: ''; }
 .control-band { margin-bottom: 12px; }
+.environment-recovery { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 14px; margin: 0 0 12px; padding: 14px 16px; border: 1px solid var(--warning); border-left-width: 3px; background: color-mix(in srgb, var(--surface-raised) 92%, var(--warning)); color: var(--warning); }
+.environment-recovery div { display: grid; min-width: 0; gap: 4px; }
+.environment-recovery strong { color: var(--text); font-size: 14px; }
+.environment-recovery span { overflow: hidden; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .launch-band, .field-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .directory-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .field-heading > div:first-child { min-width: 0; }
@@ -407,7 +408,6 @@ select:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px
 }
 @media (max-width: 700px) {
   .sidebar-brand { min-width: 52px; width: 52px; padding: 9px; }
-  .sidebar-brand > div { display: none; }
   .status-strip { gap: 9px; padding-inline: 10px; }
   .status-strip > span:not(.status-path) { font-size: 0; }
   .status-strip > span:not(.status-path) svg { width: 15px; height: 15px; }
@@ -597,16 +597,12 @@ code, pre, time, .report-summary dd, .demo-table td:nth-child(n+3), .status-stri
 .titlebar-brand { gap: 10px; }
 .titlebar-mark { width: 28px; height: 28px; flex-basis: 28px; padding: 2px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface-muted); }
 .titlebar-name { font-weight: 700; }
-.titlebar-name::after { margin-left: 9px; color: var(--bronze); content: '青玉灵脉'; font-family: STKaiti, KaiTi, "Microsoft YaHei UI", sans-serif; font-size: 11px; font-weight: 400; }
 .workspace-shell { background-color: var(--app-bg); background-image: linear-gradient(var(--tech-line) 1px, transparent 1px), linear-gradient(90deg, var(--tech-line) 1px, transparent 1px); }
 .sidebar { border-right-color: var(--border-strong); background: color-mix(in srgb, var(--surface) 94%, var(--ink)); box-shadow: inset -1px 0 var(--bronze-soft); }
 .sidebar-brand { gap: 8px; padding-inline: 10px; }
 .sidebar-brand::after { right: 10px; left: 10px; width: auto; height: 1px; background: var(--engraving-line); }
 .sidebar-brand > span { border: 1px solid var(--primary); border-radius: 4px; background: var(--jade-soft); color: var(--primary); box-shadow: inset 0 0 0 1px var(--surface); }
-.sidebar-brand > div { flex: 1; }
-.sidebar-brand strong { font-size: 12px; }
-.sidebar-brand small { color: var(--bronze); font-family: STKaiti, KaiTi, "Microsoft YaHei UI", sans-serif; }
-.sidebar-brand .version-easter-egg { min-width: 54px; min-height: 44px; margin-left: auto; padding: 0 4px; color: var(--text-muted); font-size: 13px; }
+.sidebar-brand .version-easter-egg { min-width: 78px; min-height: 44px; margin-left: auto; padding: 0 6px; color: var(--text); font-size: 21px; font-weight: 800; }
 .sidebar nav { gap: 4px; }
 .sidebar nav button { border-radius: 4px; }
 .sidebar nav button[aria-current='page'] { color: var(--primary); text-shadow: 0 0 14px var(--jade-soft); }
@@ -659,9 +655,8 @@ code, pre, time, .report-summary dd, .demo-table td:nth-child(n+3), .status-stri
 .report-summary dd { color: var(--bronze); }
 .round-list details { border-radius: 4px; background: color-mix(in srgb, var(--surface) 97%, var(--jade)); }
 @media (max-width: 860px) {
-  .sidebar-brand > div { display: none; }
   .sidebar-brand { min-width: 112px; }
-  .sidebar-brand .version-easter-egg { min-width: 48px; }
+  .sidebar-brand .version-easter-egg { min-width: 72px; font-size: 18px; }
   .status-strip > span + span { padding-left: 8px; }
   .control-grid { grid-template-columns: 1fr; }
 }

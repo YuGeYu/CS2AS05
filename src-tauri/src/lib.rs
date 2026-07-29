@@ -33,6 +33,7 @@ pub fn run() {
         })
         .manage(services::cs2_discovery::ScanCoordinator::default())
         .manage(services::demo::DemoWatcherState::default())
+        .manage(commands::scoreboard::ScoreboardState::default())
         .invoke_handler(tauri::generate_handler![
             commands::intro::get_intro_public_data,
             commands::demo::list_demo_roots,
@@ -70,6 +71,12 @@ pub fn run() {
             commands::support::open_release_page,
             commands::support::open_upstream_project,
             commands::support::open_update_download,
+            commands::scoreboard::open_scoreboard,
+            commands::scoreboard::scoreboard_frontend_ready,
+            commands::scoreboard::scoreboard_present,
+            commands::scoreboard::hide_scoreboard,
+            commands::scoreboard::destroy_scoreboard,
+            commands::scoreboard::report_scoreboard_boot_error,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

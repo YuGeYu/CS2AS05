@@ -17,3 +17,10 @@ The Demo review feature includes the Rust parser core from
 https://github.com/LaihoE/demoparser at commit
 `ba39cc44cd5abfd7f34df2b3c0a7dd3630048311`, distributed under the MIT License.
 The preserved license and provenance are available in `third_party/demoparser/`.
+
+## Local-Arena 战报契约参考
+
+The post-match statistics contract and result-table information architecture were referenced from
+[numakkiyu/Local-Arena](https://github.com/numakkiyu/Local-Arena) commit
+`fad7e4ab7441f6bb95ebe9f6186169dc424ff008`, licensed under AGPL-3.0.
+The final `simple-rating-v1` formula is an independent project-local simplification, not an OpenRating or HLTV rating.

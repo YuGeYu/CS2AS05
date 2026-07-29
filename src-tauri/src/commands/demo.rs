@@ -31,8 +31,11 @@ pub fn remove_demo_root(app: AppHandle, id: i64) -> Result<(), String> {
     demo::remove_root(&app, id).map_err(|e| e.into_string())
 }
 #[tauri::command]
-pub async fn scan_demo_roots(app: AppHandle) -> Result<DemoScanResult, String> {
-    tauri::async_runtime::spawn_blocking(move || demo::scan(&app))
+pub async fn scan_demo_roots(
+    app: AppHandle,
+    root_id: Option<i64>,
+) -> Result<DemoScanResult, String> {
+    tauri::async_runtime::spawn_blocking(move || demo::scan(&app, root_id))
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.into_string())

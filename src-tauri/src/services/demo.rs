@@ -23,9 +23,9 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::{errors::AppError, models::demo::*, services::cs2};
 
 const PARSER_COMMIT: &str = "ba39cc44cd5abfd7f34df2b3c0a7dd3630048311";
-const REPORT_SCHEMA_VERSION: u32 = 2;
+const REPORT_SCHEMA_VERSION: u32 = 4;
 const PARSER_ADAPTER_VERSION: &str = "2";
-const METRICS_VERSION: &str = "scoreboard-v2";
+const METRICS_VERSION: &str = "simple-rating-v1";
 const MIN_STEAM_ID64: u64 = 76_561_197_960_265_728;
 
 #[derive(Default)]
@@ -110,6 +110,10 @@ fn open_db(app: &AppHandle) -> Result<Connection, AppError> {
         }
         db.execute_batch("UPDATE demo_roots SET origin='manual_legacy' WHERE origin IS NULL OR origin=''; PRAGMA user_version=2;").map_err(|e| err("DEMO_DB_MIGRATION", e))?;
     }
+    if version < 4 {
+        db.execute_batch("PRAGMA user_version=4;")
+            .map_err(|e| err("DEMO_DB_MIGRATION", e))?;
+    }
     Ok(db)
 }
 
@@ -118,8 +122,8 @@ pub fn initialize(app: &AppHandle) -> Result<(), AppError> {
     let handle = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let stale = open_db(&handle).and_then(|db| {
-            let mut stmt = db.prepare("SELECT path FROM demo_files WHERE report_schema_version<?1 OR parser_adapter_version<>?2 ORDER BY mtime_ms DESC").map_err(|e| err("DEMO_DB_QUERY", e))?;
-            let rows = stmt.query_map(params![REPORT_SCHEMA_VERSION, PARSER_ADAPTER_VERSION], |row| row.get::<_, String>(0)).map_err(|e| err("DEMO_DB_QUERY", e))?;
+            let mut stmt = db.prepare("SELECT path FROM demo_files WHERE report_schema_version<?1 OR parser_adapter_version<>?2 OR metrics_version<>?3 ORDER BY mtime_ms DESC").map_err(|e| err("DEMO_DB_QUERY", e))?;
+            let rows = stmt.query_map(params![REPORT_SCHEMA_VERSION, PARSER_ADAPTER_VERSION, METRICS_VERSION], |row| row.get::<_, String>(0)).map_err(|e| err("DEMO_DB_QUERY", e))?;
             Ok(rows.filter_map(Result::ok).collect::<Vec<_>>())
         }).unwrap_or_default();
         for path in stale {
@@ -152,14 +156,28 @@ pub fn add_root(app: &AppHandle, path: &str, depth: i64) -> Result<DemoRoot, App
     if ![0, 1, 2, 3, 5].contains(&depth) {
         return Err(err("DEMO_DEPTH_INVALID", "扫描深度必须为 0/1/2/3/5。"));
     }
-    let canonical = dunce::canonicalize(path).map_err(|e| err("DEMO_ROOT_INVALID", e))?;
+    let selected = dunce::canonicalize(path).map_err(|e| err("DEMO_ROOT_INVALID", e))?;
+    let canonical = normalize_demo_root(&selected)?;
     if !canonical.is_dir() {
         return Err(err("DEMO_ROOT_INVALID", "所选路径不是目录。"));
     }
     let db = open_db(app)?;
     let display = canonical.display().to_string();
     let now = now_ms();
-    db.execute("INSERT INTO demo_roots(path,canonical_path,enabled,scan_depth,created_at,origin) VALUES(?1,?2,1,?3,?4,'manual') ON CONFLICT(canonical_path) DO UPDATE SET enabled=1,scan_depth=excluded.scan_depth,path=excluded.path,origin=CASE WHEN demo_roots.origin='selected_cs2_root' THEN 'manual' ELSE demo_roots.origin END",params![display,display.to_lowercase(),depth,now]).map_err(|e|err("DEMO_ROOT_SAVE",e))?;
+    let effective_depth = if canonical
+        .file_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case("replays"))
+    {
+        0
+    } else if canonical
+        .file_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case("csgo"))
+    {
+        1
+    } else {
+        depth
+    };
+    db.execute("INSERT INTO demo_roots(path,canonical_path,enabled,scan_depth,created_at,origin) VALUES(?1,?2,1,?3,?4,'manual') ON CONFLICT(canonical_path) DO UPDATE SET enabled=1,scan_depth=excluded.scan_depth,path=excluded.path,origin=CASE WHEN demo_roots.origin='selected_cs2_root' THEN 'manual' ELSE demo_roots.origin END",params![display,display.to_lowercase(),effective_depth,now]).map_err(|e|err("DEMO_ROOT_SAVE",e))?;
     refresh_watcher(app)?;
     list_roots(app)?
         .into_iter()
@@ -169,16 +187,18 @@ pub fn add_root(app: &AppHandle, path: &str, depth: i64) -> Result<DemoRoot, App
 
 pub fn ensure_default_root(app: &AppHandle, root_path: &str) -> Result<DemoRoot, AppError> {
     let root = cs2::normalize_root(root_path)?;
-    let display = root.display().to_string();
+    let demo_root = dunce::canonicalize(root.join("game").join("csgo"))
+        .map_err(|e| err("DEMO_ROOT_INVALID", e))?;
+    let display = demo_root.display().to_string();
     let canonical = display.to_lowercase();
     let db = open_db(app)?;
     let now = now_ms();
     db.execute(
-        "UPDATE demo_roots SET enabled=0 WHERE origin='selected_cs2_root' AND canonical_path<>?1",
+        "DELETE FROM demo_roots WHERE origin='selected_cs2_root' AND canonical_path<>?1",
         [&canonical],
     )
     .map_err(|e| err("DEMO_ROOT_SAVE", e))?;
-    db.execute("INSERT INTO demo_roots(path,canonical_path,enabled,scan_depth,created_at,origin) VALUES(?1,?2,1,5,?3,'selected_cs2_root') ON CONFLICT(canonical_path) DO UPDATE SET path=excluded.path,enabled=CASE WHEN demo_roots.origin='selected_cs2_root' THEN 1 ELSE demo_roots.enabled END,scan_depth=CASE WHEN demo_roots.origin='selected_cs2_root' THEN 5 ELSE demo_roots.scan_depth END,origin=demo_roots.origin", params![display, canonical, now]).map_err(|e| err("DEMO_ROOT_SAVE", e))?;
+    db.execute("INSERT INTO demo_roots(path,canonical_path,enabled,scan_depth,created_at,origin) VALUES(?1,?2,1,1,?3,'selected_cs2_root') ON CONFLICT(canonical_path) DO UPDATE SET path=excluded.path,enabled=1,scan_depth=1,origin=CASE WHEN demo_roots.origin='manual' THEN demo_roots.origin ELSE 'selected_cs2_root' END", params![display, canonical, now]).map_err(|e| err("DEMO_ROOT_SAVE", e))?;
     refresh_watcher(app)?;
     list_roots(app)?
         .into_iter()
@@ -231,12 +251,48 @@ pub fn refresh_watcher(app: &AppHandle) -> Result<(), AppError> {
     Ok(())
 }
 
-fn collect(root: &Path, max_depth: i64) -> Vec<PathBuf> {
-    let mut out = Vec::new();
+fn normalize_demo_root(selected: &Path) -> Result<PathBuf, AppError> {
+    if selected
+        .file_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case("replays"))
+        && selected.parent().is_some_and(|parent| {
+            parent
+                .file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case("csgo"))
+        })
+    {
+        return Ok(selected.to_path_buf());
+    }
+    if let Ok(root) = cs2::normalize_root(&selected.display().to_string()) {
+        return dunce::canonicalize(root.join("game").join("csgo"))
+            .map_err(|e| err("DEMO_ROOT_INVALID", e));
+    }
+    Ok(selected.to_path_buf())
+}
+
+struct CollectedDemos {
+    paths: Vec<PathBuf>,
+    scanned_directories: u64,
+    permission_errors: u64,
+}
+
+fn collect(root: &Path, max_depth: i64) -> CollectedDemos {
+    let mut out = CollectedDemos {
+        paths: Vec::new(),
+        scanned_directories: 0,
+        permission_errors: 0,
+    };
     let mut queue = VecDeque::from([(root.to_path_buf(), 0i64)]);
     while let Some((dir, depth)) = queue.pop_front() {
-        let Ok(entries) = fs::read_dir(dir) else {
-            continue;
+        let entries = match fs::read_dir(dir) {
+            Ok(entries) => {
+                out.scanned_directories += 1;
+                entries
+            }
+            Err(_) => {
+                out.permission_errors += 1;
+                continue;
+            }
         };
         for entry in entries.flatten() {
             let Ok(ft) = entry.file_type() else { continue };
@@ -249,13 +305,13 @@ fn collect(root: &Path, max_depth: i64) -> Vec<PathBuf> {
                     .extension()
                     .is_some_and(|x| x.eq_ignore_ascii_case("dem"))
             {
-                out.push(path)
+                out.paths.push(path)
             } else if ft.is_dir() && depth < max_depth {
                 queue.push_back((path, depth + 1))
             }
         }
     }
-    out.sort_by_key(|p| {
+    out.paths.sort_by_key(|p| {
         fs::metadata(p)
             .ok()
             .map(|m| std::cmp::Reverse(mtime_ms(&m)))
@@ -294,6 +350,21 @@ fn wait_until_stable(path: &Path) -> Result<fs::Metadata, AppError> {
     Ok(previous)
 }
 
+fn cache_is_current(
+    status: &str,
+    fingerprint: (i64, i64),
+    expected_fingerprint: (i64, i64),
+    schema: i64,
+    adapter: &str,
+    metrics: &str,
+) -> bool {
+    status == "done"
+        && fingerprint == expected_fingerprint
+        && schema >= REPORT_SCHEMA_VERSION as i64
+        && adapter == PARSER_ADAPTER_VERSION
+        && metrics == METRICS_VERSION
+}
+
 pub fn import_file(
     app: &AppHandle,
     path: &str,
@@ -311,25 +382,29 @@ pub fn import_file(
     let display = canonical.display().to_string();
     let db = open_db(app)?;
     let now = now_ms();
-    let existing: Option<(i64, String, i64, i64, i64, String)> = db
+    let existing: Option<(i64, String, i64, i64, i64, String, String)> = db
         .query_row(
-            "SELECT id,status,size_bytes,mtime_ms,report_schema_version,parser_adapter_version FROM demo_files WHERE canonical_path=?1",
+            "SELECT id,status,size_bytes,mtime_ms,report_schema_version,parser_adapter_version,metrics_version FROM demo_files WHERE canonical_path=?1",
             [display.to_lowercase()],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
         )
         .optional()
         .map_err(|e| err("DEMO_DB_QUERY", e))?;
-    if let Some((id, status, size, mtime, schema, adapter)) = existing {
+    if let Some((id, status, size, mtime, schema, adapter, metrics)) = existing {
         if !force_reparse
-            && status == "done"
-            && size == meta.len() as i64
-            && mtime == mtime_ms(&meta)
-            && schema >= REPORT_SCHEMA_VERSION as i64
-            && adapter == PARSER_ADAPTER_VERSION
+            && cache_is_current(
+                &status,
+                (size, mtime),
+                (meta.len() as i64, mtime_ms(&meta)),
+                schema,
+                &adapter,
+                &metrics,
+            )
         {
             return Ok(DemoImportResult {
                 demo_file_id: id,
                 status,
+                cache_hit: true,
             });
         }
     }
@@ -349,6 +424,7 @@ pub fn import_file(
             Ok(DemoImportResult {
                 demo_file_id: id,
                 status: "done".into(),
+                cache_hit: false,
             })
         }
         Err(e) => {
@@ -362,28 +438,51 @@ pub fn import_file(
             Ok(DemoImportResult {
                 demo_file_id: id,
                 status: "error".into(),
+                cache_hit: false,
             })
         }
     }
 }
 
-pub fn scan(app: &AppHandle) -> Result<DemoScanResult, AppError> {
+pub fn scan(app: &AppHandle, root_id: Option<i64>) -> Result<DemoScanResult, AppError> {
+    let last_scan_at = now_ms();
     let mut out = DemoScanResult {
-        discovered: 0,
+        root_paths: Vec::new(),
+        scanned_directories: 0,
+        discovered_dem_files: 0,
+        imported: 0,
+        cache_hits: 0,
         parsed: 0,
         failed: 0,
+        permission_errors: 0,
+        last_scan_at,
     };
-    for root in list_roots(app)?.into_iter().filter(|r| r.enabled) {
-        for path in collect(Path::new(&root.path), root.scan_depth) {
-            out.discovered += 1;
+    for root in list_roots(app)?
+        .into_iter()
+        .filter(|r| r.enabled && root_id.map_or(true, |id| r.id == id))
+    {
+        out.root_paths.push(root.path.clone());
+        let collected = collect(Path::new(&root.path), root.scan_depth);
+        out.scanned_directories += collected.scanned_directories;
+        out.permission_errors += collected.permission_errors;
+        out.discovered_dem_files += collected.paths.len() as u64;
+        for path in collected.paths {
             match import_file(app, &path.display().to_string(), "scan", false) {
-                Ok(v) if v.status == "done" => out.parsed += 1,
+                Ok(v) if v.cache_hit => out.cache_hits += 1,
+                Ok(v) if v.status == "done" => {
+                    out.imported += 1;
+                    out.parsed += 1
+                }
                 _ => out.failed += 1,
             }
         }
+        let last_error = (collected.permission_errors > 0).then_some(format!(
+            "[DEMO_ROOT_PERMISSION] {} 个目录无法读取。",
+            collected.permission_errors
+        ));
         let _ = open_db(app)?.execute(
-            "UPDATE demo_roots SET last_scan_at=?2,last_error=NULL WHERE id=?1",
-            params![root.id, now_ms()],
+            "UPDATE demo_roots SET last_scan_at=?2,last_error=?3 WHERE id=?1",
+            params![root.id, last_scan_at, last_error],
         );
     }
     Ok(out)
@@ -470,7 +569,7 @@ pub fn observe_assistant_launch(app: AppHandle, started_at: i64) {
         if !seen {
             return;
         }
-        let _ = scan(&app);
+        let _ = scan(&app, None);
         if let Ok(page) = list(&app, "", "done", 1, 25) {
             if let Some(item) = page
                 .items
@@ -510,6 +609,20 @@ fn boolean(event: &GameEvent, name: &str) -> Option<bool> {
     match field(event, name) {
         Some(Variant::Bool(v)) => Some(*v),
         _ => None,
+    }
+}
+fn completed_round_count(events: &[GameEvent], logical_rounds: &[DemoRound]) -> u32 {
+    let round_ends = events
+        .iter()
+        .filter(|event| event.name == "round_end")
+        .count() as u32;
+    if round_ends > 0 {
+        round_ends
+    } else {
+        logical_rounds
+            .iter()
+            .filter(|round| round.winner.is_some() && round.end_tick.is_some())
+            .count() as u32
     }
 }
 fn last_u32(column: Option<&cs2_demoparser::second_pass::variants::PropColumn>) -> Option<u32> {
@@ -593,6 +706,21 @@ fn ensure_event_player(
         headshots: Some(0),
         identity_source: "event".into(),
         stats_source: "event_aggregate".into(),
+        rounds_played: None,
+        rounds_survived: None,
+        kast_rounds: None,
+        multi_kills: None,
+        first_kills: None,
+        first_deaths: None,
+        trade_kills: None,
+        trade_denials: None,
+        adr: None,
+        kast_percent: None,
+        headshot_percent: None,
+        round_swing: None,
+        economy_adjustment: None,
+        rating_status: "unavailable".into(),
+        rating: None,
     });
     players.len() - 1
 }
@@ -600,6 +728,7 @@ fn ensure_event_player(
 fn build_scoreboard(
     output: &cs2_demoparser::parse_demo::DemoOutput,
     entity_status: &str,
+    completed_rounds: u32,
 ) -> (Vec<DemoPlayer>, DemoDataQuality) {
     let mut players = Vec::<DemoPlayer>::new();
     for source in output.player_md.iter().chain(output.roster.iter()) {
@@ -670,6 +799,21 @@ fn build_scoreboard(
                 "end_message".into()
             },
             stats_source: "partial".into(),
+            rounds_played: None,
+            rounds_survived: None,
+            kast_rounds: None,
+            multi_kills: None,
+            first_kills: None,
+            first_deaths: None,
+            trade_kills: None,
+            trade_denials: None,
+            adr: None,
+            kast_percent: None,
+            headshot_percent: None,
+            round_swing: None,
+            economy_adjustment: None,
+            rating_status: "unavailable".into(),
+            rating: None,
         });
     }
 
@@ -786,6 +930,42 @@ fn build_scoreboard(
             .iter()
             .all(Option::is_some)
         });
+    for player in &mut players {
+        let eligible_team = matches!(player.team_number, Some(2 | 3))
+            || matches!(player.team.as_deref(), Some("T" | "CT"));
+        let has_reliable_totals = matches!(
+            player.stats_source.as_str(),
+            "controller_total" | "event_aggregate"
+        );
+        if eligible_team && has_reliable_totals && completed_rounds > 0 {
+            player.rounds_played = Some(completed_rounds);
+        }
+        player.rating = crate::services::simple_rating::calculate(
+            player.kills,
+            player.deaths,
+            player.assists,
+            player.damage,
+            player.rounds_played,
+        );
+        player.rating_status = if player.rating.is_some() {
+            "complete"
+        } else {
+            "unavailable"
+        }
+        .into();
+        if let Some(rounds) = player.rounds_played.filter(|rounds| *rounds > 0) {
+            player.adr = player.damage.map(|damage| damage as f64 / rounds as f64);
+            player.kast_percent = player
+                .kast_rounds
+                .map(|kast| kast as f64 * 100.0 / rounds as f64);
+        }
+        player.headshot_percent = match (player.headshots, player.kills) {
+            (Some(headshots), Some(kills)) if kills > 0 => {
+                Some(headshots as f64 * 100.0 / kills as f64)
+            }
+            _ => None,
+        };
+    }
     let status = if players.is_empty() {
         "unavailable"
     } else if complete {
@@ -809,12 +989,36 @@ fn build_scoreboard(
     if status == "unavailable" {
         warnings.push("解析器未能从 controller、userinfo 或事件中恢复玩家身份。".into());
     }
+    let rated_players = players
+        .iter()
+        .filter(|player| matches!(player.team_number, Some(2 | 3)))
+        .collect::<Vec<_>>();
+    let rated_count = rated_players
+        .iter()
+        .filter(|player| player.rating.is_some())
+        .count();
+    let rating_status = if rated_count == 0 {
+        "unavailable"
+    } else if rated_count == rated_players.len() {
+        "complete"
+    } else {
+        "partial"
+    };
+    let rating_warnings = match rating_status {
+        "partial" => vec!["部分玩家缺少 K/D/A、伤害或报告回合，未计算简易 Rating。".into()],
+        "unavailable" => {
+            vec!["当前 Demo 缺少 K/D/A、伤害或已完成回合，无法计算简易 Rating。".into()]
+        }
+        _ => vec![],
+    };
     (
         players,
         DemoDataQuality {
             scoreboard_status: status.into(),
             warnings,
             entity_parse_status: entity_status.into(),
+            rating_status: rating_status.into(),
+            rating_warnings,
         },
     )
 }
@@ -904,15 +1108,16 @@ fn parse_report(id: i64, path: &Path, meta: &fs::Metadata) -> Result<DemoReport,
         ),
         Err(error) => return Err(err("DEMO_PARSER_UNSUPPORTED", error)),
     };
-    let (players, data_quality) = build_scoreboard(&output, entity_status);
     let header = output
         .header
+        .as_ref()
+        .cloned()
         .unwrap_or_default()
         .into_iter()
         .collect::<BTreeMap<_, _>>();
     let mut rounds: Vec<DemoRound> = Vec::new();
     let mut current: Option<usize> = None;
-    for event in output.game_events {
+    for event in &output.game_events {
         if event.name == "round_start" {
             rounds.push(DemoRound {
                 number: (rounds.len() + 1) as u32,
@@ -958,18 +1163,18 @@ fn parse_report(id: i64, path: &Path, meta: &fs::Metadata) -> Result<DemoReport,
         let round = &mut rounds[current.unwrap()];
         if event.name == "round_end" || event.name == "round_officially_ended" {
             round.end_tick = Some(event.tick);
-            round.winner = text(&event, "winner");
-            round.reason = text(&event, "reason");
+            round.winner = text(event, "winner");
+            round.reason = text(event, "reason");
             continue;
         }
         let item = DemoEvent {
             tick: event.tick,
             kind: event.name.clone(),
-            actor: text(&event, "attacker_name").or_else(|| text(&event, "user_name")),
-            target: text(&event, "user_name"),
-            weapon: text(&event, "weapon"),
-            headshot: boolean(&event, "headshot"),
-            detail: text(&event, "site"),
+            actor: text(event, "attacker_name").or_else(|| text(event, "user_name")),
+            target: text(event, "user_name"),
+            weapon: text(event, "weapon"),
+            headshot: boolean(event, "headshot"),
+            detail: text(event, "site"),
         };
         if event.name == "player_death" {
             round.kills.push(item)
@@ -977,6 +1182,8 @@ fn parse_report(id: i64, path: &Path, meta: &fs::Metadata) -> Result<DemoReport,
             round.bomb_events.push(item)
         }
     }
+    let completed_rounds = completed_round_count(&output.game_events, &rounds);
+    let (players, data_quality) = build_scoreboard(&output, entity_status, completed_rounds);
     let total_kills = rounds.iter().map(|r| r.kills.len() as u32).sum();
     let parsed = now_ms();
     Ok(DemoReport {
@@ -1000,7 +1207,7 @@ fn parse_report(id: i64, path: &Path, meta: &fs::Metadata) -> Result<DemoReport,
             server_name: header.get("server_name").cloned(),
             file_time_ms: mtime_ms(meta),
             size_bytes: meta.len() as i64,
-            total_rounds: rounds.len() as u32,
+            total_rounds: completed_rounds,
             total_kills,
             team_a_score: None,
             team_b_score: None,
@@ -1054,6 +1261,46 @@ mod tests {
     }
 
     #[test]
+    fn completed_rounds_do_not_double_count_official_events() {
+        let event = |name: &str| GameEvent {
+            name: name.into(),
+            tick: 1,
+            fields: vec![],
+        };
+        let mut events = (0..6).map(|_| event("round_end")).collect::<Vec<_>>();
+        events.extend((0..10).map(|_| event("round_officially_ended")));
+        assert_eq!(completed_round_count(&events, &[]), 6);
+    }
+
+    #[test]
+    fn cache_requires_current_schema_adapter_and_metrics() {
+        assert!(!cache_is_current(
+            "done",
+            (10, 20),
+            (10, 20),
+            3,
+            "2",
+            "openrating-demo-v1"
+        ));
+        assert!(!cache_is_current(
+            "done",
+            (10, 20),
+            (10, 20),
+            4,
+            "2",
+            "openrating-demo-v1"
+        ));
+        assert!(cache_is_current(
+            "done",
+            (10, 20),
+            (10, 20),
+            4,
+            "2",
+            "simple-rating-v1"
+        ));
+    }
+
+    #[test]
     #[ignore = "uses a local user Demo selected through CS2AS_DEMO"]
     fn real_demo_scoreboard() {
         let path = PathBuf::from(std::env::var("CS2AS_DEMO").expect("CS2AS_DEMO path"));
@@ -1061,6 +1308,25 @@ mod tests {
         let report = parse_report(1, &path, &meta).expect("Demo parse");
         println!("{}", serde_json::to_string_pretty(&report).unwrap());
         assert_eq!(report.schema_version, REPORT_SCHEMA_VERSION);
-        assert!(!report.players.is_empty(), "scoreboard must not be empty");
+        assert_eq!(report.metrics_version, "simple-rating-v1");
+        assert_eq!(report.summary.map_name.as_deref(), Some("de_dust2"));
+        assert_eq!(report.summary.total_rounds, 6);
+        let team_players = report
+            .players
+            .iter()
+            .filter(|player| matches!(player.team_number, Some(2 | 3)))
+            .collect::<Vec<_>>();
+        assert_eq!(team_players.len(), 10);
+        assert_eq!(report.data_quality.rating_status, "complete");
+        for player in team_players {
+            assert_eq!(player.rounds_played, Some(6));
+            assert!(player.kills.is_some());
+            assert!(player.deaths.is_some());
+            assert!(player.assists.is_some());
+            assert!(player.damage.is_some());
+            let rating = player.rating.as_ref().expect("simple rating");
+            assert_eq!(rating.model_version, "simple-rating-v1");
+            assert!((0.0..=3.0).contains(&rating.rating));
+        }
     }
 }

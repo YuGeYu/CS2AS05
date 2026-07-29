@@ -27,7 +27,9 @@ describe('ancient-tech desktop design contract', () => {
     expect(shell).toContain('<nav aria-label="主导航"')
     expect(shell).toContain(':aria-current="current === item.key ? \'page\' : undefined"')
     expect(shell).toContain('<main class="view-container"')
-    expect(shell).toContain('玄铁机括')
+    expect(shell).not.toContain('玄铁机括')
+    expect(shell).not.toContain('<strong>人机增强</strong>')
+    expect(styles).not.toContain("content: '青玉灵脉'")
   })
 
   it('keeps all principal workspaces on native semantic controls', () => {

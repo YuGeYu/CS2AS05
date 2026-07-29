@@ -42,14 +42,21 @@ pub struct DemoListPage {
 pub struct DemoImportResult {
     pub demo_file_id: i64,
     pub status: String,
+    pub cache_hit: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DemoScanResult {
-    pub discovered: u64,
+    pub root_paths: Vec<String>,
+    pub scanned_directories: u64,
+    pub discovered_dem_files: u64,
+    pub imported: u64,
+    pub cache_hits: u64,
     pub parsed: u64,
     pub failed: u64,
+    pub permission_errors: u64,
+    pub last_scan_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,6 +115,47 @@ pub struct DemoPlayer {
     pub identity_source: String,
     #[serde(default)]
     pub stats_source: String,
+    #[serde(default)]
+    pub rounds_played: Option<u32>,
+    #[serde(default)]
+    pub rounds_survived: Option<u32>,
+    #[serde(default)]
+    pub kast_rounds: Option<u32>,
+    #[serde(default)]
+    pub multi_kills: Option<u32>,
+    #[serde(default)]
+    pub first_kills: Option<u32>,
+    #[serde(default)]
+    pub first_deaths: Option<u32>,
+    #[serde(default)]
+    pub trade_kills: Option<u32>,
+    #[serde(default)]
+    pub trade_denials: Option<u32>,
+    #[serde(default)]
+    pub adr: Option<f64>,
+    #[serde(default)]
+    pub kast_percent: Option<f64>,
+    #[serde(default)]
+    pub headshot_percent: Option<f64>,
+    #[serde(default)]
+    pub round_swing: Option<f64>,
+    #[serde(default)]
+    pub economy_adjustment: Option<f64>,
+    #[serde(default)]
+    pub rating_status: String,
+    #[serde(default)]
+    pub rating: Option<DemoRating>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DemoRating {
+    pub model_version: String,
+    pub kill_component: f64,
+    pub damage_component: f64,
+    pub survival_component: f64,
+    pub assist_component: f64,
+    pub rating: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,6 +164,10 @@ pub struct DemoDataQuality {
     pub scoreboard_status: String,
     pub warnings: Vec<String>,
     pub entity_parse_status: String,
+    #[serde(default)]
+    pub rating_status: String,
+    #[serde(default)]
+    pub rating_warnings: Vec<String>,
 }
 
 impl Default for DemoDataQuality {
@@ -124,6 +176,10 @@ impl Default for DemoDataQuality {
             scoreboard_status: "unavailable".into(),
             warnings: vec!["报告由旧解析器生成，需要重新解析。".into()],
             entity_parse_status: "failed".into(),
+            rating_status: "unavailable".into(),
+            rating_warnings: vec![
+                "当前 Demo 缺少 K/D/A、伤害或已完成回合，无法计算简易 Rating。".into(),
+            ],
         }
     }
 }

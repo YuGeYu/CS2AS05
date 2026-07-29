@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, toRef, watch } from 'vue'
-import { FolderOpen, Play, RefreshCw, ScanSearch } from 'lucide-vue-next'
+import { FolderOpen, Play, RefreshCw, ScanSearch, Wrench } from 'lucide-vue-next'
 
 import Cs2RootSuggestionsDialog from '@/components/Cs2RootSuggestionsDialog.vue'
 import LaunchExperience from '@/components/LaunchExperience.vue'
@@ -26,7 +26,7 @@ async function browse() {
   const result = await open({ directory: true, multiple: false, title: '选择 CS2 游戏目录' })
   if (typeof result === 'string') {
     await cs2.selectRoot(result)
-    await panel.refresh(cs2.selectedRoot)
+    await panel.refresh(cs2.selectedRoot, false, cs2.environment?.baseEnvironmentReady ?? false)
   }
 }
 
@@ -37,6 +37,7 @@ function launch() {
 const changeMode = (value: PanelMode) => panel.setMode(cs2.selectedRoot, value).catch(() => undefined)
 const changeDifficulty = (value: Difficulty) => panel.setDifficulty(cs2.selectedRoot, value).catch(() => undefined)
 const changeRecording = (enabled: boolean) => demo.setRecording(cs2.selectedRoot, enabled).catch(() => undefined)
+const openInstall = () => window.dispatchEvent(new CustomEvent('cs2as:navigate', { detail: 'install' }))
 watch(() => cs2.selectedRoot, root => void demo.loadSettings(root))
 onMounted(() => void demo.loadSettings(cs2.selectedRoot))
 </script>
@@ -46,6 +47,11 @@ onMounted(() => void demo.loadSettings(cs2.selectedRoot))
     <header class="view-heading"><div><p class="overline">运行控制</p><h1 id="overview-title">概览</h1></div><button class="icon-button" title="刷新状态" aria-label="刷新状态" @click="panel.refresh(cs2.selectedRoot)"><RefreshCw :size="18" /></button></header>
     <section class="control-band">
       <div class="field-heading"><div><h2>CS2 游戏目录</h2><p :title="cs2.selectedRoot">{{ cs2.selectedRoot || '选择游戏根目录、game 或 game/csgo 目录。' }}</p></div><div class="directory-actions"><button class="secondary-button" type="button" @click="suggestionsOpen = true"><ScanSearch :size="18" />猜你想选</button><button class="secondary-button" type="button" @click="browse"><FolderOpen :size="18" />选择目录</button></div></div>
+    </section>
+    <section v-if="cs2.selectedRoot && cs2.environment && !cs2.environment.baseEnvironmentReady" class="environment-recovery" role="status">
+      <Wrench :size="20" aria-hidden="true" />
+      <div><strong>插件尚未安装</strong><span :title="cs2.selectedRoot">已识别 CS2：{{ cs2.selectedRoot }}</span></div>
+      <button class="primary-button" type="button" @click="openInstall">前往安装与诊断</button>
     </section>
     <section class="control-grid">
       <div class="control-group"><div><h2>启动模式</h2><p>BOT 模式会加载 Metamod 并使用 -insecure。</p></div><SegmentedControl :model-value="panel.snapshot?.mode.current ?? null" :options="modeOptions" label="启动模式" :disabled="blocked || cs2.cs2Running" :pending="panel.mutationKey === 'mode'" @update:model-value="changeMode" /></div>
