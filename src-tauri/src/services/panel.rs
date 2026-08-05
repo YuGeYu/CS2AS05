@@ -1046,11 +1046,11 @@ fn launch_cs2_inner(
         options.extend(["-insecure", "-console", "-condebug"]);
     }
     cs2::write_runtime_log("INFO", &format!("使用 Steam 客户端：{}", steam.display()));
-    Command::new(&steam)
-        .args(&options)
-        .spawn()
-        .map_err(|e| io_context("启动 Steam", &steam, e))?;
-    demo::observe_assistant_launch(app.clone(), chrono::Utc::now().timestamp_millis());
+    let session_id = crate::demo::post_match::mark_next_live(app);
+    if let Err(error) = Command::new(&steam).args(&options).spawn() {
+        crate::demo::post_match::cancel_pending(app, &session_id);
+        return Err(io_context("启动 Steam", &steam, error));
+    }
     Ok(LaunchResult {
         options: options[2..].join(" "),
         insecure,
@@ -1449,7 +1449,7 @@ mod tests {
                 &current
             )
             .unwrap(),
-            PluginGateDecision::Unchanged("0.5.5-test.1".into())
+            PluginGateDecision::Install
         );
         assert_eq!(
             plugin_gate_decision(cs2::PluginVersionStatus::Missing, &current).unwrap(),

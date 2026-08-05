@@ -32,7 +32,9 @@ const manifest = {
   pub_date: new Date().toISOString(),
   platforms: {
     'windows-x86_64': {
-      installer: installerPath,
+      // Keep local manifests portable and never leak the builder's filesystem path.
+      // A deployment layer may replace this basename with its public download URL.
+      installer: installerName,
       signature: signature.trim(),
       sha256: createHash('sha256').update(installerBytes).digest('hex').toUpperCase(),
       size: installerStat.size,

@@ -172,7 +172,7 @@ async fn fetch_json(client: &Client, url: &str, github: bool) -> Result<Value, F
         },
     );
     if github {
-        request = request.header(header::USER_AGENT, "CS2AS05/0.5.5");
+        request = request.header(header::USER_AGENT, "CS2AS05/0.5.6");
     }
     let response = request.send().await.map_err(classify_request_error)?;
     let status = response.status().as_u16();

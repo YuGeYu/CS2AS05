@@ -5,17 +5,19 @@ import { describe, expect, it } from 'vitest'
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
 const styles = read('src/styles/main.css')
 
-describe('ancient-tech desktop design contract', () => {
-  it('defines the jade, bronze, cinnabar, and iron semantic system for both themes', () => {
+describe('desktop design contract', () => {
+  it('defines the blue data-dense semantic system for both themes', () => {
     for (const token of [
+      '--color-primary: #1e40af', '--color-secondary: #3b82f6', '--color-accent: #d97706',
+      '--color-background: #f8fafc', '--color-text: #0f172a', '--color-border: #dbeafe',
       '--app-bg:', '--surface:', '--surface-muted:', '--surface-raised:', '--text:', '--text-muted:',
       '--border:', '--primary:', '--primary-hover:', '--bronze:', '--cinnabar:', '--ink:',
       '--engraving-line:', '--panel-shadow:', '--focus-ring:', '--motion-standard:',
     ]) expect(styles).toContain(token)
 
     expect(styles).toContain(":root[data-theme='dark']")
-    expect(styles).toContain('--app-bg: #090e10')
-    expect(styles).toContain('--primary: #45c7b3')
+    expect(styles).toContain('--app-bg: #0b1120')
+    expect(styles).toContain('--primary: #60a5fa')
     expect(styles).not.toContain('font-family: Inter')
     expect(styles).toContain('"Microsoft YaHei UI", "Segoe UI", sans-serif')
     expect(styles).toContain('Consolas, "Cascadia Mono", monospace')

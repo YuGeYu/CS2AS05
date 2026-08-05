@@ -29,6 +29,7 @@ pub struct UserInfo {
     pub name: String,
     pub userid: i32,
     pub is_hltv: bool,
+    pub is_bot: bool,
 }
 
 impl<'a> FirstPassParser<'a> {
@@ -184,6 +185,7 @@ pub fn parse_userinfo(bytes: &[u8]) -> Result<UserInfo, DemoParserError> {
     let player = CMsgPlayerInfo::decode(bytes).map_err(|_| DemoParserError::MalformedMessage)?;
     Ok(UserInfo {
         is_hltv: player.ishltv(),
+        is_bot: player.fakeplayer(),
         steamid: player.xuid(),
         name: player.name().to_string(),
         userid: player.userid() & 0xff,

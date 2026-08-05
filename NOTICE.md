@@ -1,6 +1,8 @@
 # NOTICE
 
-CS2 人机增强助手 `0.5.5`（[YuGeYu/CS2AS05](https://github.com/YuGeYu/CS2AS05)）是独立下游项目，并非上游官方发行版。它内置并再分发基于 [ed0ard/CS2-Bot-Improver](https://github.com/ed0ard/CS2-Bot-Improver) 的最小定制资源包。
+CS2 人机增强助手 `0.5.6` 同包并行包含 BotVision `0.2.2`（[XBribo/CS2-Bot-Vision](https://github.com/XBribo/CS2-Bot-Vision/releases/tag/v0.2.2)，固定提交 `17a2ca707ec1ffea8797e56d94915596ec5ef4c4`）的三个 Windows MetaMod 组件：`addons/BotVision/gamedata.json`、`addons/BotVision/bin/win64/BotVision.dll`、`addons/metamod/BotVision.vdf`。源 ZIP `E:\dow\BotVision-Windows-0.2.2.zip` SHA-256 为 `40B596D34BF336D9E59E663DAC2F94BD7C61D951C56E421EF66B5190B8787290`。上游 `v0.2.2` README/LICENSE 已核实为 AGPL-3.0；其闭源再分发、托管服务和不满足 copyleft 的专有集成需完整履行相应许可证或另行取得商业许可。该 DLL 当前核查结果为 Authenticode `NotSigned`；BotVision 是原生 MetaMod 并行组件，不替换 CounterStrikeSharp 或 NadeSystem。
+
+CS2 人机增强助手 `0.5.6`（[YuGeYu/CS2AS05](https://github.com/YuGeYu/CS2AS05)）是独立下游项目，并非上游官方发行版。它内置并再分发基于 [ed0ard/CS2-Bot-Improver](https://github.com/ed0ard/CS2-Bot-Improver) 的最小定制资源包。
 
 上游基线为 tag `v1.4.3`、提交 `d1d83982db88fbdb686b2bf13aa8c6f9d65a4604`。相对官方 ZIP 仅修改两个 BOT cfg、替换 `addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll`，并新增助手自用的 `CS2AS05.plugin.json` 完整性标记；对应修改源码、策略测试和基线说明位于 `third_party/CS2-Bot-Improver-v1.4.3/nades-pacing/`。该定制不生成 `[NadeAudit]` 或 `[NadeLimit]` 控制台行。
 
@@ -23,4 +25,26 @@ The preserved license and provenance are available in `third_party/demoparser/`.
 The post-match statistics contract and result-table information architecture were referenced from
 [numakkiyu/Local-Arena](https://github.com/numakkiyu/Local-Arena) commit
 `fad7e4ab7441f6bb95ebe9f6186169dc424ff008`, licensed under AGPL-3.0.
-The final `simple-rating-v1` formula is an independent project-local simplification, not an OpenRating or HLTV rating.
+The final `simple-rating-v1` formula is an independent project-local KDA-dominant multi-factor simplification, not an OpenRating or HLTV rating. It weights `(K + A / 5) / max(D, 1)` at 80%, damage at 10%, the report-level survival proxy at 5%, and assists per round at 5%.
+
+## akiver/cs-demo-manager map resources
+
+The Demo workbench includes CS2 radar and thumbnail resources and mechanically
+converted map coordinate metadata from
+https://github.com/akiver/cs-demo-manager at commit
+`8961f5072fe4d42803dde68e8e71b3c90b216504`, copyright (c) 2014-present AkiVer,
+distributed under the MIT License. The preserved license, provenance, and
+per-file asset manifest are available in `third_party/cs-demo-manager/`.
+
+No Electron, PostgreSQL, analyzer sidecar, or account integration from the
+upstream application is included.
+
+## CS2-insight-agent behavior reference
+
+The Demo library's Play and FolderSearch interaction semantics, managed playback
+lifecycle, and Windows Explorer argument-array behavior were studied from
+[DrEAmSs59/CS2-insight-agent](https://github.com/DrEAmSs59/CS2-insight-agent) commit
+`17d2a213ee8c32608feee3c63f0b6d05eef8f945`, licensed under PolyForm
+Noncommercial 1.0.0. No source code, tests, styles, text, or assets from that
+project are included; the implementation in this repository is independent
+Rust, Tauri, and Vue code.

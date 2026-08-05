@@ -5,6 +5,7 @@
 - Retrieved: 2026-07-28
 - Original directories: `src/parser`, `src/csgoproto`
 - License: MIT, preserved in `LICENSE`
+- Source archive SHA-256: `AA5B2722E675289F700ACB401BFC536753BE6EA06A78ECECB812DD2F95C234C0`
 
 Local build patch:
 
@@ -34,3 +35,19 @@ Coverage: the three local CS2 samples listed in
 `docs/version-0.5.5-startup-default-demo-scoreboard-fix-plan-20260728.md`;
 the 63.8 MB current sample is the strict-path baseline and the two older
 samples exercise the fallback path. Unknown parser errors are still surfaced.
+
+Reproducibility check (2026-07-30): after normalizing CRLF/LF, all vendored
+files match the fixed archive except the following documented downstream patch
+surface. `SOURCE-MANIFEST.sha256` hashes the exact downstream bytes and excludes
+ignored build output and local Demo fixtures.
+
+- `csgoproto/build.rs`
+- `parser/README.md`
+- `parser/src/e2e_test.rs`
+- `parser/src/parse_demo.rs`
+- `parser/src/first_pass/stringtables.rs`
+- `parser/src/second_pass/collect_data.rs`
+- `parser/src/second_pass/game_events.rs`
+- `parser/src/second_pass/other_netmessages.rs`
+- `parser/src/second_pass/parser_settings.rs`
+- `parser/src/second_pass/variants.rs`

@@ -1,6 +1,6 @@
 # CS2 人机增强助手
 
-当前候选版本为 `0.5.5`。本仓库是基于 [ed0ard/CS2-Bot-Improver v1.4.3](https://github.com/ed0ard/CS2-Bot-Improver/releases/tag/v1.4.3) 开发的独立下游桌面项目，并非上游官方发行版。
+当前候选版本为 `0.5.6`。本仓库是基于 [ed0ard/CS2-Bot-Improver v1.4.3](https://github.com/ed0ard/CS2-Bot-Improver/releases/tag/v1.4.3) 开发的独立下游桌面项目，并非上游官方发行版。
 
 - 本项目：[YuGeYu/CS2AS05](https://github.com/YuGeYu/CS2AS05)
 - 上游项目：[ed0ard/CS2-Bot-Improver](https://github.com/ed0ard/CS2-Bot-Improver)
@@ -18,6 +18,7 @@
 - 卸载定制插件文件与读取基础诊断信息。
 - 启动时与手动检查官网更新，并在系统默认浏览器打开官网、意见页和更新下载地址。
 - 每 10 秒轻量刷新 CS2 运行状态；通过“关于与来源”查看上游项目与许可信息。
+- 内置包并行安装 BotVision `0.2.2` MetaMod 组件；它与 CounterStrikeSharp/NadeSystem 分开校验。
 
 界面仅提供简体中文。应用不提供 AI 聊天、真人饰品编辑、比赛管理、视频剪辑、云端 Demo 上传或第三方品牌展示。
 
@@ -55,7 +56,7 @@ npm run bundle:desktop
 桌面安装包依赖仓库内的 `src-tauri/resources/CS2BotImprover.zip`。该文件是基于上游 `v1.4.3` 的最小定制包，SHA256：
 
 ```text
-ACC5E0B73626A86F3C07ECDAE04B164F806F7D5A30DDC692C3C8C864FF73F4AB
+8581E014690872F9AECB86F8B415226ADDA0E9C696B48F48DB3B491E1324DA8B
 ```
 
 ## 相对上游的修改

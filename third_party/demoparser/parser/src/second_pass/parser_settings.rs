@@ -160,7 +160,7 @@ impl<'a> SecondPassParser<'a> {
                     team_number: None,
                     user_id: Some(p.userid),
                     controller_id: None,
-                    is_bot: !valid_steamid64(p.steamid),
+                    is_bot: p.is_bot || !valid_steamid64(p.steamid),
                 })).collect(),
             game_events_counter: self.game_events_counter,
             uniq_prop_names: self.uniq_prop_names,

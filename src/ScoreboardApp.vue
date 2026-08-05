@@ -35,7 +35,7 @@ async function load(pending: PendingReport) {
   document.body.dataset.scoreboardReady = 'false'
   try {
     const next = await invoke<DemoReport>('get_demo_report', { id: pending.reportId })
-    if (next.schemaVersion < 4 || next.metricsVersion !== 'simple-rating-v1') throw new Error('报告版本过旧，请重新解析。')
+    if (next.schemaVersion < 6 || next.metricsVersion !== 'simple-rating-v1') throw new Error('报告版本过旧，请重新解析。')
     report.value = next
     await nextTick()
     await invoke('scoreboard_present', { reportId: pending.reportId, sequence: pending.sequence })

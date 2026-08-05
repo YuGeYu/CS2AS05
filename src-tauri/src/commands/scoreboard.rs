@@ -72,10 +72,7 @@ pub fn open_scoreboard(
     if report_id <= 0 {
         return Err("战报 ID 无效。".into());
     }
-    let report = demo::report(&app, report_id).map_err(|e| e.into_string())?;
-    if report.schema_version < 4 || report.metrics_version != "simple-rating-v1" {
-        return Err("报告版本过旧，请重新解析后再打开战报。".into());
-    }
+    demo::presentable_report(&app, report_id).map_err(|e| e.into_string())?;
 
     let pending = state.replace_pending(report_id)?;
     if state.frontend_ready.load(Ordering::Acquire) {

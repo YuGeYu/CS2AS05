@@ -1,9 +1,25 @@
 use tauri::AppHandle;
 
 use crate::{
+    demo::playback,
     models::demo::*,
     services::{demo, panel},
 };
+
+#[tauri::command]
+pub fn play_demo(
+    app: AppHandle,
+    state: tauri::State<'_, playback::DemoPlaybackState>,
+    demo_id: i64,
+    root_path: String,
+) -> Result<DemoPlaybackResult, String> {
+    playback::play_demo(&app, &state, demo_id, &root_path, None).map_err(|e| e.into_string())
+}
+
+#[tauri::command]
+pub fn reveal_demo_file(app: AppHandle, demo_id: i64) -> Result<RevealDemoResult, String> {
+    playback::reveal_demo_file(&app, demo_id).map_err(|e| e.into_string())
+}
 
 #[tauri::command]
 pub fn list_demo_roots(app: AppHandle) -> Result<Vec<DemoRoot>, String> {
@@ -56,6 +72,119 @@ pub fn list_demos(
     page_size: i64,
 ) -> Result<DemoListPage, String> {
     demo::list(&app, &query, &status, page, page_size).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn list_analysis_jobs(
+    app: AppHandle,
+    active_only: bool,
+) -> Result<Vec<DemoAnalysisJob>, String> {
+    demo::list_analysis_jobs(&app, active_only).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn cancel_analysis_job(app: AppHandle, job_id: i64) -> Result<(), String> {
+    demo::cancel_analysis_job(&app, job_id).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn retry_analysis_job(app: AppHandle, job_id: i64) -> Result<(), String> {
+    demo::retry_analysis_job(&app, job_id).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn get_match_overview(app: AppHandle, demo_id: i64) -> Result<MatchOverview, String> {
+    demo::match_overview(&app, demo_id).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn get_match_scoreboard(
+    app: AppHandle,
+    demo_id: i64,
+) -> Result<Vec<MatchScoreboardPlayer>, String> {
+    demo::match_scoreboard(&app, demo_id).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn get_match_rounds(app: AppHandle, demo_id: i64) -> Result<Vec<MatchRoundSummary>, String> {
+    demo::match_rounds(&app, demo_id).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn get_match_economy(app: AppHandle, demo_id: i64) -> Result<Vec<MatchEconomyRow>, String> {
+    demo::match_economy(&app, demo_id).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn get_match_duels(app: AppHandle, demo_id: i64) -> Result<MatchDuelMatrix, String> {
+    demo::match_duels(&app, demo_id).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn get_match_utility(app: AppHandle, demo_id: i64) -> Result<Vec<MatchUtilityRow>, String> {
+    demo::match_utility(&app, demo_id).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn get_match_events(
+    app: AppHandle,
+    demo_id: i64,
+    filters: MatchEventFilters,
+    page: i64,
+    page_size: i64,
+) -> Result<MatchEventPage, String> {
+    demo::match_events(&app, demo_id, filters, page, page_size).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn get_player_match_detail(
+    app: AppHandle,
+    demo_id: i64,
+    stable_key: String,
+) -> Result<PlayerMatchDetail, String> {
+    demo::player_match_detail(&app, demo_id, &stable_key).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn export_match(
+    app: AppHandle,
+    demo_id: i64,
+    format: String,
+    destination_path: String,
+) -> Result<ExportMatchResult, String> {
+    demo::export_match(&app, demo_id, &format, &destination_path).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn ensure_spatial_analysis(
+    app: AppHandle,
+    demo_id: i64,
+    sampling_hz: i64,
+) -> Result<i64, String> {
+    demo::ensure_spatial_analysis(&app, demo_id, sampling_hz).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn get_round_positions(
+    app: AppHandle,
+    demo_id: i64,
+    round_number: i64,
+    sampling_hz: i64,
+) -> Result<RoundPositions, String> {
+    demo::round_positions(&app, demo_id, round_number, sampling_hz).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn get_heatmap_points(
+    app: AppHandle,
+    demo_id: i64,
+    filters: HeatmapFilters,
+) -> Result<Vec<HeatmapPoint>, String> {
+    demo::heatmap_points(&app, demo_id, &filters).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn save_heatmap_png(
+    app: AppHandle,
+    demo_id: i64,
+    filters: HeatmapFilters,
+    destination_path: String,
+) -> Result<HeatmapExportResult, String> {
+    demo::save_heatmap_png(&app, demo_id, &filters, &destination_path).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn launch_demo_at_tick(
+    app: AppHandle,
+    demo_id: i64,
+    tick: i64,
+    player_key: Option<String>,
+) -> Result<LaunchDemoResult, String> {
+    demo::launch_demo_at_tick(&app, demo_id, tick, player_key.as_deref())
+        .map_err(|e| e.into_string())
 }
 #[tauri::command]
 pub fn get_demo_report(app: AppHandle, id: i64) -> Result<DemoReport, String> {

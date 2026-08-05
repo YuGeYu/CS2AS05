@@ -1,0 +1,891 @@
+{
+  "repository": "https://github.com/akiver/cs-demo-manager",
+  "commit": "8961f5072fe4d42803dde68e8e71b3c90b216504",
+  "generatedAt": "2026-07-30",
+  "assets": [
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_agency.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/cs_agency.png",
+      "bytes": 159602,
+      "sha256": "5B3F7248C366DAD8D4176F15987765A96964A0D32B9164DB2444FE071E9534D4"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_agency.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/cs_agency.png",
+      "bytes": 159602,
+      "sha256": "5B3F7248C366DAD8D4176F15987765A96964A0D32B9164DB2444FE071E9534D4"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_alpine.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/cs_alpine.png",
+      "bytes": 161382,
+      "sha256": "100BE0598101783CAA2777025B8802F997A0A9FCF44D756F77E30BDF2B6F908D"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_alpine.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/cs_alpine.png",
+      "bytes": 161382,
+      "sha256": "100BE0598101783CAA2777025B8802F997A0A9FCF44D756F77E30BDF2B6F908D"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_assault.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/cs_assault.png",
+      "bytes": 149312,
+      "sha256": "BB0FFD795D71FDE5D823F46A09B8F069050A077D9BA3F96716EC951795B2AE18"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_assault.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/cs_assault.png",
+      "bytes": 149312,
+      "sha256": "BB0FFD795D71FDE5D823F46A09B8F069050A077D9BA3F96716EC951795B2AE18"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_italy.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/cs_italy.png",
+      "bytes": 104916,
+      "sha256": "EFFE87E0BDF95FD600AC5765F03B64D035544B59E648050ED0A11E63B5852D9F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_italy.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/cs_italy.png",
+      "bytes": 104916,
+      "sha256": "EFFE87E0BDF95FD600AC5765F03B64D035544B59E648050ED0A11E63B5852D9F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_militia.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/cs_militia.png",
+      "bytes": 205747,
+      "sha256": "D43294A7491BE5032A30D3E5620DCE2C85A9296E306C25DB3A0CEC1C552DF2A8"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_militia.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/cs_militia.png",
+      "bytes": 205747,
+      "sha256": "D43294A7491BE5032A30D3E5620DCE2C85A9296E306C25DB3A0CEC1C552DF2A8"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_militia_lower.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/cs_militia_lower.png",
+      "bytes": 210789,
+      "sha256": "C2B2F11B3101A8D7E65849720F20AC3300F95514B0D597B4981B67AD3F519906"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_militia_lower.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/cs_militia_lower.png",
+      "bytes": 210789,
+      "sha256": "C2B2F11B3101A8D7E65849720F20AC3300F95514B0D597B4981B67AD3F519906"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_office.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/cs_office.png",
+      "bytes": 199246,
+      "sha256": "DDB3941A88256732D4C06CDF63777743423D595F59E0A5C2CAA7FBF6469A9FD5"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_office.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/cs_office.png",
+      "bytes": 199246,
+      "sha256": "DDB3941A88256732D4C06CDF63777743423D595F59E0A5C2CAA7FBF6469A9FD5"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_shelter.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/cs_shelter.png",
+      "bytes": 598749,
+      "sha256": "A7AABABFC0916FE3952BF3DD6B1C4CD49AB44BD5C8BE4492B26D82311005B11F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/cs_shelter.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/cs_shelter.png",
+      "bytes": 598749,
+      "sha256": "A7AABABFC0916FE3952BF3DD6B1C4CD49AB44BD5C8BE4492B26D82311005B11F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_ancient.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_ancient.png",
+      "bytes": 90267,
+      "sha256": "A2F7B0F4AF985FDC4985589A55EC0DC424DFD6DEA65CB4A1B42A966B891D6AA4"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_ancient.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_ancient.png",
+      "bytes": 90267,
+      "sha256": "A2F7B0F4AF985FDC4985589A55EC0DC424DFD6DEA65CB4A1B42A966B891D6AA4"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_anubis.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_anubis.png",
+      "bytes": 128723,
+      "sha256": "B325C840DB6A639965C035A542A329B2EF46CEF24908A6F1A3A927D946E28955"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_anubis.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_anubis.png",
+      "bytes": 128723,
+      "sha256": "B325C840DB6A639965C035A542A329B2EF46CEF24908A6F1A3A927D946E28955"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_assembly.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_assembly.png",
+      "bytes": 528750,
+      "sha256": "F4E0524D1CFFAAD38ECC65A98CB859DFEE9A6D56D3E3A6F0F1AB5C4D8CADF9C3"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_assembly.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_assembly.png",
+      "bytes": 528750,
+      "sha256": "F4E0524D1CFFAAD38ECC65A98CB859DFEE9A6D56D3E3A6F0F1AB5C4D8CADF9C3"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_aztec.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_aztec.png",
+      "bytes": 474463,
+      "sha256": "677121D95F4FABB41343EDDE65B777B861A0F04B7167B8C004B4C1D5438DE248"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_aztec.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_aztec.png",
+      "bytes": 474463,
+      "sha256": "677121D95F4FABB41343EDDE65B777B861A0F04B7167B8C004B4C1D5438DE248"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_basalt.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_basalt.png",
+      "bytes": 442897,
+      "sha256": "EEF0AFE4444170A45CF0794C381C5950AB3475DEE0D9C9228541E467B9FC9947"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_basalt.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_basalt.png",
+      "bytes": 442897,
+      "sha256": "EEF0AFE4444170A45CF0794C381C5950AB3475DEE0D9C9228541E467B9FC9947"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_boulder.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_boulder.png",
+      "bytes": 934338,
+      "sha256": "3243351A5E1AA613B848EFA6EA18AF7E01C680A6A9EEA3FEB70AF4636B22E95D"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_boulder.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_boulder.png",
+      "bytes": 934338,
+      "sha256": "3243351A5E1AA613B848EFA6EA18AF7E01C680A6A9EEA3FEB70AF4636B22E95D"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_boulder_lower.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_boulder_lower.png",
+      "bytes": 943079,
+      "sha256": "9E59AEE046A8441C0CD4FFE8348A3F87FF3DDFDEF490E29C9B69516A51A4B54A"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_boulder_lower.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_boulder_lower.png",
+      "bytes": 943079,
+      "sha256": "9E59AEE046A8441C0CD4FFE8348A3F87FF3DDFDEF490E29C9B69516A51A4B54A"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_brewery.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_brewery.png",
+      "bytes": 729852,
+      "sha256": "A3A55A155B880B79051B44B81559E2DBB2B30C10FD57DE3F66DDE72206B2AF4F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_brewery.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_brewery.png",
+      "bytes": 729852,
+      "sha256": "A3A55A155B880B79051B44B81559E2DBB2B30C10FD57DE3F66DDE72206B2AF4F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_cache.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_cache.png",
+      "bytes": 91324,
+      "sha256": "815B216833B94B64E19519FF2F263F49B96DE7E9FD09C7E93AB31A8C53B1E856"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_cache.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_cache.png",
+      "bytes": 91324,
+      "sha256": "815B216833B94B64E19519FF2F263F49B96DE7E9FD09C7E93AB31A8C53B1E856"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_canals.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_canals.png",
+      "bytes": 198533,
+      "sha256": "35F6CE3E58555C53D28A79F109C4701BF0277DDDCA3F830C2578085EAF760B9F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_canals.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_canals.png",
+      "bytes": 198533,
+      "sha256": "35F6CE3E58555C53D28A79F109C4701BF0277DDDCA3F830C2578085EAF760B9F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_cbble.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_cbble.png",
+      "bytes": 245004,
+      "sha256": "1A4B851CFAA25286FA51B562F07B1A99805052F42326E4C4AFB97D707E4D1263"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_cbble.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_cbble.png",
+      "bytes": 245004,
+      "sha256": "1A4B851CFAA25286FA51B562F07B1A99805052F42326E4C4AFB97D707E4D1263"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_debris.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_debris.png",
+      "bytes": 1067778,
+      "sha256": "6BA24801F8E8CFF89CA49AC615B85021297D419E268EFFCEA2BB2558EF4F6E3E"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_debris.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_debris.png",
+      "bytes": 1067778,
+      "sha256": "6BA24801F8E8CFF89CA49AC615B85021297D419E268EFFCEA2BB2558EF4F6E3E"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_dogtown.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_dogtown.png",
+      "bytes": 1043734,
+      "sha256": "A2AAE6529C7A63AB1D7B4ADFA0798621B433D871AADED5058EC34F0E2332D8F7"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_dogtown.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_dogtown.png",
+      "bytes": 1043734,
+      "sha256": "A2AAE6529C7A63AB1D7B4ADFA0798621B433D871AADED5058EC34F0E2332D8F7"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_dust.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_dust.png",
+      "bytes": 423600,
+      "sha256": "2D46D7FEF754BFD47D484676BA6E2CE2B41EB0D6E3B4FB088E82BEA22ECC8FCB"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_dust.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_dust.png",
+      "bytes": 423600,
+      "sha256": "2D46D7FEF754BFD47D484676BA6E2CE2B41EB0D6E3B4FB088E82BEA22ECC8FCB"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_dust2.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_dust2.png",
+      "bytes": 175884,
+      "sha256": "6515AB4BA319187B2130EDB0C2F60BA64C9D422E75DE113C65BDF37C2DB1479B"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_dust2.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_dust2.png",
+      "bytes": 175884,
+      "sha256": "6515AB4BA319187B2130EDB0C2F60BA64C9D422E75DE113C65BDF37C2DB1479B"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_edin.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_edin.png",
+      "bytes": 142010,
+      "sha256": "4A2E7035264D348A8F55AD361B289578F7C6A00E17EA8323BEBDF565E14F72FC"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_edin.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_edin.png",
+      "bytes": 142010,
+      "sha256": "4A2E7035264D348A8F55AD361B289578F7C6A00E17EA8323BEBDF565E14F72FC"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_eldorado.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_eldorado.png",
+      "bytes": 472541,
+      "sha256": "912BE71E0DE3F16EDEADF2B1E00EFF63283244954A17CE17A0FC96A5FA070A62"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_eldorado.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_eldorado.png",
+      "bytes": 472541,
+      "sha256": "912BE71E0DE3F16EDEADF2B1E00EFF63283244954A17CE17A0FC96A5FA070A62"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_fachwerk.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_fachwerk.png",
+      "bytes": 1060588,
+      "sha256": "2E7C642B3BC8AF820E69DFCA1C77A5A3F30ED604ACE275BFF66D841348E615CD"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_fachwerk.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_fachwerk.png",
+      "bytes": 1060588,
+      "sha256": "2E7C642B3BC8AF820E69DFCA1C77A5A3F30ED604ACE275BFF66D841348E615CD"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_golden.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_golden.png",
+      "bytes": 182561,
+      "sha256": "7B4D6B966B8E8166D86EA8FD8D0E9EC30BED801CD7F494AADCA9AE445F7EFC10"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_golden.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_golden.png",
+      "bytes": 182561,
+      "sha256": "7B4D6B966B8E8166D86EA8FD8D0E9EC30BED801CD7F494AADCA9AE445F7EFC10"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_grail.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_grail.png",
+      "bytes": 1453112,
+      "sha256": "A37DAD4520186047401383360DEE199ECCDD640183E426E0F6E1A2771A47C992"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_grail.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_grail.png",
+      "bytes": 1453112,
+      "sha256": "A37DAD4520186047401383360DEE199ECCDD640183E426E0F6E1A2771A47C992"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_inferno.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_inferno.png",
+      "bytes": 140128,
+      "sha256": "0EE1AAD237D0831B10FC76B33AA7C5846BA5AECE8D1BB60D082277584A66F55F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_inferno.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_inferno.png",
+      "bytes": 140128,
+      "sha256": "0EE1AAD237D0831B10FC76B33AA7C5846BA5AECE8D1BB60D082277584A66F55F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_jura.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_jura.png",
+      "bytes": 942987,
+      "sha256": "03254B67D377E7AB0A313F53525E52B5BA1C50FE16D28FBC83E41785CB70198A"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_jura.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_jura.png",
+      "bytes": 942987,
+      "sha256": "03254B67D377E7AB0A313F53525E52B5BA1C50FE16D28FBC83E41785CB70198A"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_memento.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_memento.png",
+      "bytes": 258826,
+      "sha256": "A49804B760024D4E0AA3ECCFAFD9EC81300799A745F37B38EFE3C04B71372104"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_memento.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_memento.png",
+      "bytes": 258826,
+      "sha256": "A49804B760024D4E0AA3ECCFAFD9EC81300799A745F37B38EFE3C04B71372104"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_mills.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_mills.png",
+      "bytes": 81398,
+      "sha256": "6DA6C37416C61644E73F368EAE7527F761D8700C35218AACCE89371255B78C4B"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_mills.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_mills.png",
+      "bytes": 81398,
+      "sha256": "6DA6C37416C61644E73F368EAE7527F761D8700C35218AACCE89371255B78C4B"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_mirage.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_mirage.png",
+      "bytes": 144543,
+      "sha256": "AF139A92CF929214F7C0AC35E2D8C82BAD385D83E71EEAF7B955DAC96467A136"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_mirage.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_mirage.png",
+      "bytes": 144543,
+      "sha256": "AF139A92CF929214F7C0AC35E2D8C82BAD385D83E71EEAF7B955DAC96467A136"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_nuke.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_nuke.png",
+      "bytes": 98581,
+      "sha256": "C9A240F8AB30D15A7B3251866A748A0F664E769E31F1828C90F716D29F08F9FE"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_nuke.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_nuke.png",
+      "bytes": 98581,
+      "sha256": "C9A240F8AB30D15A7B3251866A748A0F664E769E31F1828C90F716D29F08F9FE"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_nuke_lower.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_nuke_lower.png",
+      "bytes": 96962,
+      "sha256": "71161D4DD278D6B0E74F26901AC90962A034C2AC3C457191B4917AE7879CD41B"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_nuke_lower.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_nuke_lower.png",
+      "bytes": 96962,
+      "sha256": "71161D4DD278D6B0E74F26901AC90962A034C2AC3C457191B4917AE7879CD41B"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_overpass.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_overpass.png",
+      "bytes": 235560,
+      "sha256": "FBFA2D9D1F49B5BF76D52610253C5F206D1C8C29135E4D2EE506EB2B278ED46A"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_overpass.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_overpass.png",
+      "bytes": 235560,
+      "sha256": "FBFA2D9D1F49B5BF76D52610253C5F206D1C8C29135E4D2EE506EB2B278ED46A"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_palacio.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_palacio.png",
+      "bytes": 976554,
+      "sha256": "FAACE72E3A8A361FDDDB302A8ACCBAED40A8872C038403B1AF647057B6DEAC67"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_palacio.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_palacio.png",
+      "bytes": 976554,
+      "sha256": "FAACE72E3A8A361FDDDB302A8ACCBAED40A8872C038403B1AF647057B6DEAC67"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_palais.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_palais.png",
+      "bytes": 152943,
+      "sha256": "5F4C724FFD8A7940A5DB95C79F5F8EA59435643293B3C7D77D48331F493F22A0"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_palais.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_palais.png",
+      "bytes": 152943,
+      "sha256": "5F4C724FFD8A7940A5DB95C79F5F8EA59435643293B3C7D77D48331F493F22A0"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_palais_lower.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_palais_lower.png",
+      "bytes": 147665,
+      "sha256": "A525B3336A765ECF711CFA4CEF2DEDC8A1CECBC177490F21172B16A480143C99"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_palais_lower.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_palais_lower.png",
+      "bytes": 147665,
+      "sha256": "A525B3336A765ECF711CFA4CEF2DEDC8A1CECBC177490F21172B16A480143C99"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_poseidon.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_poseidon.png",
+      "bytes": 335276,
+      "sha256": "6D69B30CE3D00766C5324414AD1F87450A31EDBAD94400D11D6F453B7A201C61"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_poseidon.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_poseidon.png",
+      "bytes": 335276,
+      "sha256": "6D69B30CE3D00766C5324414AD1F87450A31EDBAD94400D11D6F453B7A201C61"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_rooftop.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_rooftop.png",
+      "bytes": 702192,
+      "sha256": "3DEE7A246AF5D59A7E0F23C843797F6DA214B3FC1B29654CA1011A64858C8198"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_rooftop.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_rooftop.png",
+      "bytes": 702192,
+      "sha256": "3DEE7A246AF5D59A7E0F23C843797F6DA214B3FC1B29654CA1011A64858C8198"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_sanctum.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_sanctum.png",
+      "bytes": 221404,
+      "sha256": "BA0F04AAFCF96D8348EDE4ED8FDB0D1B7E7C96A4C392059C88FBCC64F4BF3EBE"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_sanctum.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_sanctum.png",
+      "bytes": 221404,
+      "sha256": "BA0F04AAFCF96D8348EDE4ED8FDB0D1B7E7C96A4C392059C88FBCC64F4BF3EBE"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_stronghold.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_stronghold.png",
+      "bytes": 1251447,
+      "sha256": "4066C72C4CBB3AB73DC12BAC6D9B7D1789779F15F2D13A430D4FBA18DA805EF0"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_stronghold.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_stronghold.png",
+      "bytes": 1251447,
+      "sha256": "4066C72C4CBB3AB73DC12BAC6D9B7D1789779F15F2D13A430D4FBA18DA805EF0"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_thera.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_thera.png",
+      "bytes": 328952,
+      "sha256": "04FB5786B712E971FBDB393580C0627C41937E64CB20558683F0AE456DF0571C"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_thera.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_thera.png",
+      "bytes": 328952,
+      "sha256": "04FB5786B712E971FBDB393580C0627C41937E64CB20558683F0AE456DF0571C"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_thera_lower.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_thera_lower.png",
+      "bytes": 298085,
+      "sha256": "16AD113C1BF4E484B5ED4F70E8CE75F5386CDD555A2CFC0EDF0A6CBD976B610F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_thera_lower.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_thera_lower.png",
+      "bytes": 298085,
+      "sha256": "16AD113C1BF4E484B5ED4F70E8CE75F5386CDD555A2CFC0EDF0A6CBD976B610F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_train.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_train.png",
+      "bytes": 146328,
+      "sha256": "D4BF2E9F1CE75EBCF5CA721E567549BA82EF420116EC930CBDB80927DA43808C"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_train.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_train.png",
+      "bytes": 146328,
+      "sha256": "D4BF2E9F1CE75EBCF5CA721E567549BA82EF420116EC930CBDB80927DA43808C"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_train_lower.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_train_lower.png",
+      "bytes": 135521,
+      "sha256": "9572AB36DFE7EE57C49AD4E5499B19CCB48122351B971F3E2C250D9B2098C20F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_train_lower.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_train_lower.png",
+      "bytes": 135521,
+      "sha256": "9572AB36DFE7EE57C49AD4E5499B19CCB48122351B971F3E2C250D9B2098C20F"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_vertigo.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_vertigo.png",
+      "bytes": 98334,
+      "sha256": "2DE17BB5348679B0A81166FCA585512F7FD11F75569348108E4D20AC308FA8DD"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_vertigo.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_vertigo.png",
+      "bytes": 98334,
+      "sha256": "2DE17BB5348679B0A81166FCA585512F7FD11F75569348108E4D20AC308FA8DD"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_vertigo_lower.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_vertigo_lower.png",
+      "bytes": 124081,
+      "sha256": "F2C58BCE0F655C4994391755CADC3A8720CD4F818013F9C6B238F1C508F67F9D"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_vertigo_lower.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_vertigo_lower.png",
+      "bytes": 124081,
+      "sha256": "F2C58BCE0F655C4994391755CADC3A8720CD4F818013F9C6B238F1C508F67F9D"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_warden.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_warden.png",
+      "bytes": 73960,
+      "sha256": "6894AA57017023490A3E2DA342477253CF131A2D7011C11F613D4612EB812FCF"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_warden.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_warden.png",
+      "bytes": 73960,
+      "sha256": "6894AA57017023490A3E2DA342477253CF131A2D7011C11F613D4612EB812FCF"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_whistle.png",
+      "downstreamPath": "src/assets/maps/cs2/radars/de_whistle.png",
+      "bytes": 108700,
+      "sha256": "7DA45DBECF7EBD5F6357EC5DB3EF5704FCD636ADF940CAAD3CBBB6C459C3E5D2"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/radars/de_whistle.png",
+      "downstreamPath": "src-tauri/resources/demo-maps/radars/de_whistle.png",
+      "bytes": 108700,
+      "sha256": "7DA45DBECF7EBD5F6357EC5DB3EF5704FCD636ADF940CAAD3CBBB6C459C3E5D2"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/cs_agency.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/cs_agency.png",
+      "bytes": 283103,
+      "sha256": "C7EEC7734F3D2BEB87C482A14B91FCF0CB3611FF3ED77D0086EDEDA37DB5EB80"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/cs_alpine.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/cs_alpine.png",
+      "bytes": 360350,
+      "sha256": "558A58DA4498C4E1FF7854E3AFF203076647C2E99CC8E839AA6548AF354C8ACF"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/cs_assault.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/cs_assault.png",
+      "bytes": 326135,
+      "sha256": "695707E5286BAB1A296FE9DA997B13CFAFCC12DFE131B2EE11FCCCBE81E11AED"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/cs_italy.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/cs_italy.png",
+      "bytes": 307431,
+      "sha256": "6C58D4045C7E55A89917DAD4208C4530D99B3870F9DD3CF4EF6964DBD99E4CBE"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/cs_militia.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/cs_militia.png",
+      "bytes": 280821,
+      "sha256": "273D83B5F07DEF7291EB3C4E3AE37BB36D87FD53624A6C968E1C7B3C39D8F613"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/cs_office.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/cs_office.png",
+      "bytes": 292722,
+      "sha256": "C09B019BD9B64117021C5CFD6C4BA99F7B5A2E8C2AB94EE37DC0D22BFE0CBB48"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/cs_shelter.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/cs_shelter.png",
+      "bytes": 379184,
+      "sha256": "9E2A314D2369B65D5A625A31082DE115D370B176BD21150D13AED2FE89DE0C5A"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_ancient.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_ancient.png",
+      "bytes": 329549,
+      "sha256": "DA74F80E18A2D136A4A2B243BC5AD5D19B27660C594BA0271AF76BFE4C283836"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_anubis.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_anubis.png",
+      "bytes": 298461,
+      "sha256": "91734A4C6D0845E5CA254924EFABF6520E47C9C10A2B2A5873AC50519F07D9D3"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_assembly.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_assembly.png",
+      "bytes": 417779,
+      "sha256": "77A9E2FFCF831F3B51640A586944953D388A8AAA633FE025A91E64A86A4EB506"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_aztec.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_aztec.png",
+      "bytes": 591250,
+      "sha256": "C5922BEA66298A9784B189CA8569F6DB080994C521001F4A428B8F8AAD76D1E3"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_basalt.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_basalt.png",
+      "bytes": 296847,
+      "sha256": "811B705A584AE644895878D7B1A6ACD61A497CC79BA3E74279F476777D77E473"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_boulder.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_boulder.png",
+      "bytes": 521027,
+      "sha256": "3CB22A67B76DD908C9CA48D9233E8001CF466F8C95B3E1C0E0A5D46206643BBD"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_brewery.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_brewery.png",
+      "bytes": 286484,
+      "sha256": "8BCC909F1CE504C01A7ACF3F6570B74A7CA7780FEEDAEC1A95B76EB243EB7CC7"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_cache.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_cache.png",
+      "bytes": 394853,
+      "sha256": "BF0FE0D293BE7C592C6350497BA12FAA4DE4102A132545F7F40D0BD6D44BE5F7"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_canals.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_canals.png",
+      "bytes": 389547,
+      "sha256": "3E606C487C2C29ABE4929DB5902EC49921ECFB2D139C5AF3ED85447A5FC02027"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_cbble.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_cbble.png",
+      "bytes": 654223,
+      "sha256": "85DCA1674820E6A4E7E9345E18B3A721DB9135D4BBD62EF43911995CA8C1956D"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_debris.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_debris.png",
+      "bytes": 464956,
+      "sha256": "3578CBF4162C93C9502EF7C3AD71E06FC5A34DB0A4CDC8582A196FBF7CB99076"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_dogtown.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_dogtown.png",
+      "bytes": 284333,
+      "sha256": "E03A20CBFC846052837CF33D803FE6EF025C9D5C29BC9583DC59B107BB3E1251"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_dust.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_dust.png",
+      "bytes": 600443,
+      "sha256": "E60FFE0ECFF3F917CE30313659C5F86284A5A60A6F225EA12E4E9CE5BCB78BFA"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_dust2.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_dust2.png",
+      "bytes": 260926,
+      "sha256": "EB872387C38886A4EA2BD6F298391F150F32F5F5B4E0B770B76B506D26A264A8"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_edin.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_edin.png",
+      "bytes": 314279,
+      "sha256": "2B262274CF92FC70714DE128A6451BAAD6ED44AEDED62987E431E959590C9620"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_eldorado.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_eldorado.png",
+      "bytes": 542710,
+      "sha256": "9FBA2FB7AA2BE81B387FDF278F11C20FF446C2718D98E13C24E07FB609B991B9"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_fachwerk.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_fachwerk.png",
+      "bytes": 499983,
+      "sha256": "353D63E247BB6B3C8EF1B29240231492DDF03988BC564CC625ACC7D8B226517B"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_golden.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_golden.png",
+      "bytes": 363935,
+      "sha256": "9E092403A8E48154D7DC90765D2301B771A4C70A97381F63599100E2A7D0DCF8"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_grail.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_grail.png",
+      "bytes": 350941,
+      "sha256": "9FDF66D4095DE02FC3C6065734FFE196ED9DB84AE84A7514ECB42EE866E4BC16"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_inferno.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_inferno.png",
+      "bytes": 311401,
+      "sha256": "1A989F5D36B90FF187021A6AC7F79382F7E402A7BE10712D11F05447439D3933"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_jura.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_jura.png",
+      "bytes": 367042,
+      "sha256": "C127344E154163ABC71FE1B0BDBF636CDFCB2D9F732867DD0DD93C5D74EF4BCD"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_memento.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_memento.png",
+      "bytes": 373956,
+      "sha256": "2774E0A50B43433258DA7473913DAB02D271C8669CDC7CB48BF88A8C053B1C80"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_mills.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_mills.png",
+      "bytes": 405932,
+      "sha256": "92F84EA5893EA7850AE55232B2FA275385E0C8DB74517C41D79E02F676F01D0A"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_mirage.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_mirage.png",
+      "bytes": 298234,
+      "sha256": "CB0BC2EA259EFEFBE8FC4E115E9EE3EB45BF908D909BAD99B8559FBA3C0720DA"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_nuke.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_nuke.png",
+      "bytes": 285467,
+      "sha256": "C4971D3BB4D5F0C660683483FD215DFBAAECE7DA06C8783FD348E791E8E15C70"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_overpass.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_overpass.png",
+      "bytes": 309886,
+      "sha256": "94C3E1BFBC8654614F0C9FE7E7160C6F05D41861A62F4D0DAC4028DE59189926"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_palacio.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_palacio.png",
+      "bytes": 401062,
+      "sha256": "BF99E765DF9A42F11B536B2AB182C8B755AB859FA31A187CB7BE4F15D853EFEA"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_palais.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_palais.png",
+      "bytes": 324980,
+      "sha256": "4000F2CAE93DD27EE56709E158301DF12C81AE71DEB66D0B0DE877E12B4D7A2B"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_poseidon.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_poseidon.png",
+      "bytes": 311403,
+      "sha256": "5F61B7F0DC299D502C83F09EBBA23A05669BA9BDEE1FBDEEC4AA875A667187BD"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_rooftop.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_rooftop.png",
+      "bytes": 354202,
+      "sha256": "21EBAD146D5962B4541C2183A8F0C34E1AB7C2AEEDC9AC4AF01020E611C0AEDA"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_sanctum.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_sanctum.png",
+      "bytes": 375522,
+      "sha256": "CB0C9AE090209BB4CA1094F4BB572D7C6D5C0735D31B2D20673656C2E6986189"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_stronghold.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_stronghold.png",
+      "bytes": 372328,
+      "sha256": "B41C69482031FDB8BB2DAA4AB358687C2C349D8FF8F18DC116D7147FF6A4E6E9"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_thera.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_thera.png",
+      "bytes": 355531,
+      "sha256": "26BE43F01AE1070C921B203CFF2DF0A55AC394CC9E1DA5B4115EC64DCD0208FC"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_train.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_train.png",
+      "bytes": 359091,
+      "sha256": "F5997AD510315948E31E3EF0211D631CAC0A0013ABB53BF6605FD173AF6555B4"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_vertigo.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_vertigo.png",
+      "bytes": 280739,
+      "sha256": "1FE39B077553AF35AB844B07D801394721847C62014F07FCBF5950AF7733DC05"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_warden.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_warden.png",
+      "bytes": 318567,
+      "sha256": "F534041DA6DB7B95E9A712B92631099EF27BFC68E2FF83FEC51DFAADE04648F1"
+    },
+    {
+      "upstreamPath": "static/images/maps/cs2/thumbnails/de_whistle.png",
+      "downstreamPath": "src/assets/maps/cs2/thumbnails/de_whistle.png",
+      "bytes": 358793,
+      "sha256": "A2810F2D63FA3E0E5055497A0A338C95F171D53F56151671E038BA4CA2CBDB8B"
+    }
+  ],
+  "metadata": {
+    "upstreamPath": "src/node/database/maps/default-maps.ts",
+    "downstreamPath": "src/data/cs2-map-metadata.ts",
+    "mapCount": 44,
+    "sha256": "8A926C0FEBA9FDEB24E230E3B640562874723499FB784E6AE8EA03B109604B93",
+    "rustResourcePath": "src-tauri/resources/demo-maps/cs2-map-metadata.json",
+    "rustResourceSha256": "56A3A337FA4BD253A6467D59DBA6EB33BEF4ADFB8A56E0269C947EBCEC32315E"
+  }
+}

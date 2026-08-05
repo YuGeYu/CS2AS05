@@ -1,42 +1,20 @@
 mod commands;
+mod demo;
 mod errors;
 mod models;
+#[cfg(debug_assertions)]
+mod preflight;
 mod services;
 
 use tauri::Manager;
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        }))
-        .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
-            services::demo::initialize(app.handle()).map_err(|error| error.into_string())?;
-            services::demo::refresh_watcher(app.handle()).map_err(|error| error.into_string())?;
-            Ok(())
-        })
-        .manage(services::cs2_discovery::ScanCoordinator::default())
-        .manage(services::demo::DemoWatcherState::default())
-        .manage(commands::scoreboard::ScoreboardState::default())
-        .invoke_handler(tauri::generate_handler![
+macro_rules! app_invoke_handler {
+    ($($extra:path),* $(,)?) => {
+        tauri::generate_handler![
             commands::intro::get_intro_public_data,
             commands::demo::list_demo_roots,
+            commands::demo::play_demo,
+            commands::demo::reveal_demo_file,
             commands::demo::add_demo_root,
             commands::demo::ensure_default_demo_root,
             commands::demo::update_demo_root,
@@ -44,6 +22,23 @@ pub fn run() {
             commands::demo::scan_demo_roots,
             commands::demo::import_demo_file,
             commands::demo::list_demos,
+            commands::demo::list_analysis_jobs,
+            commands::demo::cancel_analysis_job,
+            commands::demo::retry_analysis_job,
+            commands::demo::get_match_overview,
+            commands::demo::get_match_scoreboard,
+            commands::demo::get_match_rounds,
+            commands::demo::get_match_economy,
+            commands::demo::get_match_duels,
+            commands::demo::get_match_utility,
+            commands::demo::get_match_events,
+            commands::demo::get_player_match_detail,
+            commands::demo::export_match,
+            commands::demo::ensure_spatial_analysis,
+            commands::demo::get_round_positions,
+            commands::demo::get_heatmap_points,
+            commands::demo::save_heatmap_png,
+            commands::demo::launch_demo_at_tick,
             commands::demo::get_demo_report,
             commands::demo::retry_demo_parse,
             commands::demo::get_demo_settings,
@@ -77,7 +72,59 @@ pub fn run() {
             commands::scoreboard::hide_scoreboard,
             commands::scoreboard::destroy_scoreboard,
             commands::scoreboard::report_scoreboard_boot_error,
-        ])
+            $($extra),*
+        ]
+    };
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    #[cfg(debug_assertions)]
+    preflight::start().expect("failed to initialize demo preflight diagnostics");
+
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }));
+    let builder = builder
+        .setup(|app| {
+            if cfg!(debug_assertions) {
+                app.handle().plugin(
+                    tauri_plugin_log::Builder::default()
+                        .level(log::LevelFilter::Info)
+                        .build(),
+                )?;
+            }
+            services::demo::initialize(app.handle()).map_err(|error| error.into_string())?;
+            services::demo::refresh_watcher(app.handle()).map_err(|error| error.into_string())?;
+            demo::coordinator::start(app.handle());
+            demo::post_match::start(app.handle());
+            Ok(())
+        })
+        .manage(services::cs2_discovery::ScanCoordinator::default())
+        .manage(services::demo::DemoWatcherState::default())
+        .manage(demo::playback::DemoPlaybackState::default())
+        .manage(demo::post_match::GameSessionCoordinator::default())
+        .manage(commands::scoreboard::ScoreboardState::default());
+
+    #[cfg(debug_assertions)]
+    let builder = builder.invoke_handler(app_invoke_handler![
+        preflight::preflight_status,
+        preflight::preflight_record_event,
+        preflight::preflight_exit_app,
+    ]);
+    #[cfg(not(debug_assertions))]
+    let builder = builder.invoke_handler(app_invoke_handler![]);
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -29,11 +29,18 @@ use crate::services::panel;
 
 const CS2_FOLDER_NAME: &str = "Counter-Strike Global Offensive";
 const BUNDLED_ZIP_NAME: &str = "CS2BotImprover.zip";
-const CUSTOM_ZIP_SHA256: &str = "ACC5E0B73626A86F3C07ECDAE04B164F806F7D5A30DDC692C3C8C864FF73F4AB";
+const CUSTOM_ZIP_SHA256: &str = "8581E014690872F9AECB86F8B415226ADDA0E9C696B48F48DB3B491E1324DA8B";
 const PANEL_FILE_NAME: &str = "Panel v1.4.3.exe";
 const PANEL_SHA256: &str = "3FD93DC7AF2702C50B9A7E4FCF1BB11387B107ABC863EE8A3067255022408CCD";
 const PANEL_SIZE: u64 = 5_844_480;
 const PLUGIN_MARKER: &str = "addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json";
+const BOTVISION_SOURCE_SHA256: &str =
+    "40B596D34BF336D9E59E663DAC2F94BD7C61D951C56E421EF66B5190B8787290";
+const BOTVISION_ENTRIES: &[&str] = &[
+    "addons/BotVision/gamedata.json",
+    "addons/BotVision/bin/win64/BotVision.dll",
+    "addons/metamod/BotVision.vdf",
+];
 const PLUGIN_PRODUCT: &str = "cs2-bot-improver";
 const PLUGIN_ID: &str = "cs2as05-custom-package";
 const LOG_DIR_NAME: &str = "CS2人机增强助手";
@@ -46,6 +53,9 @@ const REQUIRED_ZIP_ENTRIES: &[&str] = &[
     "cfg/",
     "overrides/",
     PLUGIN_MARKER,
+    "addons/BotVision/gamedata.json",
+    "addons/BotVision/bin/win64/BotVision.dll",
+    "addons/metamod/BotVision.vdf",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -57,6 +67,16 @@ struct PluginMarker {
     version: String,
     payload_sha256: String,
     payload_entries: Vec<String>,
+    #[serde(default)]
+    components: Vec<PluginComponent>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginComponent {
+    id: String,
+    version: Option<String>,
+    source_sha256: Option<String>,
 }
 
 #[derive(Debug)]
@@ -431,7 +451,7 @@ fn inspect_bot_plugin_version_at(csgo: &Path) -> Result<PluginVersionStatus, App
         }
     };
     let version = Version::parse(&marker.version).ok();
-    if marker.schema != 1 || marker.product != PLUGIN_PRODUCT || marker.plugin_id != PLUGIN_ID {
+    if marker.schema != 2 || marker.product != PLUGIN_PRODUCT || marker.plugin_id != PLUGIN_ID {
         return Ok(PluginVersionStatus::Invalid {
             reason: "标记身份字段不匹配。".into(),
             version,
@@ -448,6 +468,9 @@ fn inspect_bot_plugin_version_at(csgo: &Path) -> Result<PluginVersionStatus, App
             .payload_entries
             .iter()
             .any(|entry| entry == "addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll")
+        || BOTVISION_ENTRIES
+            .iter()
+            .any(|required| !marker.payload_entries.iter().any(|entry| entry == required))
         || marker
             .payload_entries
             .iter()
@@ -455,6 +478,19 @@ fn inspect_bot_plugin_version_at(csgo: &Path) -> Result<PluginVersionStatus, App
     {
         return Ok(PluginVersionStatus::Invalid {
             reason: "[BOT_PLUGIN_PAYLOAD_INVALID] payload 条目无效。".into(),
+            version: Some(version),
+        });
+    }
+    let botvision = marker
+        .components
+        .iter()
+        .find(|component| component.id == "botvision");
+    if botvision.and_then(|component| component.version.as_deref()) != Some("0.2.2")
+        || botvision.and_then(|component| component.source_sha256.as_deref())
+            != Some(BOTVISION_SOURCE_SHA256)
+    {
+        return Ok(PluginVersionStatus::Invalid {
+            reason: "[BOTVISION_MARKER_INVALID] BotVision 组件 provenance 不匹配。".into(),
             version: Some(version),
         });
     }
@@ -906,17 +942,27 @@ mod tests {
     }
 
     fn write_test_marker(csgo: &Path, version: &str) {
-        let entry = "addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll";
-        let dll = csgo.join(entry);
-        fs::create_dir_all(dll.parent().unwrap()).unwrap();
-        fs::write(&dll, b"test-payload").unwrap();
-        let entries = vec![entry.to_string()];
+        let entries = vec![
+            "addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll",
+            "addons/BotVision/gamedata.json",
+            "addons/BotVision/bin/win64/BotVision.dll",
+            "addons/metamod/BotVision.vdf",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect::<Vec<_>>();
+        for (index, entry) in entries.iter().enumerate() {
+            let file = csgo.join(entry);
+            fs::create_dir_all(file.parent().unwrap()).unwrap();
+            fs::write(file, format!("test-payload-{index}")).unwrap();
+        }
         let digest = payload_digest_from_files(csgo, &entries).unwrap();
         let marker = serde_json::json!({
-            "schema": 1,
+            "schema": 2,
             "product": PLUGIN_PRODUCT,
             "pluginId": PLUGIN_ID,
             "version": version,
+            "components": [{"id": "botvision", "version": "0.2.2", "sourceSha256": BOTVISION_SOURCE_SHA256}],
             "payloadSha256": digest,
             "payloadEntries": entries,
             "generatedFrom": "test"
