@@ -73,3 +73,17 @@ pub struct DiagnosticsPayload {
     pub full_log: String,
     pub log_path: String,
 }
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssistantPreferences {
+    pub autostart_enabled: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FaultSubmissionResult {
+    pub success: bool,
+    pub ticket_id: String,
+    pub message: String,
+}

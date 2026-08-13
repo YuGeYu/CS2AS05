@@ -98,6 +98,17 @@ function cachedUpstream(): { value: UpstreamProjectSummary; source: IntroData['s
   return { value, source: value === FALLBACK_UPSTREAM ? 'fallback' : 'cache' }
 }
 
+export function loadCachedIntroData(): IntroData {
+  const supporters = cachedSupporters()
+  const upstream = cachedUpstream()
+  return {
+    supporters: supporters.value,
+    upstream: upstream.value,
+    fetchedAt: null,
+    sources: { supporters: supporters.source, upstream: upstream.source },
+  }
+}
+
 async function loadBrowserIntroData(): Promise<IntroData> {
   const [supportersResult, upstreamResult] = await Promise.allSettled([
     fetchJson(SUPPORTERS_URL).then(parseSupporters),

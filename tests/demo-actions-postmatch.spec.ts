@@ -13,6 +13,19 @@ describe('Demo actions and post-match contracts', () => {
     expect(view).toContain('demo.rowBusy[item.id]')
   })
 
+  it('deletes only a selected library Demo after an in-app confirmation', () => {
+    const view = read('src/views/DemoReviewView.vue')
+    const frontend = read('src/services/tauri/demo.ts')
+    const command = read('src-tauri/src/commands/demo.rs')
+    const service = read('src-tauri/src/services/demo.rs')
+    expect(view).toContain('aria-label="删除 Demo"')
+    expect(view).toContain('role="alertdialog"')
+    expect(frontend).toContain("invoke<void>('delete_demo_file', { demoId })")
+    expect(command).toContain('demo::delete_file(&app, demo_id)')
+    expect(service).toContain('只允许删除录像库中登记的 .dem 文件')
+    expect(service).toContain('DELETE FROM demo_files WHERE id=?1')
+  })
+
   it('uses argument arrays and never accepts an arbitrary reveal path from the frontend', () => {
     const playback = read('src-tauri/src/demo/playback.rs')
     const service = read('src/services/tauri/demo.ts')

@@ -47,6 +47,10 @@ pub fn remove_demo_root(app: AppHandle, id: i64) -> Result<(), String> {
     demo::remove_root(&app, id).map_err(|e| e.into_string())
 }
 #[tauri::command]
+pub fn delete_demo_file(app: AppHandle, demo_id: i64) -> Result<(), String> {
+    demo::delete_file(&app, demo_id).map_err(|e| e.into_string())
+}
+#[tauri::command]
 pub async fn scan_demo_roots(
     app: AppHandle,
     root_id: Option<i64>,

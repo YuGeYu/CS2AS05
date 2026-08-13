@@ -5,9 +5,10 @@ export interface StageSize {
 }
 
 export interface StageInteraction {
-  type: 'pointer-down' | 'pointer-move' | 'pointer-up'
-  x: number
-  y: number
+  type: 'pointer-down' | 'pointer-move' | 'pointer-up' | 'key-down' | 'key-up'
+  x?: number
+  y?: number
+  key?: string
 }
 
 export interface ThreeStageController {

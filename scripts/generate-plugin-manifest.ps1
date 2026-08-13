@@ -9,6 +9,12 @@ $zip = (Resolve-Path (Join-Path $workspace $ZipPath)).Path
 $version = (Get-Content (Join-Path $workspace 'package.json') -Raw | ConvertFrom-Json).version
 $markerName = 'addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json'
 $panelName = 'Panel v1.4.3.exe'
+$botVisionEntries = @(
+  'addons/BotVision/bin/win64/BotVision.dll',
+  'addons/BotVision/gamedata.json',
+  'addons/metamod/BotVision.vdf'
+)
+$botVisionSourceSha256 = '40B596D34BF336D9E59E663DAC2F94BD7C61D951C56E421EF66B5190B8787290'
 $temporary = "$zip.tmp-$([guid]::NewGuid().ToString('N'))"
 $backup = "$zip.before-plugin-manifest-$((Get-Date).ToString('yyyyMMdd-HHmmss')).bak"
 
@@ -23,7 +29,11 @@ function Add-Text([Security.Cryptography.HashAlgorithm]$Hash, [string]$Text) {
 function Get-Payload([System.IO.Compression.ZipArchive]$Archive) {
   $hash = [Security.Cryptography.SHA256]::Create()
   try {
-    $entries = @($Archive.Entries | Where-Object { -not $_.FullName.EndsWith('/') -and $_.FullName.StartsWith('addons/counterstrikesharp/plugins/NadeSystem/') -and $_.FullName -ne $markerName } | Sort-Object FullName)
+    $entries = @($Archive.Entries | Where-Object {
+      -not $_.FullName.EndsWith('/') -and
+      $_.FullName -ne $markerName -and
+      ($_.FullName.StartsWith('addons/counterstrikesharp/plugins/NadeSystem/') -or $botVisionEntries -contains $_.FullName)
+    } | Sort-Object FullName)
     foreach ($entry in $entries) {
       Add-Text $hash "$($entry.FullName)`0$($entry.Length)`0"
       $stream = $entry.Open()
@@ -50,13 +60,24 @@ try {
     @($archive.Entries | Where-Object FullName -eq $markerName) | ForEach-Object Delete
     $payload = Get-Payload $archive
     $manifest = [ordered]@{
-      schema = 1
+      schema = 2
       product = 'cs2-bot-improver'
       pluginId = 'cs2as05-custom-package'
       version = $version
+      components = @(
+        [ordered]@{
+          id = 'cs2as05-custom-package'
+          source = 'CS2-Bot-Improver-v1.4.3'
+        },
+        [ordered]@{
+          id = 'botvision'
+          version = '0.2.2'
+          source = 'XBribo/CS2-Bot-Vision'
+          sourceSha256 = $botVisionSourceSha256
+        }
+      )
       payloadSha256 = $payload.sha256
       payloadEntries = $payload.entries
-      generatedFrom = 'CS2-Bot-Improver-v1.4.3'
     } | ConvertTo-Json -Depth 4
     $entry = $archive.CreateEntry($markerName, [IO.Compression.CompressionLevel]::Optimal)
     $entry.LastWriteTime = [DateTimeOffset]::new(2026, 7, 26, 0, 0, 0, [TimeSpan]::Zero)

@@ -2670,6 +2670,59 @@ pub fn path_for_id(app: &AppHandle, id: i64) -> Result<String, AppError> {
         .map_err(|e| err("DEMO_NOT_FOUND", e))
 }
 
+pub fn delete_file(app: &AppHandle, demo_id: i64) -> Result<(), AppError> {
+    let mut db = open_db(app)?;
+    let path: String = db
+        .query_row(
+            "SELECT path FROM demo_files WHERE id=?1",
+            [demo_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| err("DEMO_NOT_FOUND", e))?;
+    let active_jobs: i64 = db
+        .query_row(
+            "SELECT COUNT(*) FROM analysis_jobs WHERE demo_id=?1 AND stage NOT IN ('done','spatial_done','error','canceled')",
+            [demo_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| err("DEMO_DELETE_CHECK", e))?;
+    if active_jobs > 0 {
+        return Err(err(
+            "DEMO_DELETE_BUSY",
+            "Demo 正在分析，请等待分析结束或先取消任务。",
+        ));
+    }
+
+    let stored = PathBuf::from(&path);
+    if !stored
+        .extension()
+        .is_some_and(|value| value.eq_ignore_ascii_case("dem"))
+    {
+        return Err(err(
+            "DEMO_DELETE_EXTENSION",
+            "只允许删除录像库中登记的 .dem 文件。",
+        ));
+    }
+    if stored.exists() {
+        let canonical = dunce::canonicalize(&stored).map_err(|e| err("DEMO_DELETE_PATH", e))?;
+        if !canonical.is_file()
+            || !canonical
+                .extension()
+                .is_some_and(|value| value.eq_ignore_ascii_case("dem"))
+        {
+            return Err(err("DEMO_DELETE_FILE", "目标不是可删除的 Demo 文件。"));
+        }
+        fs::remove_file(&canonical).map_err(|e| err("DEMO_DELETE_FILE", e))?;
+    }
+
+    let transaction = db.transaction().map_err(|e| err("DEMO_DELETE_DB", e))?;
+    transaction
+        .execute("DELETE FROM demo_files WHERE id=?1", [demo_id])
+        .map_err(|e| err("DEMO_DELETE_DB", e))?;
+    transaction.commit().map_err(|e| err("DEMO_DELETE_DB", e))?;
+    Ok(())
+}
+
 fn field<'a>(event: &'a GameEvent, name: &str) -> Option<&'a Variant> {
     event
         .fields

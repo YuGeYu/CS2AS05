@@ -10,7 +10,7 @@ CS2 人机增强助手 `0.5.6`（[YuGeYu/CS2AS05](https://github.com/YuGeYu/CS2A
 
 刀具页的 20 张 PNG 历史素材仍来自固定官方 `Panel v1.4.2.exe` 的 Tauri 嵌入资源；这与 `0.5.4` 运行时内置并校验的 `Panel v1.4.3.exe` 是两个独立来源记录。图片按运行资源路径中的 subclass 数字映射并通过 Brotli 无损解压，逐图路径、尺寸和 SHA256 位于 `src/assets/knives/manifest.json`，可复现提取工具为 `scripts/extract-panel-knives.mjs`。
 
-0.5.4 原生融合的 `commands.txt`、队伍解析、Source 按键映射和交互语义以固定 `v1.4.3` 运行资产为基线，并下游加入 `bot_nades less` 与 `br_reroll`。Rust 兼容实现参考了 [numakkiyu/Local-Arena](https://github.com/numakkiyu/Local-Arena) 提交 `568031eeefaf26f1e4f5fab83f9266a7ecd85e19` 的公开 Panel 后端，并按本项目目录模型、原子写入和白名单约束重新实现；它不代表上游官方 Panel 后端。
+0.5.4 原生融合的 `commands.txt`、队伍解析、Source 按键映射和交互语义以固定 `ed0ard/CS2-Bot-Improver v1.4.3` 运行资产为基线，并由本项目下游加入 `bot_nades less` 与 `br_reroll`。Rust 兼容实现按本项目目录模型、原子写入和白名单约束独立维护；它不代表上游官方 Panel 后端。
 
 开屏鸣谢与原创彩蛋“青冥试剑”使用 [Three.js](https://github.com/mrdoob/three.js) `0.185.1`（MIT）进行 WebGL 渲染。场景、几何体和交互逻辑均在本项目中原创并程序化生成，没有复用第三方游戏源码或视觉资产。
 ## LaihoE/demoparser
@@ -20,11 +20,8 @@ https://github.com/LaihoE/demoparser at commit
 `ba39cc44cd5abfd7f34df2b3c0a7dd3630048311`, distributed under the MIT License.
 The preserved license and provenance are available in `third_party/demoparser/`.
 
-## Local-Arena 战报契约参考
+## 简易 Rating
 
-The post-match statistics contract and result-table information architecture were referenced from
-[numakkiyu/Local-Arena](https://github.com/numakkiyu/Local-Arena) commit
-`fad7e4ab7441f6bb95ebe9f6186169dc424ff008`, licensed under AGPL-3.0.
 The final `simple-rating-v1` formula is an independent project-local KDA-dominant multi-factor simplification, not an OpenRating or HLTV rating. It weights `(K + A / 5) / max(D, 1)` at 80%, damage at 10%, the report-level survival proxy at 5%, and assists per round at 5%.
 
 ## akiver/cs-demo-manager map resources
@@ -38,6 +35,21 @@ per-file asset manifest are available in `third_party/cs-demo-manager/`.
 
 No Electron, PostgreSQL, analyzer sidecar, or account integration from the
 upstream application is included.
+
+## kaecho/CS2-Skin-Forge
+
+The Skin Forge workbench includes mechanically converted catalog data and a
+fixed PlayerSkinMod build from the public migration repository
+https://github.com/kaecho/CS2-Skin-Forge at tag `v1.8.2`, commit
+`75f52fbd5fd0616dbbdd09a65c3a1981593400d1`. The original `emptysuns` URL was
+not anonymously accessible during verification. Upstream READMEs declare
+GPL-3.0, but this commit contains no standalone LICENSE file; that condition is
+preserved in `third_party/CS2-Skin-Forge/UPSTREAM.md`.
+
+Upstream plugin metadata remains `1.8.1` despite the repository `v1.8.2` tag.
+The bundled derivative applies the recorded two-line version patch and is
+reported as a downstream `1.8.2` build. Source, patch, complete hashes, and
+build evidence are retained under `third_party/CS2-Skin-Forge/`.
 
 ## CS2-insight-agent behavior reference
 

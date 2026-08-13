@@ -4,7 +4,6 @@ import { defineStore } from 'pinia'
 import {
   checkCs2Process,
   discoverCs2Roots,
-  getDiagnosticsPayload,
   guessCs2Roots,
   inspectCs2Root,
   installBotPackage,
@@ -12,7 +11,7 @@ import {
   uninstallBotPackage,
   stopGuessCs2Roots,
 } from '@/services/tauri/cs2'
-import type { Cs2EnvironmentStatus, Cs2RootCandidate, Cs2RootScanEvent, Cs2RootScanSummary, Cs2SuggestedRoot, DiagnosticsPayload, ToastMessage } from '@/types/cs2'
+import type { Cs2EnvironmentStatus, Cs2RootCandidate, Cs2RootScanEvent, Cs2RootScanSummary, Cs2SuggestedRoot, ToastMessage } from '@/types/cs2'
 import type { Cs2ProcessState } from '@/types/cs2'
 import { ensureDefaultDemoRoot } from '@/services/tauri/demo'
 
@@ -21,7 +20,7 @@ const ROOT_STORAGE_KEY = 'cs2-bot-improver.selected-root.v1'
 function normalizeError(error: unknown) {
   if (typeof error === 'string') return error
   if (error instanceof Error) return error.message
-  return '操作失败，请展开诊断信息后重试。'
+  return '操作失败，请稍后重试或提交故障详情。'
 }
 
 export const useCs2Store = defineStore('cs2', () => {
@@ -30,7 +29,6 @@ export const useCs2Store = defineStore('cs2', () => {
   const environment = ref<Cs2EnvironmentStatus | null>(null)
   const cs2ProcessState = ref<Cs2ProcessState>('checking')
   const cs2Running = computed(() => cs2ProcessState.value === 'running')
-  const diagnostics = ref<DiagnosticsPayload | null>(null)
   const message = ref<ToastMessage | null>(null)
   const busy = ref(false)
   const rootScan = ref<{ running: boolean; elapsedMs: number; checkedLocations: number; currentLocation: string; candidates: Cs2SuggestedRoot[]; summary: Cs2RootScanSummary | null }>({ running: false, elapsedMs: 0, checkedLocations: 0, currentLocation: '', candidates: [], summary: null })
@@ -121,17 +119,6 @@ export const useCs2Store = defineStore('cs2', () => {
     }
   }
 
-  async function refreshDiagnostics() {
-    busy.value = true
-    try {
-      diagnostics.value = await getDiagnosticsPayload(selectedRoot.value || undefined)
-    } catch (error) {
-      message.value = failure(error)
-    } finally {
-      busy.value = false
-    }
-  }
-
   async function scanSuggestedRoots(onEvent?: (event: Cs2RootScanEvent) => void) {
     if (rootScan.value.running) return rootScan.value.summary
     rootScan.value = { running: true, elapsedMs: 0, checkedLocations: 0, currentLocation: '', candidates: [], summary: null }
@@ -162,7 +149,7 @@ export const useCs2Store = defineStore('cs2', () => {
     return stopGuessCs2Roots()
   }
 
-  return { candidates, selectedRoot, environment, cs2ProcessState, cs2Running, diagnostics, message, busy, rootScan, selectRoot, scanRoots, refreshProcessStatus, refresh, install, openPanel, uninstall, refreshDiagnostics, scanSuggestedRoots, stopSuggestedRoots }
+  return { candidates, selectedRoot, environment, cs2ProcessState, cs2Running, message, busy, rootScan, selectRoot, scanRoots, refreshProcessStatus, refresh, install, openPanel, uninstall, scanSuggestedRoots, stopSuggestedRoots }
 })
 
 function dedupe(candidates: Cs2RootCandidate[]) {

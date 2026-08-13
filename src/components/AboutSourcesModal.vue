@@ -3,7 +3,8 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, ExternalLink, X } from 'lucide-vue-next'
 
 import { appConfig } from '@/config/app'
-import { openUpstreamProject } from '@/services/tauri/support'
+import { REFERENCE_PROJECT_GROUPS } from '@/features/support/reference-projects'
+import { openReferenceProject, type ReferenceProjectId } from '@/services/tauri/support'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -28,10 +29,12 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && props.open) close()
 }
 
-async function openProject() {
+const sourceGroups = REFERENCE_PROJECT_GROUPS
+
+async function openProject(project: ReferenceProjectId) {
   errorMessage.value = ''
   try {
-    await openUpstreamProject()
+    await openReferenceProject(project)
   } catch {
     errorMessage.value = '暂时无法打开上游项目。'
   }
@@ -66,16 +69,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
         </div>
 
         <div v-else class="about-content">
-          <dl class="source-list">
-            <div><dt>参考项目</dt><dd>ed0ard/CS2-Bot-Improver</dd></div>
-            <div><dt>上游版本</dt><dd>v1.4.3</dd></div>
-            <div><dt>许可</dt><dd>GNU Affero General Public License v3.0 或更高版本</dd></div>
-          </dl>
-          <p>本项目保留上游版权、许可证和来源说明，仅对 NadeSystem 做已公开源码的最小定制。</p>
+          <div class="source-groups">
+            <section v-for="group in sourceGroups" :key="group.title" class="source-group">
+              <h3>{{ group.title }}</h3>
+              <article v-for="project in group.projects" :key="project.id" class="source-project">
+                <div><strong>{{ project.repository }}</strong><p>{{ project.description }}</p><small v-if="project.license">许可：{{ project.license }}</small></div>
+                <button class="secondary-button" type="button" :aria-label="`打开项目 ${project.repository}`" @click="openProject(project.id)"><ExternalLink :size="17" /><span>打开项目</span></button>
+              </article>
+            </section>
+          </div>
+          <p>许可与固定提交以项目根目录 NOTICE.md 及 third_party 来源记录为准。</p>
           <p v-if="errorMessage" class="inline-error" role="alert">{{ errorMessage }}</p>
-          <button class="secondary-button source-link" type="button" @click="openProject">
-            <ExternalLink :size="18" /><span>打开上游项目</span>
-          </button>
         </div>
       </section>
     </div>

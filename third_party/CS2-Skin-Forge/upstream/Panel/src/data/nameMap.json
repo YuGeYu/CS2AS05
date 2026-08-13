@@ -1,0 +1,1077 @@
+{
+  "agent_names": {
+    "agent-4613": {
+      "en": "Bloody Darryl The Strapped | The Professionals",
+      "model": "",
+      "zh": "残酷的达里尔（穷鬼）| 专业人士"
+    },
+    "agent-4619": {
+      "en": "'Blueberries' Buckshot | NSWC SEAL",
+      "model": "",
+      "zh": "“蓝莓” 铅弹 | 海军水面战中心海豹部队"
+    },
+    "agent-4680": {
+      "en": "'Two Times' McCoy | TACP Cavalry",
+      "model": "",
+      "zh": "“两次”麦考伊 | 战术空中管制部队装甲兵"
+    },
+    "agent-4711": {
+      "en": "Cmdr. Mae 'Dead Cold' Jamison | SWAT",
+      "model": "",
+      "zh": "指挥官 梅 “极寒” 贾米森 | 特警"
+    },
+    "agent-4712": {
+      "en": "1st Lieutenant Farlow | SWAT",
+      "model": "",
+      "zh": "第一中尉法洛 | 特警"
+    },
+    "agent-4713": {
+      "en": "John 'Van Healen' Kask | SWAT",
+      "model": "",
+      "zh": "约翰 “范·海伦” 卡斯克 | 特警"
+    },
+    "agent-4714": {
+      "en": "Bio-Haz Specialist | SWAT",
+      "model": "",
+      "zh": "生物防害专家 | 特警"
+    },
+    "agent-4715": {
+      "en": "Sergeant Bombson | SWAT",
+      "model": "",
+      "zh": "军士长炸弹森 | 特警"
+    },
+    "agent-4716": {
+      "en": "Chem-Haz Specialist | SWAT",
+      "model": "",
+      "zh": "化学防害专家 | 特警"
+    },
+    "agent-4718": {
+      "en": "Rezan the Redshirt | Sabre",
+      "model": "",
+      "zh": "红衫列赞 | 军刀"
+    },
+    "agent-4726": {
+      "en": "Sir Bloody Miami Darryl | The Professionals",
+      "model": "",
+      "zh": "残酷的达里尔爵士（迈阿密）| 专业人士"
+    },
+    "agent-4727": {
+      "en": "Safecracker Voltzmann | The Professionals",
+      "model": "",
+      "zh": "飞贼波兹曼 | 专业人士"
+    },
+    "agent-4728": {
+      "en": "Little Kev | The Professionals",
+      "model": "",
+      "zh": "小凯夫 | 专业人士"
+    },
+    "agent-4730": {
+      "en": "Getaway Sally | The Professionals",
+      "model": "",
+      "zh": "出逃的萨莉 | 专业人士"
+    },
+    "agent-4732": {
+      "en": "Number K | The Professionals",
+      "model": "",
+      "zh": "老K | 专业人士"
+    },
+    "agent-4733": {
+      "en": "Sir Bloody Silent Darryl | The Professionals",
+      "model": "",
+      "zh": "残酷的达里尔爵士（沉默）| 专业人士"
+    },
+    "agent-4734": {
+      "en": "Sir Bloody Skullhead Darryl | The Professionals",
+      "model": "",
+      "zh": "残酷的达里尔爵士（头盖骨）| 专业人士"
+    },
+    "agent-4735": {
+      "en": "Sir Bloody Darryl Royale | The Professionals",
+      "model": "",
+      "zh": "残酷的达里尔爵士（皇家）| 专业人士"
+    },
+    "agent-4736": {
+      "en": "Sir Bloody Loudmouth Darryl | The Professionals",
+      "model": "",
+      "zh": "残酷的达里尔爵士（聒噪）| 专业人士"
+    },
+    "agent-4749": {
+      "en": "Sous-Lieutenant Medic | Gendarmerie Nationale",
+      "model": "",
+      "zh": "军医少尉 | 法国宪兵特勤队"
+    },
+    "agent-4750": {
+      "en": "Chem-Haz Capitaine | Gendarmerie Nationale",
+      "model": "",
+      "zh": "化学防害上尉| 法国宪兵特勤队"
+    },
+    "agent-4751": {
+      "en": "Chef d'Escadron Rouchard | Gendarmerie Nationale",
+      "model": "",
+      "zh": "中队长鲁沙尔·勒库托 | 法国宪兵特勤队"
+    },
+    "agent-4752": {
+      "en": "Aspirant | Gendarmerie Nationale",
+      "model": "",
+      "zh": "准尉 | 法国宪兵特勤队"
+    },
+    "agent-4753": {
+      "en": "Officer Jacques Beltram | Gendarmerie Nationale",
+      "model": "",
+      "zh": "军官雅克·贝尔特朗 | 法国宪兵特勤队"
+    },
+    "agent-4756": {
+      "en": "Lieutenant 'Tree Hugger' Farlow | SWAT",
+      "model": "",
+      "zh": "中尉法洛（抱树人） | 特警"
+    },
+    "agent-4757": {
+      "en": "Cmdr. Davida 'Goggles' Fernandez | SEAL Frogman",
+      "model": "",
+      "zh": "指挥官黛维达·费尔南德斯（护目镜） | 海豹蛙人"
+    },
+    "agent-4771": {
+      "en": "Cmdr. Frank 'Wet Sox' Baroud | SEAL Frogman",
+      "model": "",
+      "zh": "指挥官弗兰克·巴鲁德（湿袜） | 海豹蛙人"
+    },
+    "agent-4772": {
+      "en": "Lieutenant Rex Krikey | SEAL Frogman",
+      "model": "",
+      "zh": "中尉雷克斯·克里奇 | 海豹蛙人"
+    },
+    "agent-4773": {
+      "en": "Elite Trapper Solman | Guerrilla Warfare",
+      "model": "",
+      "zh": "精锐捕兽者索尔曼 | 游击队"
+    },
+    "agent-4774": {
+      "en": "Crasswater The Forgotten | Guerrilla Warfare",
+      "model": "",
+      "zh": "遗忘者克拉斯沃特 | 游击队"
+    },
+    "agent-4775": {
+      "en": "Arno The Overgrown | Guerrilla Warfare",
+      "model": "",
+      "zh": "亚诺（野草） | 游击队"
+    },
+    "agent-4776": {
+      "en": "Col. Mangos Dabisi | Guerrilla Warfare",
+      "model": "",
+      "zh": "上校曼戈斯·达比西 | 游击队"
+    },
+    "agent-4777": {
+      "en": "Vypa Sista of the Revolution | Guerrilla Warfare",
+      "model": "",
+      "zh": "薇帕姐（革新派） | 游击队"
+    },
+    "agent-4778": {
+      "en": "Trapper Aggressor | Guerrilla Warfare",
+      "model": "",
+      "zh": "捕兽者（挑衅者） | 游击队"
+    },
+    "agent-4780": {
+      "en": "'Medium Rare' Crasswater | Guerrilla Warfare",
+      "model": "",
+      "zh": "克拉斯沃特（三分熟） | 游击队"
+    },
+    "agent-4781": {
+      "en": "Trapper | Guerrilla Warfare",
+      "model": "",
+      "zh": "捕兽者 | 游击队"
+    },
+    "agent-5105": {
+      "en": "Ground Rebel  | Elite Crew",
+      "model": "",
+      "zh": "地面叛军 | 精锐分子"
+    },
+    "agent-5106": {
+      "en": "Osiris | Elite Crew",
+      "model": "",
+      "zh": "奥西瑞斯 | 精锐分子"
+    },
+    "agent-5107": {
+      "en": "Prof. Shahmat | Elite Crew",
+      "model": "",
+      "zh": "沙哈马特教授 | 精锐分子"
+    },
+    "agent-5108": {
+      "en": "The Elite Mr. Muhlik | Elite Crew",
+      "model": "",
+      "zh": "精英穆哈里克先生 | 精锐分子"
+    },
+    "agent-5109": {
+      "en": "Jungle Rebel | Elite Crew",
+      "model": "",
+      "zh": "丛林反抗者 | 精锐分子"
+    },
+    "agent-5205": {
+      "en": "Soldier | Phoenix",
+      "model": "",
+      "zh": "枪手 | 凤凰战士"
+    },
+    "agent-5206": {
+      "en": "Enforcer | Phoenix",
+      "model": "",
+      "zh": "执行者 | 凤凰战士"
+    },
+    "agent-5207": {
+      "en": "Slingshot | Phoenix",
+      "model": "",
+      "zh": "弹弓 | 凤凰战士"
+    },
+    "agent-5208": {
+      "en": "Street Soldier | Phoenix",
+      "model": "",
+      "zh": "街头士兵 | 凤凰战士"
+    },
+    "agent-5305": {
+      "en": "Operator | FBI SWAT",
+      "model": "",
+      "zh": "特种兵 | 联邦调查局（FBI）特警"
+    },
+    "agent-5306": {
+      "en": "Markus Delrow | FBI HRT",
+      "model": "",
+      "zh": "马尔库斯·戴劳 | 联邦调查局（FBI）人质营救队"
+    },
+    "agent-5307": {
+      "en": "Michael Syfers  | FBI Sniper",
+      "model": "",
+      "zh": "迈克·赛弗斯 | 联邦调查局（FBI）狙击手"
+    },
+    "agent-5308": {
+      "en": "Special Agent Ava | FBI",
+      "model": "",
+      "zh": "爱娃特工 | 联邦调查局（FBI）"
+    },
+    "agent-5400": {
+      "en": "3rd Commando Company | KSK",
+      "model": "",
+      "zh": "第三特种兵连 | 德国特种部队突击队"
+    },
+    "agent-5401": {
+      "en": "Seal Team 6 Soldier | NSWC SEAL",
+      "model": "",
+      "zh": "海豹突击队第六分队士兵 | 海军水面战中心海豹部队"
+    },
+    "agent-5402": {
+      "en": "Buckshot | NSWC SEAL",
+      "model": "",
+      "zh": "铅弹 | 海军水面战中心海豹部队"
+    },
+    "agent-5403": {
+      "en": "'Two Times' McCoy | USAF TACP",
+      "model": "",
+      "zh": "“两次”麦考伊 | 美国空军战术空中管制部队"
+    },
+    "agent-5404": {
+      "en": "Lt. Commander Ricksaw | NSWC SEAL",
+      "model": "",
+      "zh": "海军上尉里克索尔 | 海军水面战中心海豹部队"
+    },
+    "agent-5405": {
+      "en": "Primeiro Tenente | Brazilian 1st Battalion",
+      "model": "",
+      "zh": "陆军中尉普里米罗 | 巴西第一营"
+    },
+    "agent-5500": {
+      "en": "Dragomir | Sabre",
+      "model": "",
+      "zh": "德拉戈米尔 | 军刀"
+    },
+    "agent-5501": {
+      "en": "Maximus | Sabre",
+      "model": "",
+      "zh": "马克西姆斯 | 军刀"
+    },
+    "agent-5502": {
+      "en": "Rezan The Ready | Sabre",
+      "model": "",
+      "zh": "准备就绪的列赞 | 军刀"
+    },
+    "agent-5503": {
+      "en": "Blackwolf | Sabre",
+      "model": "",
+      "zh": "黑狼 | 军刀"
+    },
+    "agent-5504": {
+      "en": "'The Doctor' Romanov | Sabre",
+      "model": "",
+      "zh": "“医生”罗曼诺夫 | 军刀"
+    },
+    "agent-5505": {
+      "en": "Dragomir | Sabre Footsoldier",
+      "model": "",
+      "zh": "德拉戈米尔 | 军刀勇士"
+    },
+    "agent-5601": {
+      "en": "B Squadron Officer | SAS",
+      "model": "",
+      "zh": "B 中队指挥官 | 英国空军特别部队"
+    },
+    "agent-5602": {
+      "en": "D Squadron Officer | NZSAS",
+      "model": "",
+      "zh": "D 中队军官 | 新西兰特种空勤团"
+    }
+  },
+  "kit_names": {
+    "music_kit-1": {
+      "en": "Valve, Counter-Strike 2",
+      "zh": "Valve，反恐精英"
+    },
+    "music_kit-2": {
+      "en": "Valve, CS:GO",
+      "zh": "Valve，反恐精英：全球攻势"
+    },
+    "music_kit-3": {
+      "en": "Music Kit | Daniel Sadowski, Crimson Assault",
+      "zh": "音乐盒 | Daniel Sadowski - 深红突击"
+    },
+    "music_kit-3_st": {
+      "en": "StatTrak™ Music Kit | Daniel Sadowski, Crimson Assault",
+      "zh": "StatTrak™ 音乐盒 | Daniel Sadowski - 深红突击"
+    },
+    "music_kit-4": {
+      "en": "Music Kit | Noisia, Sharpened",
+      "zh": "音乐盒 | Noisia - 尖峰时刻"
+    },
+    "music_kit-4_st": {
+      "en": "StatTrak™ Music Kit | Noisia, Sharpened",
+      "zh": "StatTrak™ 音乐盒 | Noisia - 尖峰时刻"
+    },
+    "music_kit-5": {
+      "en": "Music Kit | Robert Allaire, Insurgency",
+      "zh": "音乐盒 | Robert Allaire - 叛乱"
+    },
+    "music_kit-5_st": {
+      "en": "StatTrak™ Music Kit | Robert Allaire, Insurgency",
+      "zh": "StatTrak™ 音乐盒 | Robert Allaire - 叛乱"
+    },
+    "music_kit-6": {
+      "en": "Music Kit | Sean Murray, A*D*8",
+      "zh": "音乐盒 | Sean Murray - A*D*8"
+    },
+    "music_kit-6_st": {
+      "en": "StatTrak™ Music Kit | Sean Murray, A*D*8",
+      "zh": "StatTrak™ 音乐盒 | Sean Murray - A*D*8"
+    },
+    "music_kit-7": {
+      "en": "Music Kit | Feed Me, High Noon",
+      "zh": "音乐盒 | Feed Me - 如日中天"
+    },
+    "music_kit-7_st": {
+      "en": "StatTrak™ Music Kit | Feed Me, High Noon",
+      "zh": "StatTrak™ 音乐盒 | Feed Me - 如日中天"
+    },
+    "music_kit-8": {
+      "en": "Music Kit | Dren, Death's Head Demolition",
+      "zh": "音乐盒 | Dren - 骷髅爆破"
+    },
+    "music_kit-8_st": {
+      "en": "StatTrak™ Music Kit | Dren, Death's Head Demolition",
+      "zh": "StatTrak™ 音乐盒 | Dren - 骷髅爆破"
+    },
+    "music_kit-9": {
+      "en": "Music Kit | Austin Wintory, Desert Fire",
+      "zh": "音乐盒 | Austin Wintory - 沙漠之焰"
+    },
+    "music_kit-9_st": {
+      "en": "StatTrak™ Music Kit | Austin Wintory, Desert Fire",
+      "zh": "StatTrak™ 音乐盒 | Austin Wintory - 沙漠之焰"
+    },
+    "music_kit-10": {
+      "en": "Music Kit | Sasha, LNOE",
+      "zh": "音乐盒 | Sasha - 地球末夜"
+    },
+    "music_kit-10_st": {
+      "en": "StatTrak™ Music Kit | Sasha, LNOE",
+      "zh": "StatTrak™ 音乐盒 | Sasha - 地球末夜"
+    },
+    "music_kit-11": {
+      "en": "Music Kit | Skog, Metal",
+      "zh": "音乐盒 | Skog - 金属"
+    },
+    "music_kit-11_st": {
+      "en": "StatTrak™ Music Kit | Skog, Metal",
+      "zh": "StatTrak™ 音乐盒 | Skog - 金属"
+    },
+    "music_kit-12": {
+      "en": "Music Kit | Midnight Riders, All I Want for Christmas",
+      "zh": "音乐盒 | Midnight Riders - 圣诞之欲"
+    },
+    "music_kit-12_st": {
+      "en": "StatTrak™ Music Kit | Midnight Riders, All I Want for Christmas",
+      "zh": "StatTrak™ 音乐盒 | Midnight Riders - 圣诞之欲"
+    },
+    "music_kit-13": {
+      "en": "Music Kit | Matt Lange, IsoRhythm",
+      "zh": "音乐盒 | Matt Lange - 同型节奏"
+    },
+    "music_kit-13_st": {
+      "en": "StatTrak™ Music Kit | Matt Lange, IsoRhythm",
+      "zh": "StatTrak™ 音乐盒 | Matt Lange - 同型节奏"
+    },
+    "music_kit-14": {
+      "en": "Music Kit | Mateo Messina, For No Mankind",
+      "zh": "音乐盒 | Mateo Messina - 无人之境"
+    },
+    "music_kit-14_st": {
+      "en": "StatTrak™ Music Kit | Mateo Messina, For No Mankind",
+      "zh": "StatTrak™ 音乐盒 | Mateo Messina - 无人之境"
+    },
+    "music_kit-15": {
+      "en": "Music Kit | Various Artists, Hotline Miami",
+      "zh": "音乐盒 | 多名作曲家 - 迈阿密热线"
+    },
+    "music_kit-15_st": {
+      "en": "StatTrak™ Music Kit | Various Artists, Hotline Miami",
+      "zh": "StatTrak™ 音乐盒 | 多名作曲家 - 迈阿密热线"
+    },
+    "music_kit-16": {
+      "en": "Music Kit | Daniel Sadowski, Total Domination",
+      "zh": "音乐盒 | Daniel Sadowski - 绝对统御"
+    },
+    "music_kit-16_st": {
+      "en": "StatTrak™ Music Kit | Daniel Sadowski, Total Domination",
+      "zh": "StatTrak™ 音乐盒 | Daniel Sadowski - 绝对统御"
+    },
+    "music_kit-17": {
+      "en": "Music Kit | Damjan Mravunac, The Talos Principle",
+      "zh": "音乐盒 | Damjan Mravunac - 塔罗斯的法则"
+    },
+    "music_kit-17_st": {
+      "en": "StatTrak™ Music Kit | Damjan Mravunac, The Talos Principle",
+      "zh": "StatTrak™ 音乐盒 | Damjan Mravunac - 塔罗斯的法则"
+    },
+    "music_kit-18": {
+      "en": "Music Kit | Proxy, Battlepack",
+      "zh": "音乐盒 | Proxy - 万夫莫敌包"
+    },
+    "music_kit-18_st": {
+      "en": "StatTrak™ Music Kit | Proxy, Battlepack",
+      "zh": "StatTrak™ 音乐盒 | Proxy - 万夫莫敌包"
+    },
+    "music_kit-19": {
+      "en": "Music Kit | Ki:Theory, MOLOTOV",
+      "zh": "音乐盒 | Ki:Theory - 莫洛托夫烈火"
+    },
+    "music_kit-19_st": {
+      "en": "StatTrak™ Music Kit | Ki:Theory, MOLOTOV",
+      "zh": "StatTrak™ 音乐盒 | Ki:Theory - 莫洛托夫烈火"
+    },
+    "music_kit-20": {
+      "en": "Music Kit | Troels Folmann, Uber Blasto Phone",
+      "zh": "音乐盒 | Troels Folmann - 超爆话筒"
+    },
+    "music_kit-20_st": {
+      "en": "StatTrak™ Music Kit | Troels Folmann, Uber Blasto Phone",
+      "zh": "StatTrak™ 音乐盒 | Troels Folmann - 超爆话筒"
+    },
+    "music_kit-21": {
+      "en": "Music Kit | Kelly Bailey, Hazardous Environments",
+      "zh": "音乐盒 | Kelly Bailey - 有害物质环境"
+    },
+    "music_kit-21_st": {
+      "en": "StatTrak™ Music Kit | Kelly Bailey, Hazardous Environments",
+      "zh": "StatTrak™ 音乐盒 | Kelly Bailey - 有害物质环境"
+    },
+    "music_kit-22": {
+      "en": "Music Kit | Skog, II-Headshot",
+      "zh": "音乐盒 | Skog - II-爆头"
+    },
+    "music_kit-22_st": {
+      "en": "StatTrak™ Music Kit | Skog, II-Headshot",
+      "zh": "StatTrak™ 音乐盒 | Skog - II-爆头"
+    },
+    "music_kit-23": {
+      "en": "Music Kit | Daniel Sadowski, The 8-Bit Kit",
+      "zh": "音乐盒 | Daniel Sadowski - 8 位音乐盒"
+    },
+    "music_kit-23_st": {
+      "en": "StatTrak™ Music Kit | Daniel Sadowski, The 8-Bit Kit",
+      "zh": "StatTrak™ 音乐盒 | Daniel Sadowski - 8 位音乐盒"
+    },
+    "music_kit-24": {
+      "en": "Music Kit | AWOLNATION, I Am",
+      "zh": "音乐盒 | AWOLNATION - 就是我"
+    },
+    "music_kit-24_st": {
+      "en": "StatTrak™ Music Kit | AWOLNATION, I Am",
+      "zh": "StatTrak™ 音乐盒 | AWOLNATION - 就是我"
+    },
+    "music_kit-25": {
+      "en": "Music Kit | Mord Fustang, Diamonds",
+      "zh": "音乐盒 | Mord Fustang - 永恒之钻"
+    },
+    "music_kit-25_st": {
+      "en": "StatTrak™ Music Kit | Mord Fustang, Diamonds",
+      "zh": "StatTrak™ 音乐盒 | Mord Fustang - 永恒之钻"
+    },
+    "music_kit-26": {
+      "en": "Music Kit | Michael Bross, Invasion!",
+      "zh": "音乐盒 | Michael Bross - 大举入侵！"
+    },
+    "music_kit-26_st": {
+      "en": "StatTrak™ Music Kit | Michael Bross, Invasion!",
+      "zh": "StatTrak™ 音乐盒 | Michael Bross - 大举入侵！"
+    },
+    "music_kit-27": {
+      "en": "Music Kit | Ian Hultquist, Lion's Mouth",
+      "zh": "音乐盒 | Ian Hultquist - 雄狮之口"
+    },
+    "music_kit-27_st": {
+      "en": "StatTrak™ Music Kit | Ian Hultquist, Lion's Mouth",
+      "zh": "StatTrak™ 音乐盒 | Ian Hultquist - 雄狮之口"
+    },
+    "music_kit-28": {
+      "en": "Music Kit | New Beat Fund, Sponge Fingerz",
+      "zh": "音乐盒 | New Beat Fund - 海绵手指"
+    },
+    "music_kit-28_st": {
+      "en": "StatTrak™ Music Kit | New Beat Fund, Sponge Fingerz",
+      "zh": "StatTrak™ 音乐盒 | New Beat Fund - 海绵手指"
+    },
+    "music_kit-29": {
+      "en": "Music Kit | Beartooth, Disgusting",
+      "zh": "音乐盒 | Beartooth - 令人发指"
+    },
+    "music_kit-29_st": {
+      "en": "StatTrak™ Music Kit | Beartooth, Disgusting",
+      "zh": "StatTrak™ 音乐盒 | Beartooth - 令人发指"
+    },
+    "music_kit-30": {
+      "en": "Music Kit | Lennie Moore, Java Havana Funkaloo",
+      "zh": "音乐盒 | Lennie Moore - 爪哇哈瓦那放克乐"
+    },
+    "music_kit-30_st": {
+      "en": "StatTrak™ Music Kit | Lennie Moore, Java Havana Funkaloo",
+      "zh": "StatTrak™ 音乐盒 | Lennie Moore - 爪哇哈瓦那放克乐"
+    },
+    "music_kit-31": {
+      "en": "Music Kit | Darude, Moments CS:GO",
+      "zh": "音乐盒 | Darude - CSGO 精彩时刻"
+    },
+    "music_kit-31_st": {
+      "en": "StatTrak™ Music Kit | Darude, Moments CS:GO",
+      "zh": "StatTrak™ 音乐盒 | Darude - CSGO 精彩时刻"
+    },
+    "music_kit-32_st": {
+      "en": "StatTrak™ Music Kit | Beartooth, Aggressive",
+      "zh": "StatTrak™ 音乐盒 | Beartooth - 咄咄逼人"
+    },
+    "music_kit-33_st": {
+      "en": "StatTrak™ Music Kit | Blitz Kids, The Good Youth",
+      "zh": "StatTrak™ 音乐盒 | Blitz Kids - 有为青年"
+    },
+    "music_kit-34_st": {
+      "en": "StatTrak™ Music Kit | Hundredth, FREE",
+      "zh": "StatTrak™ 音乐盒 | Hundredth - 冲破藩篱"
+    },
+    "music_kit-35_st": {
+      "en": "StatTrak™ Music Kit | Neck Deep, Life's Not Out To Get You",
+      "zh": "StatTrak™ 音乐盒 | Neck Deep - 人生何处不青山"
+    },
+    "music_kit-36_st": {
+      "en": "StatTrak™ Music Kit | Roam, Backbone",
+      "zh": "StatTrak™ 音乐盒 | Roam - 决心"
+    },
+    "music_kit-37_st": {
+      "en": "StatTrak™ Music Kit | Twin Atlantic, GLA",
+      "zh": "StatTrak™ 音乐盒 | Twin Atlantic - GLA"
+    },
+    "music_kit-38_st": {
+      "en": "StatTrak™ Music Kit | Skog, III-Arena",
+      "zh": "StatTrak™ 音乐盒 | Skog - III-竞技场"
+    },
+    "music_kit-39": {
+      "en": "Music Kit | The Verkkars, EZ4ENCE",
+      "zh": "音乐盒 | The Verkkars - EZ4ENCE"
+    },
+    "music_kit-39_st": {
+      "en": "StatTrak™ Music Kit | The Verkkars, EZ4ENCE",
+      "zh": "StatTrak™ 音乐盒 | The Verkkars - EZ4ENCE"
+    },
+    "music_kit-40": {
+      "en": "Halo, The Master Chief Collection",
+      "zh": "《光环：士官长合集》"
+    },
+    "music_kit-41": {
+      "en": "Music Kit | Scarlxrd: King, Scar",
+      "zh": "音乐盒 | Scarlxrd - 疤王"
+    },
+    "music_kit-41_st": {
+      "en": "StatTrak™ Music Kit | Scarlxrd: King, Scar",
+      "zh": "StatTrak™ 音乐盒 | Scarlxrd - 疤王"
+    },
+    "music_kit-42": {
+      "en": "Half-Life: Alyx, Anti-Citizen",
+      "zh": "《半衰期：爱莉克斯》，反叛者"
+    },
+    "music_kit-43": {
+      "en": "Music Kit | Austin Wintory, Bachram",
+      "zh": "音乐盒 | Austin Wintory - 巴克拉姆"
+    },
+    "music_kit-43_st": {
+      "en": "StatTrak™ Music Kit | Austin Wintory, Bachram",
+      "zh": "StatTrak™ 音乐盒 | Austin Wintory - 巴克拉姆"
+    },
+    "music_kit-44": {
+      "en": "Music Kit | Dren, Gunman Taco Truck",
+      "zh": "音乐盒 | Dren - 枪手的卷饼卡车"
+    },
+    "music_kit-44_st": {
+      "en": "StatTrak™ Music Kit | Dren, Gunman Taco Truck",
+      "zh": "StatTrak™ 音乐盒 | Dren - 枪手的卷饼卡车"
+    },
+    "music_kit-45": {
+      "en": "Music Kit | Daniel Sadowski, Eye of the Dragon",
+      "zh": "音乐盒 | Daniel Sadowski - 巨龙之眼"
+    },
+    "music_kit-45_st": {
+      "en": "StatTrak™ Music Kit | Daniel Sadowski, Eye of the Dragon",
+      "zh": "StatTrak™ 音乐盒 | Daniel Sadowski - 巨龙之眼"
+    },
+    "music_kit-46": {
+      "en": "Music Kit | Tree Adams and Ben Bromfield, M.U.D.D. FORCE",
+      "zh": "音乐盒 | Tree Adams 和 Ben Bromfield - M.U.D.D. 军团"
+    },
+    "music_kit-46_st": {
+      "en": "StatTrak™ Music Kit | Tree Adams and Ben Bromfield, M.U.D.D. FORCE",
+      "zh": "StatTrak™ 音乐盒 | Tree Adams 和 Ben Bromfield - M.U.D.D. 军团"
+    },
+    "music_kit-47": {
+      "en": "Music Kit | Tim Huling, Neo Noir",
+      "zh": "音乐盒 | Tim Huling - 新黑色电影"
+    },
+    "music_kit-47_st": {
+      "en": "StatTrak™ Music Kit | Tim Huling, Neo Noir",
+      "zh": "StatTrak™ 音乐盒 | Tim Huling - 新黑色电影"
+    },
+    "music_kit-48": {
+      "en": "Music Kit | Sam Marshall, Bodacious",
+      "zh": "音乐盒 | Sam Marshall - 大胆尝试"
+    },
+    "music_kit-48_st": {
+      "en": "StatTrak™ Music Kit | Sam Marshall, Bodacious",
+      "zh": "StatTrak™ 音乐盒 | Sam Marshall - 大胆尝试"
+    },
+    "music_kit-49": {
+      "en": "Music Kit | Matt Levine, Drifter",
+      "zh": "音乐盒 | Matt Levine - 漂泊者"
+    },
+    "music_kit-49_st": {
+      "en": "StatTrak™ Music Kit | Matt Levine, Drifter",
+      "zh": "StatTrak™ 音乐盒 | Matt Levine - 漂泊者"
+    },
+    "music_kit-50": {
+      "en": "Music Kit | Amon Tobin, All for Dust",
+      "zh": "音乐盒 | Amon Tobin - 尘归尘"
+    },
+    "music_kit-50_st": {
+      "en": "StatTrak™ Music Kit | Amon Tobin, All for Dust",
+      "zh": "StatTrak™ 音乐盒 | Amon Tobin - 尘归尘"
+    },
+    "music_kit-51": {
+      "en": "Darren Korb, Hades Music Kit",
+      "zh": "Darren Korb，黑帝斯音乐盒"
+    },
+    "music_kit-52": {
+      "en": "Music Kit | Neck Deep, The Lowlife Pack",
+      "zh": "音乐盒 | Neck Deep - 躺平青年"
+    },
+    "music_kit-52_st": {
+      "en": "StatTrak™ Music Kit | Neck Deep, The Lowlife Pack",
+      "zh": "StatTrak™ 音乐盒 | Neck Deep - 躺平青年"
+    },
+    "music_kit-53": {
+      "en": "Music Kit | Scarlxrd, CHAIN$AW.LXADXUT.",
+      "zh": "音乐盒 | Scarlxrd - 电锯·追命"
+    },
+    "music_kit-53_st": {
+      "en": "StatTrak™ Music Kit | Scarlxrd, CHAIN$AW.LXADXUT.",
+      "zh": "StatTrak™ 音乐盒 | Scarlxrd - 电锯·追命"
+    },
+    "music_kit-54": {
+      "en": "Music Kit | Austin Wintory, Mocha Petal",
+      "zh": "音乐盒 | Austin Wintory - 咖啡拉花"
+    },
+    "music_kit-54_st": {
+      "en": "StatTrak™ Music Kit | Austin Wintory, Mocha Petal",
+      "zh": "StatTrak™ 音乐盒 | Austin Wintory - 咖啡拉花"
+    },
+    "music_kit-55": {
+      "en": "Music Kit | Chipzel, ~Yellow Magic~",
+      "zh": "音乐盒 | Chipzel - 黄色魔法"
+    },
+    "music_kit-55_st": {
+      "en": "StatTrak™ Music Kit | Chipzel, ~Yellow Magic~",
+      "zh": "StatTrak™ 音乐盒 | Chipzel - 黄色魔法"
+    },
+    "music_kit-56": {
+      "en": "Music Kit | Freaky DNA, Vici",
+      "zh": "音乐盒 | Freaky DNA - 征服"
+    },
+    "music_kit-56_st": {
+      "en": "StatTrak™ Music Kit | Freaky DNA, Vici",
+      "zh": "StatTrak™ 音乐盒 | Freaky DNA - 征服"
+    },
+    "music_kit-57": {
+      "en": "Music Kit | Jesse Harlin, Astro Bellum",
+      "zh": "音乐盒 | Jesse Harlin - 战火星空"
+    },
+    "music_kit-57_st": {
+      "en": "StatTrak™ Music Kit | Jesse Harlin, Astro Bellum",
+      "zh": "StatTrak™ 音乐盒 | Jesse Harlin - 战火星空"
+    },
+    "music_kit-58": {
+      "en": "Music Kit | Laura Shigihara: Work Hard, Play Hard",
+      "zh": "音乐盒 | Laura Shigihara - 好好干，好好活"
+    },
+    "music_kit-58_st": {
+      "en": "StatTrak™ Music Kit | Laura Shigihara: Work Hard, Play Hard",
+      "zh": "StatTrak™ 音乐盒 | Laura Shigihara - 好好干，好好活"
+    },
+    "music_kit-59": {
+      "en": "Music Kit | Sarah Schachner, KOLIBRI",
+      "zh": "音乐盒 | Sarah Schachner - 蜂鸟"
+    },
+    "music_kit-59_st": {
+      "en": "StatTrak™ Music Kit | Sarah Schachner, KOLIBRI",
+      "zh": "StatTrak™ 音乐盒 | Sarah Schachner - 蜂鸟"
+    },
+    "music_kit-60": {
+      "en": "Music Kit | bbno$, u mad!",
+      "zh": "音乐盒 | bbno$ - 你急了！"
+    },
+    "music_kit-60_st": {
+      "en": "StatTrak™ Music Kit | bbno$, u mad!",
+      "zh": "StatTrak™ 音乐盒 | bbno$ - 你急了！"
+    },
+    "music_kit-61": {
+      "en": "Music Kit | The Verkkars & n0thing, Flashbang Dance",
+      "zh": "音乐盒 | The Verkkars & n0thing - 闪光舞"
+    },
+    "music_kit-61_st": {
+      "en": "StatTrak™ Music Kit | The Verkkars & n0thing, Flashbang Dance",
+      "zh": "StatTrak™ 音乐盒 | The Verkkars & n0thing - 闪光舞"
+    },
+    "music_kit-62": {
+      "en": "Music Kit | 3kliksphilip, Heading for the Source",
+      "zh": "音乐盒 | 3kliksphilip - 追溯起源"
+    },
+    "music_kit-62_st": {
+      "en": "StatTrak™ Music Kit | 3kliksphilip, Heading for the Source",
+      "zh": "StatTrak™ 音乐盒 | 3kliksphilip - 追溯起源"
+    },
+    "music_kit-63": {
+      "en": "Music Kit | Humanity's Last Breath, Void",
+      "zh": "音乐盒 | Humanity's Last Breath - 虚空"
+    },
+    "music_kit-63_st": {
+      "en": "StatTrak™ Music Kit | Humanity's Last Breath, Void",
+      "zh": "StatTrak™ 音乐盒 | Humanity's Last Breath - 虚空"
+    },
+    "music_kit-64": {
+      "en": "Music Kit | Juelz, Shooters",
+      "zh": "音乐盒 | Juelz - 神枪手"
+    },
+    "music_kit-64_st": {
+      "en": "StatTrak™ Music Kit | Juelz, Shooters",
+      "zh": "StatTrak™ 音乐盒 | Juelz - 神枪手"
+    },
+    "music_kit-65": {
+      "en": "Music Kit | Knock2, dashstar*",
+      "zh": "音乐盒 | Knock2 - 冲击星*"
+    },
+    "music_kit-65_st": {
+      "en": "StatTrak™ Music Kit | Knock2, dashstar*",
+      "zh": "StatTrak™ 音乐盒 | Knock2 - 冲击星*"
+    },
+    "music_kit-66": {
+      "en": "Music Kit | Meechy Darko, Gothic Luxury",
+      "zh": "音乐盒 | Meechy Darko - 哥特浮华"
+    },
+    "music_kit-66_st": {
+      "en": "StatTrak™ Music Kit | Meechy Darko, Gothic Luxury",
+      "zh": "StatTrak™ 音乐盒 | Meechy Darko - 哥特浮华"
+    },
+    "music_kit-67": {
+      "en": "Music Kit | Sullivan King, Lock Me Up",
+      "zh": "音乐盒 | Sullivan King - 困兽"
+    },
+    "music_kit-67_st": {
+      "en": "StatTrak™ Music Kit | Sullivan King, Lock Me Up",
+      "zh": "StatTrak™ 音乐盒 | Sullivan King - 困兽"
+    },
+    "music_kit-68": {
+      "en": "Music Kit | Perfect World, 花脸 Hua Lian (Painted Face)",
+      "zh": "音乐盒 | 完美世界 - 花脸"
+    },
+    "music_kit-68_st": {
+      "en": "StatTrak™ Music Kit | Perfect World, 花脸 Hua Lian (Painted Face)",
+      "zh": "StatTrak™ 音乐盒 | 完美世界 - 花脸"
+    },
+    "music_kit-69": {
+      "en": "Music Kit | Denzel Curry, ULTIMATE",
+      "zh": "音乐盒 | Denzel Curry - 终极"
+    },
+    "music_kit-69_st": {
+      "en": "StatTrak™ Music Kit | Denzel Curry, ULTIMATE",
+      "zh": "StatTrak™ 音乐盒 | Denzel Curry - 终极"
+    },
+    "music_kit-70": {
+      "en": "Valve, CS:GO",
+      "zh": "Valve，反恐精英：全球攻势"
+    },
+    "music_kit-71": {
+      "en": "Music Kit | DRYDEN, Feel The Power",
+      "zh": "音乐盒 | DRYDEN - 触摸能量"
+    },
+    "music_kit-71_st": {
+      "en": "StatTrak™ Music Kit | DRYDEN, Feel The Power",
+      "zh": "StatTrak™ 音乐盒 | DRYDEN - 触摸能量"
+    },
+    "music_kit-72": {
+      "en": "Music Kit | ISOxo, inhuman",
+      "zh": "音乐盒 | ISOxo - 非人类"
+    },
+    "music_kit-72_st": {
+      "en": "StatTrak™ Music Kit | ISOxo, inhuman",
+      "zh": "StatTrak™ 音乐盒 | ISOxo - 非人类"
+    },
+    "music_kit-73": {
+      "en": "Music Kit | KILL SCRIPT, All Night",
+      "zh": "音乐盒 | KILL SCRIPT - 通宵达旦"
+    },
+    "music_kit-73_st": {
+      "en": "StatTrak™ Music Kit | KILL SCRIPT, All Night",
+      "zh": "StatTrak™ 音乐盒 | KILL SCRIPT - 通宵达旦"
+    },
+    "music_kit-74": {
+      "en": "Music Kit | Knock2, Make U SWEAT!",
+      "zh": "音乐盒 | Knock2 - 燥起来！"
+    },
+    "music_kit-74_st": {
+      "en": "StatTrak™ Music Kit | Knock2, Make U SWEAT!",
+      "zh": "StatTrak™ 音乐盒 | Knock2 - 燥起来！"
+    },
+    "music_kit-75": {
+      "en": "Music Kit | Rad Cat, Reason",
+      "zh": "音乐盒 | Rad Cat - 理由"
+    },
+    "music_kit-75_st": {
+      "en": "StatTrak™ Music Kit | Rad Cat, Reason",
+      "zh": "StatTrak™ 音乐盒 | Rad Cat - 理由"
+    },
+    "music_kit-76": {
+      "en": "Music Kit | TWERL, Ekko & Sidetrack, Under Bright Lights",
+      "zh": "音乐盒 | TWERL, Ekko & Sidetrack - 万众瞩目"
+    },
+    "music_kit-76_st": {
+      "en": "StatTrak™ Music Kit | TWERL and Ekko & Sidetrack, Under Bright Lights",
+      "zh": "StatTrak™ 音乐盒 | TWERL, Ekko & Sidetrack - 万众瞩目"
+    },
+    "music_kit-78": {
+      "en": "Music Kit | Austin Wintory, The Devil Went Clubbing In Georgia",
+      "zh": "音乐盒 | Austin Wintory，恶魔舞厅"
+    },
+    "music_kit-78_st": {
+      "en": "StatTrak™ Music Kit | Austin Wintory, The Devil Went Clubbing In Georgia",
+      "zh": "StatTrak™音乐盒 | Austin Wintory，恶魔舞厅"
+    },
+    "music_kit-79": {
+      "en": "Music Kit | Ben Bromfield, Rabbit Hole",
+      "zh": "音乐盒 | Ben Bromfield，兔子洞"
+    },
+    "music_kit-79_st": {
+      "en": "StatTrak™ Music Kit | Ben Bromfield, Rabbit Hole",
+      "zh": "StatTrak™音乐盒 | Ben Bromfield，兔子洞"
+    },
+    "music_kit-80": {
+      "en": "Music Kit | Daniel Sadowski, Dead Shot",
+      "zh": "音乐盒 | Daniel Sadowski，致命一击"
+    },
+    "music_kit-80_st": {
+      "en": "StatTrak™ Music Kit | Daniel Sadowski, Dead Shot",
+      "zh": "StatTrak™音乐盒 | Daniel Sadowski，致命一击"
+    },
+    "music_kit-81": {
+      "en": "Music Kit | Dren McDonald, Coffee! Kofe! Kahveh!",
+      "zh": "音乐盒 | Dren McDonald，咖啡！加非！磕肥！"
+    },
+    "music_kit-81_st": {
+      "en": "StatTrak™ Music Kit | Dren McDonald, Coffee! Kofe! Kahveh!",
+      "zh": "StatTrak™音乐盒 | Dren McDonald，咖啡！加非！磕肥！"
+    },
+    "music_kit-82": {
+      "en": "Music Kit | Matt Levine, Agency",
+      "zh": "音乐盒 | Matt Levine，特工"
+    },
+    "music_kit-82_st": {
+      "en": "StatTrak™ Music Kit | Matt Levine, Agency",
+      "zh": "StatTrak™音乐盒 | Matt Levine，特工"
+    },
+    "music_kit-83": {
+      "en": "Music Kit | Sam Marshall, Clutch",
+      "zh": "音乐盒 | Sam Marshall，危在旦夕"
+    },
+    "music_kit-83_st": {
+      "en": "StatTrak™ Music Kit | Sam Marshall, Clutch",
+      "zh": "StatTrak™音乐盒 | Sam Marshall，危在旦夕"
+    },
+    "music_kit-84": {
+      "en": "Music Kit | Tim Huling, Devil's Paintbrush",
+      "zh": "音乐盒 | Tim Huling，恶魔油漆刷"
+    },
+    "music_kit-84_st": {
+      "en": "StatTrak™ Music Kit | Tim Huling, Devil's Paintbrush",
+      "zh": "StatTrak™音乐盒 | Tim Huling，恶魔油漆刷"
+    },
+    "music_kit-85": {
+      "en": "Music Kit | Tree Adams, Seventh Moon",
+      "zh": "音乐盒 | Tree Adams，柒月"
+    },
+    "music_kit-85_st": {
+      "en": "StatTrak™ Music Kit | Tree Adams, Seventh Moon",
+      "zh": "StatTrak™音乐盒 | Tree Adams，柒月"
+    },
+    "music_kit-86": {
+      "en": "Music Kit | Perfect World, Ay Hey",
+      "zh": "音乐盒 | 完美世界 - 诶嘿"
+    },
+    "music_kit-86_st": {
+      "en": "StatTrak™ Music Kit | Perfect World, Ay Hey",
+      "zh": "StatTrak™ 音乐盒 | 完美世界 - 诶嘿"
+    },
+    "music_kit-87": {
+      "en": "Music Kit | Adam Beyer, Red Room",
+      "zh": "音乐盒 | Adam Beyer - 猩红密室"
+    },
+    "music_kit-87_st": {
+      "en": "StatTrak™ Music Kit | Adam Beyer, Red Room",
+      "zh": "StatTrak™音乐盒 | Adam Beyer - 猩红密室"
+    },
+    "music_kit-88": {
+      "en": "Music Kit | Ghost, Skeletá",
+      "zh": "音乐盒 | Ghost - 骸骨圣典"
+    },
+    "music_kit-88_st": {
+      "en": "StatTrak™ Music Kit | Ghost, Skeletá",
+      "zh": "StatTrak™音乐盒 | Ghost - 骸骨圣典"
+    },
+    "music_kit-89": {
+      "en": "Music Kit | HEALTH, RAT WARS",
+      "zh": "音乐盒 | HEALTH - 鼠役"
+    },
+    "music_kit-89_st": {
+      "en": "StatTrak™ Music Kit | HEALTH, RAT WARS",
+      "zh": "StatTrak™音乐盒 | HEALTH - 鼠役"
+    },
+    "music_kit-90": {
+      "en": "Music Kit | James and the Cold Gun, Chewing Glass",
+      "zh": "音乐盒 | James and the Cold Gun - 嚼玻璃"
+    },
+    "music_kit-90_st": {
+      "en": "StatTrak™ Music Kit | James and the Cold Gun, Chewing Glass",
+      "zh": "StatTrak™音乐盒 | James and the Cold Gun - 嚼玻璃"
+    },
+    "music_kit-91": {
+      "en": "Music Kit | Jonathan Young, Starship Velociraptor",
+      "zh": "音乐盒 | Jonathan Young - 星际战机速龙号"
+    },
+    "music_kit-91_st": {
+      "en": "StatTrak™ Music Kit | Jonathan Young, Starship Velociraptor",
+      "zh": "StatTrak™音乐盒 | Jonathan Young - 星际战机速龙号"
+    },
+    "music_kit-92": {
+      "en": "Music Kit | Juelz, Floorspace",
+      "zh": "音乐盒 | Juelz - 无拘空间"
+    },
+    "music_kit-92_st": {
+      "en": "StatTrak™ Music Kit | Juelz, Floorspace",
+      "zh": "StatTrak™音乐盒 | Juelz - 无拘空间"
+    },
+    "music_kit-93": {
+      "en": "Music Kit | Killer Mike, MICHAEL",
+      "zh": "音乐盒 | Killer Mike - 迈克尔"
+    },
+    "music_kit-93_st": {
+      "en": "StatTrak™ Music Kit | Killer Mike, MICHAEL",
+      "zh": "StatTrak™音乐盒 | Killer Mike - 迈克尔"
+    },
+    "music_kit-94": {
+      "en": "Music Kit | PVRIS, Evergreen",
+      "zh": "音乐盒 | PVRIS - 常青"
+    },
+    "music_kit-94_st": {
+      "en": "StatTrak™ Music Kit | PVRIS, Evergreen",
+      "zh": "StatTrak™音乐盒 | PVRIS - 常青"
+    },
+    "music_kit-95": {
+      "en": "Music Kit | Selective Response, No Love Only Pleasure",
+      "zh": "音乐盒 | Selective Response - 纵欲狂欢"
+    },
+    "music_kit-95_st": {
+      "en": "StatTrak™ Music Kit | Selective Response, No Love Only Pleasure",
+      "zh": "StatTrak™音乐盒 | Selective Response - 纵欲狂欢"
+    },
+    "music_kit-96": {
+      "en": "Music Kit | Tigercub, The Perfume of Decay",
+      "zh": "音乐盒 | Tigercub - 腐朽香氛"
+    },
+    "music_kit-96_st": {
+      "en": "StatTrak™ Music Kit | Tigercub, The Perfume of Decay",
+      "zh": "StatTrak™音乐盒 | Tigercub - 腐朽香氛"
+    },
+    "music_kit-98": {
+      "en": "Music Kit | ALRT, DOPAMINE HIT",
+      "zh": "音乐盒 | ALRT, 多巴胺冲击"
+    },
+    "music_kit-98_st": {
+      "en": "StatTrak™ Music Kit | ALRT, DOPAMINE HIT",
+      "zh": "StatTrak™ 音乐盒 | ALRT, 多巴胺冲击"
+    },
+    "music_kit-99": {
+      "en": "Music Kit | Altare, Change My Mind",
+      "zh": "音乐盒 | Altare, 吾心不移"
+    },
+    "music_kit-99_st": {
+      "en": "StatTrak™ Music Kit | Altare, Change My Mind",
+      "zh": "StatTrak™ 音乐盒 | Altare, 吾心不移"
+    },
+    "music_kit-100": {
+      "en": "Music Kit | borne, Give It To Me",
+      "zh": "音乐盒 | borne, 给我"
+    },
+    "music_kit-100_st": {
+      "en": "StatTrak™ Music Kit | borne, Give It To Me",
+      "zh": "StatTrak™ 音乐盒 | borne, 给我"
+    },
+    "music_kit-101": {
+      "en": "Music Kit | Pirapus, EVERYNITE",
+      "zh": "音乐盒 | Pirapus, 每夜"
+    },
+    "music_kit-101_st": {
+      "en": "StatTrak™ Music Kit | Pirapus, EVERYNITE",
+      "zh": "StatTrak™ 音乐盒 | Pirapus, 每夜"
+    },
+    "music_kit-102": {
+      "en": "Music Kit | Repiet & Julia Kleijn, On And On",
+      "zh": "音乐盒 | Repiet & Julia Kleijn, 循环不息"
+    },
+    "music_kit-102_st": {
+      "en": "StatTrak™ Music Kit | Repiet & Julia Kleijn, On And On",
+      "zh": "StatTrak™ 音乐盒 | Repiet & Julia Kleijn, 循环不息"
+    },
+    "music_kit-103": {
+      "en": "Music Kit | ShockOne, Voices",
+      "zh": "音乐盒 | ShockOne, 声流"
+    },
+    "music_kit-103_st": {
+      "en": "StatTrak™ Music Kit | ShockOne, Voices",
+      "zh": "StatTrak™ 音乐盒 | ShockOne, 声流"
+    }
+  }
+}

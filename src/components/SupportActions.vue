@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CircleArrowUp, Download, Globe2, MessageSquareText, RotateCw } from 'lucide-vue-next'
+import { CircleArrowUp, Download, Globe2, Info, MessageSquareText, RotateCw } from 'lucide-vue-next'
 
 import AboutSourcesModal from '@/components/AboutSourcesModal.vue'
 import { checkSoftwareUpdates, resumeSoftwareUpdate, softwareUpdateCoordinatorState, softwareUpdateStatusMessage } from '@/features/software-updates/coordinator'
@@ -29,7 +29,7 @@ async function openPage(action: () => Promise<void>, failure: string) {
       <p class="overline">支持与服务</p>
       <h2 id="support-title">更新与官网</h2>
       <p class="support-status" aria-live="polite">{{ statusMessage }}</p>
-      <button class="about-trigger" type="button" @click="aboutOpen = true">关于与来源</button>
+      <button class="about-trigger" type="button" @click="aboutOpen = true"><Info :size="15" />关于与来源</button>
     </div>
     <div class="support-actions">
       <button v-if="hasInstallAction || hasRedownloadReminder" class="primary-button" type="button" :disabled="checking" @click="resumeSoftwareUpdate">

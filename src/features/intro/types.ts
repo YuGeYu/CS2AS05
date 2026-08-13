@@ -28,3 +28,13 @@ export interface IntroData {
     upstream: 'network' | 'cache' | 'fallback'
   }
 }
+
+export interface IntroAcknowledgementCard {
+  id: string
+  kind: 'supporter' | 'upstream'
+  eyebrow: string
+  title: string
+  message: string
+  detail: string
+  updatedAt: string
+}

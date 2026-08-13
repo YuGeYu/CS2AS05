@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { FALLBACK_UPSTREAM, loadIntroData, parseSupporters, parseUpstream } from '@/services/intro-data'
+import { FALLBACK_UPSTREAM, loadCachedIntroData, loadIntroData, parseSupporters, parseUpstream } from '@/services/intro-data'
 
 describe('intro data', () => {
   beforeEach(() => {
@@ -40,5 +40,13 @@ describe('intro data', () => {
     expect(result.supporters).toEqual([])
     expect(result.sources.supporters).toBe('network')
     expect(localStorage.getItem('cs2as:intro:supporters:v1')).not.toContain('旧记录')
+  })
+
+  it('returns cached supporters synchronously before network refresh', () => {
+    localStorage.setItem('cs2as:intro:supporters:v1', JSON.stringify({ savedAt: Date.now(), value: { supporters: [{ id: 'cached', nickname: '缓存同路人', message: '先亮馆，再刷新', amountCents: 600, updatedAt: 'now' }] } }))
+    const result = loadCachedIntroData()
+    expect(result.supporters).toHaveLength(1)
+    expect(result.supporters[0]?.nickname).toBe('缓存同路人')
+    expect(result.sources.supporters).toBe('cache')
   })
 })

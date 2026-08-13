@@ -8,6 +8,7 @@ export const addDemoRoot = (path: string, scanDepth = 5) => invoke<DemoRoot>('ad
 export const ensureDefaultDemoRoot = (rootPath: string) => invoke<DemoRoot>('ensure_default_demo_root', { rootPath })
 export const updateDemoRoot = (id: number, enabled: boolean, scanDepth: number) => invoke<void>('update_demo_root', { id, enabled, scanDepth })
 export const removeDemoRoot = (id: number) => invoke<void>('remove_demo_root', { id })
+export const deleteDemoFile = (demoId: number) => invoke<void>('delete_demo_file', { demoId })
 export const scanDemoRoots = (rootId?: number) => invoke<DemoScanResult>('scan_demo_roots', { rootId })
 export const importDemoFile = (path: string) => invoke<{ demoFileId: number; status: string }>('import_demo_file', { path })
 export const listDemos = (query: string, status: string, page: number, pageSize: number) => invoke<DemoListPage>('list_demos', { query, status, page, pageSize })

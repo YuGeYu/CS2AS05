@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { FolderOpen, RefreshCw, ShieldCheck, TerminalSquare, Trash2, Wrench } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { AlertTriangle, Bug, Database, FolderOpen, Power, RefreshCw, Send, ShieldCheck, TerminalSquare, Trash2, Wrench, X } from 'lucide-vue-next'
 
 import SupportActions from '@/components/SupportActions.vue'
 import { appConfig } from '@/config/app'
 import { useCs2Store } from '@/stores/cs2'
+import { clearAssistantData, getAssistantPreferences, setAssistantAutostart, submitFaultReport } from '@/services/tauri/support'
 
 const store = useCs2Store()
 const uninstallConfirmOpen = ref(false)
-const diagnosticsOpen = ref(false)
+const clearConfirmOpen = ref(false)
+const faultOpen = ref(false)
+const autostartEnabled = ref(false)
+const preferenceBusy = ref(false)
+const maintenanceState = ref('')
+const faultDetails = ref('')
+const faultSubmitting = ref(false)
+const faultState = ref('')
 
 const installBlocked = computed(() => !store.selectedRoot || store.cs2Running || store.busy)
 const installLabel = computed(() => {
@@ -67,10 +75,62 @@ async function confirmUninstall() {
   }
 }
 
-async function toggleDiagnostics() {
-  diagnosticsOpen.value = !diagnosticsOpen.value
-  if (diagnosticsOpen.value) await store.refreshDiagnostics()
+async function toggleAutostart(event: Event) {
+  const enabled = (event.target as HTMLInputElement).checked
+  preferenceBusy.value = true
+  maintenanceState.value = ''
+  try {
+    autostartEnabled.value = (await setAssistantAutostart(enabled)).autostartEnabled
+    maintenanceState.value = enabled ? '已开启开机启动。' : '已关闭开机启动。'
+  } catch (error) {
+    autostartEnabled.value = !enabled
+    maintenanceState.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    preferenceBusy.value = false
+  }
 }
+
+async function confirmClearData() {
+  clearConfirmOpen.value = false
+  preferenceBusy.value = true
+  try {
+    const result = await clearAssistantData()
+    localStorage.clear()
+    maintenanceState.value = result.message
+  } catch (error) {
+    maintenanceState.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    preferenceBusy.value = false
+  }
+}
+
+function openFaultDialog() {
+  faultState.value = ''
+  faultOpen.value = true
+}
+
+async function submitFault() {
+  if (faultDetails.value.trim().length < 10 || faultSubmitting.value) return
+  faultSubmitting.value = true
+  faultState.value = ''
+  try {
+    const result = await submitFaultReport(faultDetails.value.trim(), store.selectedRoot || undefined)
+    faultState.value = result.message
+    faultDetails.value = ''
+  } catch (error) {
+    faultState.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    faultSubmitting.value = false
+  }
+}
+
+onMounted(async () => {
+  try {
+    autostartEnabled.value = (await getAssistantPreferences()).autostartEnabled
+  } catch {
+    maintenanceState.value = '开机启动状态暂时无法读取。'
+  }
+})
 
 </script>
 
@@ -82,7 +142,7 @@ async function toggleDiagnostics() {
         <div>
           <p class="overline">CS2-BOT-IMPROVER</p>
           <h1 id="page-title">CS2 人机增强助手</h1>
-          <p class="subtitle">插件安装、覆盖更新、卸载、诊断与兼容工具</p>
+          <p class="subtitle">从环境确认到故障反馈，把每一次运行准备妥当</p>
         </div>
         <span class="version-label">{{ appConfig.appVersion }}</span>
       </header>
@@ -123,6 +183,27 @@ async function toggleDiagnostics() {
         </div>
       </section>
 
+      <section class="assistant-settings" aria-labelledby="assistant-settings-title">
+        <div class="section-heading">
+          <div>
+            <p class="overline">助手设置</p>
+            <h2 id="assistant-settings-title">随时待命，保持轻盈</h2>
+          </div>
+        </div>
+        <div class="setting-row">
+          <span class="setting-icon" aria-hidden="true"><Power :size="20" /></span>
+          <div class="setting-copy">
+            <strong>开机启动</strong>
+            <span>登录 Windows 后自动启动助手，不需要管理员权限。</span>
+          </div>
+          <label class="toggle-switch" :aria-label="autostartEnabled ? '关闭开机启动' : '开启开机启动'">
+            <input type="checkbox" :checked="autostartEnabled" :disabled="preferenceBusy" @change="toggleAutostart" />
+            <span aria-hidden="true"></span>
+          </label>
+        </div>
+        <p v-if="maintenanceState" class="maintenance-state" aria-live="polite">{{ maintenanceState }}</p>
+      </section>
+
       <section class="install-section" aria-labelledby="install-title">
         <div>
           <p class="overline">定制资源包</p>
@@ -149,20 +230,14 @@ async function toggleDiagnostics() {
       </section>
 
       <section class="utility-section">
-        <button class="text-button" type="button" :aria-expanded="diagnosticsOpen" @click="toggleDiagnostics">
-          {{ diagnosticsOpen ? '收起诊断信息' : '展开诊断信息' }}
-        </button>
-        <div v-if="diagnosticsOpen" class="diagnostics" aria-live="polite">
-          <p>{{ store.diagnostics?.summary ?? '正在读取诊断信息...' }}</p>
-          <details>
-            <summary>运行日志</summary>
-            <pre>{{ store.diagnostics?.fullLog }}</pre>
-          </details>
+        <div class="utility-heading">
+          <div><p class="overline">维护与求助</p><h2>问题留在这里，信息一次带齐</h2></div>
         </div>
-        <button class="danger-button" type="button" :disabled="!store.selectedRoot || store.busy" @click="uninstallConfirmOpen = true">
-          <Trash2 :size="17" />
-          <span>卸载插件</span>
-        </button>
+        <div class="maintenance-actions">
+          <button class="secondary-button" type="button" :disabled="preferenceBusy" @click="clearConfirmOpen = true"><Database :size="18" /><span>清除数据</span></button>
+          <button class="primary-button" type="button" @click="openFaultDialog"><Bug :size="18" /><span>提交故障</span></button>
+          <button class="danger-button" type="button" :disabled="!store.selectedRoot || store.busy" @click="uninstallConfirmOpen = true"><Trash2 :size="17" /><span>卸载插件</span></button>
+        </div>
       </section>
     </section>
 
@@ -176,6 +251,25 @@ async function toggleDiagnostics() {
             <button class="danger-button" type="button" @click="confirmUninstall"><Trash2 :size="17" /><span>确认卸载</span></button>
           </div>
         </section>
+      </div>
+      <div v-if="clearConfirmOpen" class="modal-backdrop" role="presentation" @click.self="clearConfirmOpen = false">
+        <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-data-title">
+          <div class="dialog-icon danger" aria-hidden="true"><AlertTriangle :size="22" /></div>
+          <h2 id="clear-data-title">清除助手数据？</h2>
+          <p>将清除助手缓存、运行日志和界面偏好。CS2 文件、已安装插件、Demo 与复盘数据库不会删除。完成后部分设置需要重新选择。</p>
+          <div class="dialog-actions"><button class="secondary-button" type="button" @click="clearConfirmOpen = false">取消</button><button class="danger-button" type="button" @click="confirmClearData"><Database :size="17" /><span>确认清除</span></button></div>
+        </section>
+      </div>
+      <div v-if="faultOpen" class="modal-backdrop" role="presentation" @click.self="faultOpen = false">
+        <form class="fault-dialog" role="dialog" aria-modal="true" aria-labelledby="fault-title" @submit.prevent="submitFault">
+          <header><div><p class="overline">故障工单</p><h2 id="fault-title">告诉我们发生了什么</h2></div><button class="icon-button" type="button" aria-label="关闭故障提交" @click="faultOpen = false"><X :size="19" /></button></header>
+          <p>请描述出现问题前后的操作和你看到的现象。助手会附带经过脱敏与裁剪的诊断日志，不上传 Demo、游戏文件或皮肤配置。</p>
+          <label for="fault-details">故障详情</label>
+          <textarea id="fault-details" v-model="faultDetails" minlength="10" maxlength="4000" rows="8" placeholder="例如：我在安装完成后启动 CS2，进入本地地图时……" autofocus />
+          <div class="fault-meta"><span><ShieldCheck :size="15" />诊断日志将随工单提交</span><span>{{ faultDetails.length }}/4000</span></div>
+          <p v-if="faultState" class="fault-state" aria-live="polite">{{ faultState }}</p>
+          <div class="dialog-actions"><button class="secondary-button" type="button" @click="faultOpen = false">稍后再说</button><button class="primary-button" type="submit" :disabled="faultDetails.trim().length < 10 || faultSubmitting"><Send :size="17" /><span>{{ faultSubmitting ? '正在提交…' : '提交故障单' }}</span></button></div>
+        </form>
       </div>
     </Teleport>
   </main>

@@ -50,27 +50,26 @@ describe('EasterEggGame close control', () => {
     element.dispatchEvent(event)
   }
 
-  it('closes once from pointerdown during countdown', async () => {
+  it('closes once from pointerdown in the contribution gallery', async () => {
     const wrapper = await mountGame()
-    await wrapper.get('[aria-label="关闭青冥试剑"]').trigger('pointerdown', { pointerId: 1 })
-    await wrapper.get('[aria-label="关闭青冥试剑"]').trigger('click')
+    await wrapper.get('[aria-label="关闭贡献陈列馆"]').trigger('pointerdown', { pointerId: 1 })
+    await wrapper.get('[aria-label="关闭贡献陈列馆"]').trigger('click')
     expect(wrapper.emitted('close')).toHaveLength(1)
     wrapper.unmount()
   })
 
-  it('releases input capture and closes once while playing', async () => {
+  it('releases input capture and closes once while exploring', async () => {
     const captures = new Set<number>()
     const setPointerCapture = vi.spyOn(HTMLElement.prototype, 'setPointerCapture').mockImplementation((id: number) => captures.add(id))
     const releasePointerCapture = vi.spyOn(HTMLElement.prototype, 'releasePointerCapture').mockImplementation((id: number) => captures.delete(id))
     vi.spyOn(HTMLElement.prototype, 'hasPointerCapture').mockImplementation((id: number) => captures.has(id))
     const wrapper = await mountGame()
-    await vi.advanceTimersByTimeAsync(3_000)
     const input = wrapper.get('.game-input-layer')
     dispatchPointer(input.element, 'pointerdown', 7, 100, 100)
     expect(setPointerCapture).toHaveBeenCalledWith(7)
     expect(interact).toHaveBeenCalledWith(expect.objectContaining({ type: 'pointer-down' }))
-    await wrapper.get('[aria-label="关闭青冥试剑"]').trigger('pointerdown', { pointerId: 8 })
-    await wrapper.get('[aria-label="关闭青冥试剑"]').trigger('click')
+    await wrapper.get('[aria-label="关闭贡献陈列馆"]').trigger('pointerdown', { pointerId: 8 })
+    await wrapper.get('[aria-label="关闭贡献陈列馆"]').trigger('click')
     expect(releasePointerCapture).toHaveBeenCalledWith(7)
     expect(wrapper.emitted('close')).toHaveLength(1)
     expect(interact).toHaveBeenCalledTimes(1)
@@ -79,11 +78,9 @@ describe('EasterEggGame close control', () => {
 
   it('closes once with Escape and clears the clock', async () => {
     const wrapper = await mountGame()
-    await vi.advanceTimersByTimeAsync(3_000)
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await vi.advanceTimersByTimeAsync(2_000)
     expect(wrapper.emitted('close')).toHaveLength(1)
-    expect(wrapper.text()).toContain('60')
+    expect(wrapper.text()).toContain('贡献陈列馆')
     wrapper.unmount()
   })
 })

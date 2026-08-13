@@ -7,6 +7,10 @@
   "ignorePatterns": [
     "backups/**",
     "src-tauri/resources/**",
+    "src/features/skin-forge/data/generated/**",
+    "public/museum/contribution-gallery/draco/**",
+    "public/museum/contribution-gallery/basis/**",
+    "third_party/CS2-Skin-Forge/upstream/**",
     "workspace/**",
     "dist/**",
     "dist-release/**",

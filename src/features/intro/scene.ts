@@ -1,17 +1,16 @@
 import type { ThreeStageController, StageSize } from '@/components/three/stage'
-import type { SupporterAcknowledgement, UpstreamProjectSummary } from './types'
+import type { IntroAcknowledgementCard } from './types'
 
 export interface IntroSceneState {
   elapsedMs: number
-  supporterSlotMs: number
-  phase: 'supporters' | 'upstream'
+  durationMs: number
+  supporterLockMs: number
   loading: boolean
-  supporters: SupporterAcknowledgement[]
-  upstream: UpstreamProjectSummary
+  cards: IntroAcknowledgementCard[]
 }
 
-export function introSupporterSignature(supporters: SupporterAcknowledgement[]) {
-  return supporters.map(item => `${item.id}:${item.updatedAt}`).join('|')
+export function introCardSignature(cards: IntroAcknowledgementCard[]) {
+  return cards.map(item => `${item.id}:${item.updatedAt}`).join('|')
 }
 
 function fittedText(context: CanvasRenderingContext2D, value: string, maxWidth: number) {
@@ -21,188 +20,187 @@ function fittedText(context: CanvasRenderingContext2D, value: string, maxWidth: 
   return `${output}...`
 }
 
-export async function createIntroScene(
-  canvas: HTMLCanvasElement,
-  initialSize: StageSize,
-  getState: () => IntroSceneState,
-): Promise<ThreeStageController> {
+function easeInOut(value: number) {
+  const t = Math.min(1, Math.max(0, value))
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+}
+
+export async function createIntroScene(canvas: HTMLCanvasElement, initialSize: StageSize, getState: () => IntroSceneState): Promise<ThreeStageController> {
   const THREE = await import('three')
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' })
-  renderer.setClearColor(0x050d11, 1)
+  renderer.setClearColor(0x12383c, 1)
   renderer.outputColorSpace = THREE.SRGBColorSpace
-  const scene = new THREE.Scene()
-  scene.fog = new THREE.FogExp2(0x050d11, 0.032)
-  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 120)
-  camera.position.set(0, 2.25, 12.5)
-  scene.add(new THREE.HemisphereLight(0x79dce6, 0x071014, 1.3))
-  const key = new THREE.DirectionalLight(0x83ecf3, 3)
-  key.position.set(4, 7, 6)
-  scene.add(key)
-  const bronzeLight = new THREE.PointLight(0xc59a4a, 26, 22)
-  bronzeLight.position.set(-5, 2.5, 2)
-  scene.add(bronzeLight)
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.PCFShadowMap
 
+  const scene = new THREE.Scene()
+  scene.background = new THREE.Color(0x12383c)
+  scene.fog = new THREE.FogExp2(0x12383c, 0.024)
+  const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 100)
+  const target = new THREE.Vector3()
   const geometries = new Set<InstanceType<typeof THREE.BufferGeometry>>()
   const materials = new Set<InstanceType<typeof THREE.Material>>()
+  const textures = new Set<InstanceType<typeof THREE.Texture>>()
   const geometry = <T extends InstanceType<typeof THREE.BufferGeometry>>(value: T) => { geometries.add(value); return value }
   const material = <T extends InstanceType<typeof THREE.Material>>(value: T) => { materials.add(value); return value }
 
-  const floor = new THREE.Mesh(
-    geometry(new THREE.PlaneGeometry(22, 80)),
-    material(new THREE.MeshStandardMaterial({ color: 0x08191d, metalness: 0.15, roughness: 0.82 })),
-  )
+  scene.add(new THREE.HemisphereLight(0xf4fbef, 0x25575a, 2.15))
+  const moon = new THREE.DirectionalLight(0xd8ffff, 4.2)
+  moon.position.set(7, 9, 7)
+  moon.castShadow = true
+  moon.shadow.mapSize.set(1024, 1024)
+  scene.add(moon)
+  const warm = new THREE.PointLight(0xffbd68, 58, 32, 1.45)
+  warm.position.set(0, 4.2, -9)
+  scene.add(warm)
+
+  const stone = material(new THREE.MeshStandardMaterial({ color: 0x31575a, roughness: 0.72, metalness: 0.08 }))
+  const darkStone = material(new THREE.MeshStandardMaterial({ color: 0x1c4144, roughness: 0.82 }))
+  const bronze = material(new THREE.MeshStandardMaterial({ color: 0xc28a3f, emissive: 0x4b2e0d, metalness: 0.58, roughness: 0.3 }))
+  const jade = material(new THREE.MeshStandardMaterial({ color: 0x277177, emissive: 0x104247, metalness: 0.18, roughness: 0.4 }))
+
+  const floor = new THREE.Mesh(geometry(new THREE.CircleGeometry(18, 64)), darkStone)
   floor.rotation.x = -Math.PI / 2
-  floor.position.set(0, -2.25, -24)
+  floor.receiveShadow = true
   scene.add(floor)
+  const dais = new THREE.Mesh(geometry(new THREE.CylinderGeometry(8.2, 9.2, 0.32, 64)), stone)
+  dais.position.y = 0.05
+  dais.receiveShadow = true
+  scene.add(dais)
+  const innerRing = new THREE.Mesh(geometry(new THREE.TorusGeometry(6.4, 0.055, 10, 96)), bronze)
+  innerRing.rotation.x = Math.PI / 2
+  innerRing.position.y = 0.24
+  scene.add(innerRing)
+  const lightPool = new THREE.Mesh(geometry(new THREE.CircleGeometry(3.2, 64)), material(new THREE.MeshBasicMaterial({ color: 0x15494d, transparent: true, opacity: 0.24 })))
+  lightPool.rotation.x = -Math.PI / 2
+  lightPool.position.y = 0.23
+  scene.add(lightPool)
 
-  const stone = material(new THREE.MeshStandardMaterial({ color: 0x102f34, emissive: 0x061519, roughness: 0.7 }))
-  const bronze = material(new THREE.MeshStandardMaterial({ color: 0x987136, emissive: 0x271906, metalness: 0.55, roughness: 0.38 }))
-  const pillarGeometry = geometry(new THREE.CylinderGeometry(0.2, 0.28, 6.4, 8))
-  const beamGeometry = geometry(new THREE.BoxGeometry(10, 0.32, 0.42))
-  const roofGeometry = geometry(new THREE.BoxGeometry(11.2, 0.16, 1.1))
-  const arches: InstanceType<typeof THREE.Group>[] = []
-  for (const z of [-5, -18, -31]) {
-    const arch = new THREE.Group()
-    for (const x of [-4.5, 4.5]) {
-      const pillar = new THREE.Mesh(pillarGeometry, stone)
-      pillar.position.set(x, 0.9, 0)
-      arch.add(pillar)
-    }
-    const beam = new THREE.Mesh(beamGeometry, bronze)
-    beam.position.y = 3.75
-    const roof = new THREE.Mesh(roofGeometry, stone)
-    roof.position.y = 4.15
-    arch.add(beam, roof)
-    arch.position.z = z
-    scene.add(arch)
-    arches.push(arch)
+  const pillarGeometry = geometry(new THREE.CylinderGeometry(0.24, 0.34, 6.8, 10))
+  for (let index = 0; index < 12; index += 1) {
+    const angle = index / 12 * Math.PI * 2
+    const pillar = new THREE.Mesh(pillarGeometry, stone)
+    pillar.position.set(Math.sin(angle) * 13.8, 3.4, Math.cos(angle) * 13.8)
+    pillar.castShadow = true
+    scene.add(pillar)
   }
+  const roofRing = new THREE.Mesh(geometry(new THREE.TorusGeometry(13.8, 0.2, 10, 96)), bronze)
+  roofRing.rotation.x = Math.PI / 2
+  roofRing.position.y = 6.75
+  scene.add(roofRing)
 
-  const mountainMaterial = material(new THREE.MeshBasicMaterial({ color: 0x10252b, side: THREE.DoubleSide }))
-  for (let index = 0; index < 5; index += 1) {
-    const mountain = new THREE.Mesh(geometry(new THREE.ConeGeometry(5 + index * 0.8, 7 + index, 5)), mountainMaterial)
-    mountain.position.set(index % 2 ? 8 : -8, -0.2, -35 - index * 3.5)
-    mountain.rotation.y = index * 0.65
-    scene.add(mountain)
-  }
-
-  const scanMaterial = material(new THREE.MeshBasicMaterial({ color: 0x45c6d7, wireframe: true, transparent: true, opacity: 0.16 }))
-  const scanGeometry = geometry(new THREE.BoxGeometry(10.5, 6.8, 0.2))
-  const scanGates = Array.from({ length: 4 }, (_, index) => {
-    const gate = new THREE.Mesh(scanGeometry, scanMaterial)
-    gate.position.set(0, 0.7, -8 - index * 11)
-    scene.add(gate)
-    return gate
-  })
-
-  const flowMaterial = material(new THREE.MeshBasicMaterial({ color: 0x32a9bd, transparent: true, opacity: 0.42 }))
-  const flowGeometry = geometry(new THREE.BoxGeometry(13, 0.018, 0.055))
-  const flowLines = Array.from({ length: 20 }, (_, index) => {
-    const line = new THREE.Mesh(flowGeometry, flowMaterial)
-    line.position.set(0, -2.21, 7 - index * 3.2)
-    scene.add(line)
-    return line
-  })
-
-  const sword = new THREE.Group()
-  const blade = new THREE.Mesh(geometry(new THREE.ConeGeometry(0.14, 4.8, 4)), material(new THREE.MeshBasicMaterial({ color: 0x9af4ff })))
-  blade.rotation.z = Math.PI
-  const guard = new THREE.Mesh(geometry(new THREE.BoxGeometry(1.35, 0.12, 0.2)), bronze)
-  guard.position.y = 2.42
-  sword.add(blade, guard)
-  sword.position.set(-3.6, 0.3, -1.5)
-  sword.rotation.z = -0.48
-  scene.add(sword)
-
-  const pointCount = 170
-  const positions = new Float32Array(pointCount * 3)
-  for (let index = 0; index < pointCount; index += 1) {
-    positions[index * 3] = (Math.random() - 0.5) * 28
-    positions[index * 3 + 1] = Math.random() * 11 - 2
-    positions[index * 3 + 2] = -Math.random() * 55
-  }
-  const pointsGeometry = geometry(new THREE.BufferGeometry())
-  pointsGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  const points = new THREE.Points(pointsGeometry, material(new THREE.PointsMaterial({ color: 0x79e5ef, size: 0.04, transparent: true, opacity: 0.65 })))
-  scene.add(points)
-
-  const tabletGeometry = geometry(new THREE.BoxGeometry(3.4, 2.15, 0.16))
-  const tabletBackMaterial = material(new THREE.MeshStandardMaterial({ color: 0x123b40, emissive: 0x082329, metalness: 0.25, roughness: 0.42 }))
-  const tablets: { group: InstanceType<typeof THREE.Group>; texture: InstanceType<typeof THREE.CanvasTexture>; faceMaterial: InstanceType<typeof THREE.MeshBasicMaterial> }[] = []
+  const pedestalBase = geometry(new THREE.CylinderGeometry(1.25, 1.5, 0.72, 10))
+  const pedestalTop = geometry(new THREE.CylinderGeometry(1.06, 1.18, 0.18, 10))
+  const cardBack = geometry(new THREE.BoxGeometry(3.7, 2.25, 0.16))
+  const faceGeometry = geometry(new THREE.PlaneGeometry(3.5, 2.05))
+  const exhibits: Array<{ group: InstanceType<typeof THREE.Group>; texture: InstanceType<typeof THREE.CanvasTexture>; faceMaterial: InstanceType<typeof THREE.MeshBasicMaterial>; light: InstanceType<typeof THREE.PointLight> }> = []
   let signature = ''
-  let lowPerformance = false
 
-  function clearTablets() {
-    for (const tablet of tablets) {
-      scene.remove(tablet.group)
-      tablet.texture.dispose()
-      tablet.faceMaterial.dispose()
-    }
-    tablets.length = 0
-  }
-
-  function canvasFor(supporter: SupporterAcknowledgement) {
+  function cardCanvas(card: IntroAcknowledgementCard) {
     const surface = document.createElement('canvas')
-    surface.width = 768
-    surface.height = 480
+    surface.width = 640
+    surface.height = 400
     const context = surface.getContext('2d')
-    if (!context) throw new Error('无法创建鸣谢碑文字纹理')
-    const gradient = context.createLinearGradient(0, 0, 768, 480)
-    gradient.addColorStop(0, '#174a51')
-    gradient.addColorStop(1, '#0a2328')
+    if (!context) throw new Error('无法创建鸣谢展牌纹理')
+    const gradient = context.createLinearGradient(0, 0, 640, 400)
+    gradient.addColorStop(0, card.kind === 'upstream' ? '#202e2e' : '#173f43')
+    gradient.addColorStop(1, '#091315')
     context.fillStyle = gradient
-    context.fillRect(0, 0, 768, 480)
-    context.strokeStyle = '#c59a4a'
-    context.lineWidth = 10
-    context.strokeRect(18, 18, 732, 444)
-    context.strokeStyle = 'rgba(120,228,239,.46)'
-    context.lineWidth = 2
-    context.strokeRect(36, 36, 696, 408)
-    context.fillStyle = '#78e4ef'
-    context.font = '700 30px "Microsoft YaHei UI", "Microsoft YaHei", sans-serif'
-    context.fillText('鸣谢同路人', 68, 95)
-    context.fillStyle = '#ffffff'
-    context.font = '700 58px "Microsoft YaHei UI", "Microsoft YaHei", sans-serif'
-    context.fillText(fittedText(context, supporter.nickname || '青锋无名客', 630), 68, 190)
-    context.fillStyle = 'rgba(231,237,240,.78)'
-    context.font = '400 29px "Microsoft YaHei UI", "Microsoft YaHei", sans-serif'
-    context.fillText(fittedText(context, supporter.message || '长夜执剑，幸与诸君同路。', 630), 68, 270)
-    context.fillStyle = '#d7ae62'
-    context.font = '700 36px "Microsoft YaHei UI", "Microsoft YaHei", sans-serif'
-    context.fillText(`¥${(supporter.amountCents / 100).toFixed(2)}`, 68, 370)
+    context.fillRect(0, 0, 640, 400)
+    context.strokeStyle = '#b48749'
+    context.lineWidth = 8
+    context.strokeRect(18, 18, 604, 364)
+    context.fillStyle = '#d5a95e'
+    context.font = '700 25px "Microsoft YaHei UI", sans-serif'
+    context.fillText(card.eyebrow, 50, 72)
+    context.fillStyle = '#f5f2e9'
+    context.font = '700 42px "Microsoft YaHei UI", sans-serif'
+    context.fillText(fittedText(context, card.title, 540), 50, 145)
+    context.fillStyle = 'rgba(235,238,232,.78)'
+    context.font = '400 23px "Microsoft YaHei UI", sans-serif'
+    context.fillText(fittedText(context, card.message, 540), 50, 218)
+    context.fillStyle = '#75d9dc'
+    context.font = '700 25px "Microsoft YaHei UI", sans-serif'
+    context.fillText(fittedText(context, card.detail, 540), 50, 315)
     return surface
   }
 
-  function rebuildTablets(supporters: SupporterAcknowledgement[]) {
-    clearTablets()
-    const visible = supporters.slice(0, 8)
-    const records = visible.length ? visible : [{
-      id: 'fallback', nickname: '致每一位同路人', message: '长夜执剑，幸与诸君同路。', amountCents: 0,
-      sortOrder: 0, isVisible: true, createdAt: '', updatedAt: '',
-    }]
-    for (const supporter of records) {
-      const texture = new THREE.CanvasTexture(canvasFor(supporter))
-      texture.colorSpace = THREE.SRGBColorSpace
-      texture.minFilter = THREE.LinearFilter
-      const faceMaterial = new THREE.MeshBasicMaterial({ map: texture, transparent: true })
-      const group = new THREE.Group()
-      group.add(new THREE.Mesh(tabletGeometry, tabletBackMaterial))
-      const face = new THREE.Mesh(new THREE.PlaneGeometry(3.18, 1.98), faceMaterial)
-      geometries.add(face.geometry)
-      face.position.z = 0.09
-      group.add(face)
-      scene.add(group)
-      tablets.push({ group, texture, faceMaterial })
+  function clearExhibits() {
+    for (const exhibit of exhibits) {
+      scene.remove(exhibit.group)
+      exhibit.texture.dispose()
+      exhibit.faceMaterial.dispose()
     }
+    exhibits.length = 0
   }
 
-  function syncData() {
+  function rebuild(cards: IntroAcknowledgementCard[]) {
+    clearExhibits()
+    const records = cards.length ? cards : [{ id: 'fallback', kind: 'supporter' as const, eyebrow: '鸣谢同路人', title: '致每一位同路人', message: '长夜执剑，幸与诸君同路。', detail: 'CS2AS', updatedAt: '' }]
+    records.forEach((card, index) => {
+      const angle = index / records.length * Math.PI * 2
+      const group = new THREE.Group()
+      group.position.set(Math.sin(angle) * 6.5, 0.6, Math.cos(angle) * 6.5)
+      group.rotation.y = angle + Math.PI
+      const base = new THREE.Mesh(pedestalBase, stone)
+      base.castShadow = true
+      const top = new THREE.Mesh(pedestalTop, bronze)
+      top.position.y = 0.45
+      const texture = new THREE.CanvasTexture(cardCanvas(card))
+      texture.colorSpace = THREE.SRGBColorSpace
+      texture.minFilter = THREE.LinearFilter
+      textures.add(texture)
+      const faceMaterial = new THREE.MeshBasicMaterial({ map: texture })
+      const panel = new THREE.Mesh(cardBack, jade)
+      panel.position.set(0, 2.2, 0)
+      const face = new THREE.Mesh(faceGeometry, faceMaterial)
+      face.position.set(0, 2.2, 0.085)
+      const reverseFace = new THREE.Mesh(faceGeometry, faceMaterial)
+      reverseFace.position.set(0, 2.2, -0.085)
+      reverseFace.rotation.y = Math.PI
+      const light = new THREE.PointLight(card.kind === 'upstream' ? 0xd6a35d : 0x6ddce0, 5.5, 5, 1.8)
+      light.position.set(0, 2.4, 1.1)
+      group.add(base, top, panel, face, reverseFace, light)
+      scene.add(group)
+      exhibits.push({ group, texture, faceMaterial, light })
+    })
+  }
+
+  function sync() {
     const state = getState()
-    const nextSignature = introSupporterSignature(state.supporters)
-    if (nextSignature === signature && tablets.length) return state
-    signature = nextSignature
-    rebuildTablets(state.supporters)
+    const next = introCardSignature(state.cards)
+    if (next !== signature || !exhibits.length) { signature = next; rebuild(state.cards) }
     return state
+  }
+
+  function cameraAt(state: IntroSceneState) {
+    const cards = state.cards.length || 1
+    const elapsed = state.elapsedMs
+    if (elapsed < 650) {
+      const t = easeInOut(elapsed / 650)
+      camera.position.set(0, 2.8 + t * 0.3, 14 - t * 4.2)
+      target.set(0, 1.7, 0)
+      return
+    }
+    if (elapsed < state.supporterLockMs) {
+      const t = (elapsed - 650) / (state.supporterLockMs - 650)
+      const angle = -0.4 + t * Math.PI * 0.92
+      camera.position.set(Math.sin(angle) * 12.4, 3.35, Math.cos(angle) * 12.4)
+      target.set(Math.sin(angle) * 5.8, 2.0, Math.cos(angle) * 5.8)
+      return
+    }
+    if (elapsed < 7_800) {
+      const t = easeInOut((elapsed - state.supporterLockMs) / (7_800 - state.supporterLockMs))
+      const supporterStart = Math.min(5, cards - 1)
+      const index = supporterStart + t * Math.max(1, cards - supporterStart)
+      const angle = index / cards * Math.PI * 2
+      camera.position.set(Math.sin(angle - 0.12) * 12.1, 3.05 + Math.sin(t * Math.PI) * 0.3, Math.cos(angle - 0.12) * 12.1)
+      target.set(Math.sin(angle) * 6.0, 2.0, Math.cos(angle) * 6.0)
+      return
+    }
+    const t = easeInOut((elapsed - 7_800) / Math.max(1, state.durationMs - 7_800))
+    camera.position.set(Math.sin(2.25) * (8.8 + t * 4.8), 3 + t * 3.5, Math.cos(2.25) * (8.8 + t * 4.8))
+    target.set(0, 1.4, 0)
   }
 
   function resize(size: StageSize) {
@@ -213,46 +211,36 @@ export async function createIntroScene(
   }
 
   resize(initialSize)
-  syncData()
+  const initial = sync()
+  cameraAt(initial)
+  camera.lookAt(target)
   renderer.render(scene, camera)
 
   return {
     resize,
-    frame(time, delta) {
-      const state = syncData()
-      const current = state.supporters.length ? state.elapsedMs / Math.max(1, state.supporterSlotMs) : 0
-      tablets.forEach((tablet, index) => {
-        const offset = index - current
-        const wrapped = ((offset + tablets.length / 2) % tablets.length + tablets.length) % tablets.length - tablets.length / 2
-        tablet.group.position.x = Math.sin(wrapped * 0.82) * 5.2
-        tablet.group.position.y = 0.25 + Math.cos(time * 0.9 + index) * 0.08
-        tablet.group.position.z = -1.8 - Math.abs(wrapped) * 2.2
-        tablet.group.rotation.y = -Math.sin(wrapped * 0.62) * 0.58
-        const focus = Math.max(0, 1 - Math.abs(wrapped) * 0.45)
-        tablet.group.scale.setScalar(0.76 + focus * 0.24)
-        tablet.group.visible = state.phase === 'supporters' && Math.abs(wrapped) < 3.4
+    frame(time) {
+      const state = sync()
+      cameraAt(state)
+      camera.lookAt(target)
+      exhibits.forEach((exhibit, index) => {
+        exhibit.group.position.y = 0.6 + Math.sin(time * 0.55 + index * 0.7) * 0.025
+        exhibit.light.intensity = 5.2 + Math.sin(time * 0.8 + index) * 0.35
       })
-      camera.position.x = Math.sin(time * 0.24) * 0.28
-      camera.position.y = 2.25 + Math.sin(time * 0.31) * 0.08
-      camera.lookAt(0, 0.15, -6)
-      sword.rotation.y = Math.sin(time * 0.72) * 0.18
-      scanGates.forEach((gate, index) => {
-        gate.position.z += delta * 1.8
-        if (gate.position.z > 8) gate.position.z = -35 - index * 2
-      })
-      flowLines.forEach(line => {
-        line.position.z += delta * 6.2
-        if (line.position.z > 8) line.position.z -= 64
-      })
-      if (!lowPerformance) points.rotation.y += delta * 0.016
+      lightPool.rotation.z = time * 0.018
       renderer.render(scene, camera)
     },
-    setLowPerformance(enabled) { lowPerformance = enabled; points.visible = !enabled; renderer.setPixelRatio(1) },
+    setLowPerformance(enabled) {
+      renderer.setPixelRatio(1)
+      renderer.shadowMap.enabled = !enabled
+      exhibits.forEach(exhibit => { exhibit.light.castShadow = false })
+    },
     dispose() {
-      clearTablets()
+      clearExhibits()
+      textures.forEach(value => value.dispose())
       geometries.forEach(value => value.dispose())
       materials.forEach(value => value.dispose())
       renderer.dispose()
+      renderer.forceContextLoss()
     },
   }
 }

@@ -56,4 +56,29 @@ describe('0.5.5 integrated Panel contract', () => {
     expect(read('src/components/AppTitlebar.vue')).toContain('getCurrentWindow')
     expect(read('src/components/AppTitlebar.vue')).toContain('startDragging')
   })
+
+  it('provides native maintenance and fault-report controls with narrow cleanup scope', () => {
+    const view = read('src/views/InstallView.vue')
+    const support = read('src-tauri/src/services/support.rs')
+    const commands = read('src-tauri/src/lib.rs')
+    for (const label of ['开机启动', '清除数据', '提交故障', '诊断日志将随工单提交']) expect(view).toContain(label)
+    for (const command of ['get_assistant_preferences', 'set_assistant_autostart', 'clear_assistant_data', 'submit_fault_report']) {
+      expect(commands).toContain(`commands::support::${command}`)
+    }
+    expect(support).toContain('["skin-forge/cache", "cache", "logs"]')
+    expect(support).toContain('CS2 文件、插件、Demo 与复盘记录均已保留')
+    expect(support).not.toContain('remove_dir_all(root_path)')
+  })
+
+  it('removes manual diagnostics viewing while retaining automatic fault-log attachment', () => {
+    const view = read('src/views/InstallView.vue')
+    const store = read('src/stores/cs2.ts')
+    expect(view).not.toContain('查看诊断日志')
+    expect(view).not.toContain('toggleDiagnostics')
+    expect(view).not.toContain('diagnosticsOpen')
+    expect(view).toContain('submitFaultReport')
+    expect(store).not.toContain('refreshDiagnostics')
+    expect(store).not.toContain('getDiagnosticsPayload')
+    expect(read('src-tauri/src/services/support.rs')).toContain('get_diagnostics_payload(root_path)')
+  })
 })

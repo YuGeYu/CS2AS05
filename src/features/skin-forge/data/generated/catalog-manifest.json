@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "upstream": {
+    "repo": "https://github.com/kaecho/CS2-Skin-Forge",
+    "tag": "v1.8.2",
+    "commit": "75f52fbd5fd0616dbbdd09a65c3a1981593400d1",
+    "previousCommit": "b2edea17db9128609dd41f726f179cd965206433"
+  },
+  "counts": {
+    "weapons": 35,
+    "weaponPaintRows": 1456,
+    "uniqueWeaponPaintKits": 1318,
+    "maxWeaponPaintKit": 1477,
+    "knives": 20,
+    "knifePaintRows": 576,
+    "gloves": 8,
+    "glovePaintRows": 94,
+    "agents": 63,
+    "musicKits": 94,
+    "stickers": 10461,
+    "keychains": 78
+  },
+  "duplicates": {
+    "weapons": 0,
+    "knives": 0,
+    "agents": 0,
+    "musicKits": 0,
+    "stickers": 0,
+    "keychains": 0
+  },
+  "files": {
+    "source": {
+      "weapons.ts": {
+        "bytes": 4143,
+        "sha256": "E8274D0DF3A805B3F38755AAD36A6E3CBFB0DEE5588BC4DB0907263B2ADCCEE6"
+      },
+      "weaponImages.ts": {
+        "bytes": 14442,
+        "sha256": "B6F50F68AF027E1592BCB19D394321CD2B43349EB2267B63C2B909F3ACA32336"
+      },
+      "skins.ts": {
+        "bytes": 556182,
+        "sha256": "A294EB93EFED09E9FC39714633C03893EEF0AD29FB40CCFC132B2A6A4FF8828A"
+      },
+      "stickers.ts": {
+        "bytes": 3070701,
+        "sha256": "0BEC76FA5AA2CC7BE79D7A77A1A5FA460FDC62033138065F8A84B945A00BB1A4"
+      },
+      "knives.ts": {
+        "bytes": 2055,
+        "sha256": "AA2E59E52D571261E6ABD5E1F33301331043F4924861467064BE945E1B6AD359"
+      },
+      "knifeSkins.ts": {
+        "bytes": 179734,
+        "sha256": "FAC575019E562F5F2A62F61348D710EDD5A8C0E329905DB2D24CF0249E4AB43B"
+      },
+      "keychains.ts": {
+        "bytes": 25760,
+        "sha256": "653B6D4F8268201335518C4BBDE4F39874D155BAF1B5B7FAD28908F21633346F"
+      },
+      "localNames.ts": {
+        "bytes": 34509,
+        "sha256": "8B2416BCCEE341AFD96780F6B7873C24CAF23F6097286D5B3AE034264391016F"
+      },
+      "skinNamesEn.ts": {
+        "bytes": 41334,
+        "sha256": "CAAC4ED58050C0C9F895DECBB0730BADF002802CDAB2925577EA19314DD821A0"
+      },
+      "nameMap.json": {
+        "bytes": 38211,
+        "sha256": "62EF95DB0C8AC72AFBA2D4BADC7074BCF4DD00F127D53B7EF7A284EA7F00B337"
+      }
+    },
+    "generated": {
+      "weapons.ts": {
+        "bytes": 4143,
+        "sha256": "E8274D0DF3A805B3F38755AAD36A6E3CBFB0DEE5588BC4DB0907263B2ADCCEE6"
+      },
+      "weaponImages.ts": {
+        "bytes": 14442,
+        "sha256": "B6F50F68AF027E1592BCB19D394321CD2B43349EB2267B63C2B909F3ACA32336"
+      },
+      "skins.ts": {
+        "bytes": 556174,
+        "sha256": "DC6531B379B83A506B797BE92B05C57B3947AC8B9EE69B3E99315368279ABEF7"
+      },
+      "stickers.ts": {
+        "bytes": 3070701,
+        "sha256": "0BEC76FA5AA2CC7BE79D7A77A1A5FA460FDC62033138065F8A84B945A00BB1A4"
+      },
+      "knives.ts": {
+        "bytes": 2055,
+        "sha256": "AA2E59E52D571261E6ABD5E1F33301331043F4924861467064BE945E1B6AD359"
+      },
+      "knifeSkins.ts": {
+        "bytes": 179734,
+        "sha256": "FAC575019E562F5F2A62F61348D710EDD5A8C0E329905DB2D24CF0249E4AB43B"
+      },
+      "keychains.ts": {
+        "bytes": 25760,
+        "sha256": "653B6D4F8268201335518C4BBDE4F39874D155BAF1B5B7FAD28908F21633346F"
+      },
+      "localNames.ts": {
+        "bytes": 34509,
+        "sha256": "8B2416BCCEE341AFD96780F6B7873C24CAF23F6097286D5B3AE034264391016F"
+      },
+      "skinNamesEn.ts": {
+        "bytes": 41334,
+        "sha256": "CAAC4ED58050C0C9F895DECBB0730BADF002802CDAB2925577EA19314DD821A0"
+      },
+      "nameMap.json": {
+        "bytes": 38211,
+        "sha256": "62EF95DB0C8AC72AFBA2D4BADC7074BCF4DD00F127D53B7EF7A284EA7F00B337"
+      }
+    }
+  }
+}
