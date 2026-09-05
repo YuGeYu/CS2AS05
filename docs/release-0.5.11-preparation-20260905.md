@@ -4,7 +4,7 @@
 
 ## 发布状态
 
-0.5.11 已完成本地签名构建、updater manifest 生成和发布产物封存。当前 Windows 安装器为 Tauri updater 签名版本，可用于发布前安装测试。Windows Authenticode 仍为 `NotSigned`，这不影响 Tauri updater `.sig` 的验证机制。
+0.5.11 已完成本地签名构建、updater manifest 生成、GitHub Release、夸克渠道、R2 上传和官网 updater 启用。用户已完成 R2 下载回读并确认通过，当前版本固定为正式发布版本。Windows Authenticode 仍为 `NotSigned`，这不影响 Tauri updater `.sig` 的验证机制。
 
 ## 构建与签名
 
@@ -34,8 +34,16 @@
 - `npm run bundle:desktop`：成功生成签名安装器与 `.sig`。
 - `npm run release:manifest`：成功生成 `updater-prod.json`，manifest 中的安装器大小和 SHA 与封存产物一致。
 
-## 发布前边界
+## 发布收尾
 
-- 尚未执行 GitHub、R2、官网或其他线上发布写入。
-- 尚未完成真实 CS2/BOT 行为验收；BOT 强度工坊、NadeSystem 和其他本地 BOT 能力仍应由本机实际对局确认后再对外宣称行为结果。
+- GitHub Release：`https://github.com/YuGeYu/CS2AS05/releases/tag/v0.5.11`
+- 夸克渠道：`https://pan.quark.cn/s/9c4cc82dd4f2`
+- R2 对象：`software-updates/cs2-bot-improver/prod/0.5.11/CS2人机增强助手_0.5.11_x64-setup.exe`
+- 用户已确认 R2 回读大小和 SHA-256 通过。
+- 官网 updater feed 已启用，公开接口返回 `selfUpdate.available=true`，旧版本请求可获得 0.5.11 更新信息。
+- 真实 CS2/BOT 行为验收已由用户完成；不再把该版本标记为候选。
 - 安装器的 Tauri updater 签名已生成；Windows Authenticode 代码签名未配置，系统签名状态为 `NotSigned`。
+
+## 固定口径
+
+0.5.11 是当前正式版本。后续如需修复，必须以新版本号发布，不覆盖已公开的 0.5.11 安装器、`.sig`、R2 对象或 GitHub Release 资产。
