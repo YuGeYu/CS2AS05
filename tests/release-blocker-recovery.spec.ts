@@ -50,7 +50,7 @@ describe('0.5.5 release blocker recovery', () => {
     expect(command).toContain('scoreboard_frontend_ready')
     expect(command).toContain('scoreboard_present')
     expect(command).toContain('demo::presentable_report(&app, report_id)')
-    expect(read('src/ScoreboardApp.vue')).toContain("next.metricsVersion !== 'simple-rating-v1'")
+    expect(read('src/ScoreboardApp.vue')).toContain("next.metricsVersion !== 'lb-rating-2.0'")
     expect(command).toContain('emit_to("scoreboard"')
   })
 

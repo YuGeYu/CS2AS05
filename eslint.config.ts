@@ -16,6 +16,7 @@ export default defineConfigWithVueTs(
   },
 
   globalIgnores([
+    '**/artifacts/**',
     '**/dist/**',
     '**/dist-ssr/**',
     '**/coverage/**',

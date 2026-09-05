@@ -4,7 +4,10 @@ use std::{
     fs,
     io::Read,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, OnceLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, OnceLock,
+    },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -33,12 +36,23 @@ use crate::{
 const PARSER_COMMIT: &str = "ba39cc44cd5abfd7f34df2b3c0a7dd3630048311";
 pub(crate) const REPORT_SCHEMA_VERSION: u32 = 6;
 pub(crate) const PARSER_ADAPTER_VERSION: &str = "9";
-pub(crate) const METRICS_VERSION: &str = "simple-rating-v1";
+pub(crate) const METRICS_VERSION: &str = "lb-rating-2.0";
+const PERFORMANCE_RADAR_MODEL_VERSION: &str = "performance-radar-v1";
 const JOB_LEASE_MS: i64 = 30_000;
 const MIN_STEAM_ID64: u64 = 76_561_197_960_265_728;
+const DEMO_SOURCE_OFFICIAL: &str = "official";
+const DEMO_SOURCE_WORKSHOP: &str = "workshop";
+const DEMO_SOURCE_UNKNOWN: &str = "unknown";
+const DEMO_WORKSHOP_SKIPPED: &str = "DEMO_WORKSHOP_PARSE_SKIPPED";
+const DEMO_UNKNOWN_SKIPPED: &str = "DEMO_MAP_SOURCE_UNKNOWN";
+
+struct DemoWatcherRuntime {
+    _watcher: RecommendedWatcher,
+    stop: Arc<AtomicBool>,
+}
 
 #[derive(Default)]
-pub struct DemoWatcherState(pub Mutex<Option<RecommendedWatcher>>);
+pub struct DemoWatcherState(Mutex<Option<DemoWatcherRuntime>>);
 
 type PositionCacheKey = (i64, i64, i64);
 type PositionCache = Mutex<VecDeque<(PositionCacheKey, Arc<Vec<PositionPoint>>)>>;
@@ -107,6 +121,55 @@ fn sha256_file(path: &Path) -> Result<String, AppError> {
         digest.update(&buffer[..read]);
     }
     Ok(format!("{:X}", digest.finalize()))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DemoSource {
+    Official,
+    Workshop,
+    Unknown,
+}
+
+impl DemoSource {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Official => DEMO_SOURCE_OFFICIAL,
+            Self::Workshop => DEMO_SOURCE_WORKSHOP,
+            Self::Unknown => DEMO_SOURCE_UNKNOWN,
+        }
+    }
+}
+
+fn read_demo_metadata_header(path: &Path) -> Result<Option<String>, AppError> {
+    let mut file = fs::File::open(path).map_err(|e| err("DEMO_FILE_READ", e))?;
+    let mut bytes = vec![0u8; 256 * 1024];
+    let size = file
+        .read(&mut bytes)
+        .map_err(|e| err("DEMO_FILE_READ", e))?;
+    let text = String::from_utf8_lossy(&bytes[..size]).to_ascii_lowercase();
+    let maps = map_metadata::embedded().map_err(|e| err("DEMO_MAP_METADATA", e))?;
+    Ok(maps.into_iter().find_map(|map| {
+        let name = map.name.to_ascii_lowercase();
+        text.contains(&name).then_some(map.name)
+    }))
+}
+
+fn classify_demo_source(path: &Path) -> DemoSource {
+    let normalized = path
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase();
+    if normalized
+        .split('/')
+        .any(|part| part == "workshop" || part == "ugc")
+        || normalized.contains("steamapps/workshop/content/730/")
+    {
+        return DemoSource::Workshop;
+    }
+    match read_demo_metadata_header(path) {
+        Ok(Some(_)) => DemoSource::Official,
+        _ => DemoSource::Unknown,
+    }
 }
 fn db_path(app: &AppHandle) -> Result<PathBuf, AppError> {
     Ok(app
@@ -178,7 +241,7 @@ fn open_db(app: &AppHandle) -> Result<Connection, AppError> {
         .map_err(|e| err("DEMO_DB_BUSY", e))?;
     db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
       CREATE TABLE IF NOT EXISTS demo_roots(id INTEGER PRIMARY KEY,path TEXT NOT NULL,canonical_path TEXT NOT NULL UNIQUE,enabled INTEGER NOT NULL DEFAULT 1,scan_depth INTEGER NOT NULL DEFAULT 5,last_scan_at INTEGER,last_error TEXT,created_at INTEGER NOT NULL,origin TEXT NOT NULL DEFAULT 'manual_legacy');
-      CREATE TABLE IF NOT EXISTS demo_files(id INTEGER PRIMARY KEY,path TEXT NOT NULL,canonical_path TEXT NOT NULL UNIQUE,file_name TEXT NOT NULL,size_bytes INTEGER NOT NULL,mtime_ms INTEGER NOT NULL,status TEXT NOT NULL,error_code TEXT,error_detail TEXT,map_name TEXT,total_rounds INTEGER,kills INTEGER,parsed_at INTEGER,report_json TEXT,source TEXT NOT NULL,discovered_at INTEGER NOT NULL,report_schema_version INTEGER NOT NULL DEFAULT 1,parser_adapter_version TEXT NOT NULL DEFAULT '1',metrics_version TEXT NOT NULL DEFAULT 'events-v1',scoreboard_status TEXT NOT NULL DEFAULT 'unavailable');
+      CREATE TABLE IF NOT EXISTS demo_files(id INTEGER PRIMARY KEY,path TEXT NOT NULL,canonical_path TEXT NOT NULL UNIQUE,file_name TEXT NOT NULL,size_bytes INTEGER NOT NULL,mtime_ms INTEGER NOT NULL,status TEXT NOT NULL,error_code TEXT,error_detail TEXT,map_name TEXT,total_rounds INTEGER,kills INTEGER,parsed_at INTEGER,report_json TEXT,source TEXT NOT NULL,discovered_at INTEGER NOT NULL,report_schema_version INTEGER NOT NULL DEFAULT 1,parser_adapter_version TEXT NOT NULL DEFAULT '1',metrics_version TEXT NOT NULL DEFAULT 'events-v1',scoreboard_status TEXT NOT NULL DEFAULT 'unavailable',map_source TEXT NOT NULL DEFAULT 'unknown');
       CREATE INDEX IF NOT EXISTS demo_files_mtime ON demo_files(mtime_ms DESC);
       CREATE INDEX IF NOT EXISTS demo_files_status ON demo_files(status);
       CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value_json TEXT NOT NULL,updated_at INTEGER NOT NULL);
@@ -528,6 +591,18 @@ fn open_db(app: &AppHandle) -> Result<Connection, AppError> {
             .map_err(|e| err("DEMO_DB_MIGRATION", e))?;
         tx.commit().map_err(|e| err("DEMO_DB_MIGRATION", e))?;
     }
+    if version < 8 {
+        let columns = table_columns(&db, "demo_files")?;
+        if !columns.contains("map_source") {
+            db.execute(
+                "ALTER TABLE demo_files ADD COLUMN map_source TEXT NOT NULL DEFAULT 'unknown'",
+                [],
+            )
+            .map_err(|e| err("DEMO_DB_MIGRATION", e))?;
+        }
+        db.execute_batch("UPDATE demo_files SET map_source='unknown' WHERE map_source IS NULL OR map_source NOT IN ('official','workshop','unknown'); PRAGMA user_version=8;")
+            .map_err(|e| err("DEMO_DB_MIGRATION", e))?;
+    }
     Ok(db)
 }
 
@@ -536,6 +611,7 @@ pub fn initialize(app: &AppHandle) -> Result<(), AppError> {
     let db = open_db(app)?;
     seed_map_metadata(&db)?;
     if !cs2::check_cs2_process()? {
+        db.execute("UPDATE analysis_jobs SET stage='canceled',progress=0,error_code=?1,error_detail=?2,finished_at=?3 WHERE demo_id IN (SELECT id FROM demo_files WHERE map_source IN ('workshop','unknown')) AND stage IN ('queued','fingerprinting','parsing_core','parsing_spatial')", params![DEMO_WORKSHOP_SKIPPED, "非官方或来源未确认的 Demo 已保留，任务已隔离。", now_ms()]).map_err(|e| err("DEMO_JOB_RECOVERY", e))?;
         db.execute("UPDATE analysis_jobs SET stage='queued',progress=0,lease_owner=NULL,lease_until=NULL,worker_id=NULL WHERE stage IN ('fingerprinting','parsing_core','normalizing','persisting','computing_metrics','parsing_spatial') AND COALESCE(lease_until,0)<?1 AND attempts<2", [now_ms()]).map_err(|e| err("DEMO_JOB_RECOVERY", e))?;
         db.execute("UPDATE analysis_jobs SET stage='error',error_code='DEMO_JOB_RETRY_EXHAUSTED',error_detail='应用重启后任务已达到 2 次自动重试上限。',finished_at=?1,lease_owner=NULL,lease_until=NULL,worker_id=NULL WHERE stage IN ('fingerprinting','parsing_core','normalizing','persisting','computing_metrics','parsing_spatial') AND attempts>=2", [now_ms()]).map_err(|e| err("DEMO_JOB_RECOVERY", e))?;
     }
@@ -661,6 +737,11 @@ pub fn refresh_watcher(app: &AppHandle) -> Result<(), AppError> {
         .0
         .lock()
         .map_err(|_| err("DEMO_WATCHER_LOCK", "监听器状态不可用。"))?;
+    if let Some(previous) = slot.take() {
+        previous.stop.store(true, Ordering::Release);
+    }
+    let stop = Arc::new(AtomicBool::new(false));
+    let coordinator_stop = stop.clone();
     let pending = Arc::new(Mutex::new(HashMap::<PathBuf, i64>::new()));
     let coordinator_pending = pending.clone();
     let coordinator_handle = app.clone();
@@ -668,7 +749,10 @@ pub fn refresh_watcher(app: &AppHandle) -> Result<(), AppError> {
         .name("demo-watch-coordinator".into())
         .spawn(move || loop {
             std::thread::sleep(Duration::from_millis(750));
-            if cs2::check_cs2_process().unwrap_or(true) {
+            if coordinator_stop.load(Ordering::Acquire) {
+                break;
+            }
+            if parse_gate::assert_parse_allowed().is_err() {
                 continue;
             }
             let paths = coordinator_pending
@@ -676,6 +760,9 @@ pub fn refresh_watcher(app: &AppHandle) -> Result<(), AppError> {
                 .map(|entries| entries.keys().cloned().collect::<Vec<_>>())
                 .unwrap_or_default();
             for path in paths {
+                if coordinator_stop.load(Ordering::Acquire) {
+                    break;
+                }
                 if !path.is_file() {
                     let _ = coordinator_pending.lock().map(|mut e| e.remove(&path));
                     continue;
@@ -723,7 +810,10 @@ pub fn refresh_watcher(app: &AppHandle) -> Result<(), AppError> {
     for root in list_roots(app)?.into_iter().filter(|r| r.enabled) {
         let _ = watcher.watch(Path::new(&root.path), RecursiveMode::Recursive);
     }
-    *slot = Some(watcher);
+    *slot = Some(DemoWatcherRuntime {
+        _watcher: watcher,
+        stop,
+    });
     Ok(())
 }
 
@@ -1117,6 +1207,8 @@ pub fn import_file(
     parse_gate::assert_parse_allowed_for_path(&canonical)?;
     let checksum = sha256_file(&canonical)?;
     let display = canonical.display().to_string();
+    let demo_source = classify_demo_source(&canonical);
+    let map_source = demo_source.as_str();
     let db = open_db(app)?;
     let now = now_ms();
     let existing: Option<ExistingDemoFingerprint> = db
@@ -1138,10 +1230,21 @@ pub fn import_file(
                 &metrics,
             )
         {
+            if map_source != DEMO_SOURCE_OFFICIAL {
+                db.execute("UPDATE demo_files SET status='skipped',map_source=?2,error_code=?3,error_detail=?4 WHERE id=?1", params![id,map_source,if map_source == DEMO_SOURCE_WORKSHOP { DEMO_WORKSHOP_SKIPPED } else { DEMO_UNKNOWN_SKIPPED },if map_source == DEMO_SOURCE_WORKSHOP { "创意工坊地图 Demo 已保留，但按策略不解析。" } else { "Demo 已保留，地图来源无法可靠确认，暂不解析。" }]).map_err(|e| err("DEMO_DB_SAVE", e))?;
+                db.execute("DELETE FROM analysis_jobs WHERE demo_id=?1 AND stage IN ('queued','fingerprinting','parsing_core','parsing_spatial')", [id]).map_err(|e| err("DEMO_JOB_SAVE", e))?;
+                return Ok(DemoImportResult {
+                    demo_file_id: id,
+                    status: "skipped".into(),
+                    cache_hit: false,
+                    skipped_reason: Some(map_source.into()),
+                });
+            }
             return Ok(DemoImportResult {
                 demo_file_id: id,
                 status,
                 cache_hit: true,
+                skipped_reason: None,
             });
         }
         if status != "done"
@@ -1152,7 +1255,26 @@ pub fn import_file(
             db.execute("UPDATE analysis_jobs SET stage='queued',progress=0,attempts=0,error_code=NULL,error_detail=NULL,cancel_requested=0,lease_owner=NULL,lease_until=NULL,worker_id=NULL,started_at=NULL,finished_at=NULL WHERE demo_id=?1 AND kind='core' AND parser_commit=?2 AND adapter_version=?3 AND schema_version=?4 AND metric_version=?5", params![id,PARSER_COMMIT,PARSER_ADAPTER_VERSION,REPORT_SCHEMA_VERSION,METRICS_VERSION]).map_err(|e| err("DEMO_JOB_SAVE", e))?;
         }
     }
-    db.execute("INSERT INTO demo_files(path,canonical_path,file_name,size_bytes,mtime_ms,checksum,status,source,discovered_at) VALUES(?1,?2,?3,?4,?5,?6,'queued',?7,?8) ON CONFLICT(canonical_path) DO UPDATE SET size_bytes=excluded.size_bytes,mtime_ms=excluded.mtime_ms,checksum=excluded.checksum,status='queued',error_code=NULL,error_detail=NULL",params![display,display.to_lowercase(),canonical.file_name().unwrap_or_default().to_string_lossy(),meta.len() as i64,mtime_ms(&meta),checksum,source,now]).map_err(|e|err("DEMO_DB_SAVE",e))?;
+    let status = if demo_source == DemoSource::Official {
+        "queued"
+    } else {
+        "skipped"
+    };
+    let error_code = if demo_source == DemoSource::Workshop {
+        Some(DEMO_WORKSHOP_SKIPPED)
+    } else if demo_source == DemoSource::Unknown {
+        Some(DEMO_UNKNOWN_SKIPPED)
+    } else {
+        None
+    };
+    let error_detail = if demo_source == DemoSource::Workshop {
+        Some("创意工坊地图 Demo 已保留，但按策略不解析。")
+    } else if demo_source == DemoSource::Unknown {
+        Some("Demo 已保留，地图来源无法可靠确认，暂不解析。")
+    } else {
+        None
+    };
+    db.execute("INSERT INTO demo_files(path,canonical_path,file_name,size_bytes,mtime_ms,checksum,status,source,discovered_at,map_source,error_code,error_detail) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12) ON CONFLICT(canonical_path) DO UPDATE SET size_bytes=excluded.size_bytes,mtime_ms=excluded.mtime_ms,checksum=excluded.checksum,status=excluded.status,map_source=excluded.map_source,error_code=excluded.error_code,error_detail=excluded.error_detail",params![display,display.to_lowercase(),canonical.file_name().unwrap_or_default().to_string_lossy(),meta.len() as i64,mtime_ms(&meta),checksum,status,source,now,map_source,error_code,error_detail]).map_err(|e|err("DEMO_DB_SAVE",e))?;
     let id: i64 = db
         .query_row(
             "SELECT id FROM demo_files WHERE canonical_path=?1",
@@ -1160,6 +1282,14 @@ pub fn import_file(
             |r| r.get(0),
         )
         .map_err(|e| err("DEMO_DB_QUERY", e))?;
+    if demo_source != DemoSource::Official {
+        return Ok(DemoImportResult {
+            demo_file_id: id,
+            status: "skipped".into(),
+            cache_hit: false,
+            skipped_reason: Some(map_source.into()),
+        });
+    }
     db.execute(
         "INSERT INTO demo_paths(demo_id,canonical_path,exists_now,last_seen_at) VALUES(?1,?2,1,?3) ON CONFLICT(canonical_path) DO UPDATE SET demo_id=excluded.demo_id,exists_now=1,last_seen_at=excluded.last_seen_at",
         params![id, display.to_lowercase(), now],
@@ -1181,6 +1311,7 @@ pub fn import_file(
         demo_file_id: id,
         status: "queued".into(),
         cache_hit: false,
+        skipped_reason: None,
     })
 }
 
@@ -1220,6 +1351,10 @@ fn execute_core_job(
     let meta = validate(&canonical)?;
     let snapshot = (meta.len() as i64, mtime_ms(&meta));
     let db = open_db(app)?;
+    if classify_demo_source(&canonical) != DemoSource::Official {
+        db.execute("UPDATE demo_files SET status='skipped',error_code=?2,error_detail=?3,map_source=?4 WHERE id=?1", params![demo_id, DEMO_UNKNOWN_SKIPPED, "Demo 来源非官方，已保留但不解析。", DEMO_SOURCE_UNKNOWN]).map_err(|e| err("DEMO_DB_SAVE", e))?;
+        return finish_canceled_job(&db, job_id, demo_id);
+    }
     if job_cancel_requested(&db, job_id)? {
         return finish_canceled_job(&db, job_id, demo_id);
     }
@@ -1301,7 +1436,7 @@ pub(crate) fn process_next_job(app: &AppHandle, worker_id: &str) -> Result<bool,
     let now = now_ms();
     let claimed: Option<(i64, i64, String)> = db
         .query_row(
-            "SELECT j.id,j.demo_id,d.path FROM analysis_jobs j JOIN demo_files d ON d.id=j.demo_id WHERE j.kind='core' AND j.stage='queued' AND j.cancel_requested=0 AND (j.lease_until IS NULL OR j.lease_until<?1) ORDER BY j.created_at,j.id LIMIT 1",
+            "SELECT j.id,j.demo_id,d.path FROM analysis_jobs j JOIN demo_files d ON d.id=j.demo_id WHERE j.kind='core' AND d.map_source='official' AND j.stage='queued' AND j.cancel_requested=0 AND (j.lease_until IS NULL OR j.lease_until<?1) ORDER BY j.created_at,j.id LIMIT 1",
             [now],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
@@ -1597,7 +1732,7 @@ pub(crate) fn process_next_spatial_job(app: &AppHandle, worker_id: &str) -> Resu
     db.execute_batch("BEGIN IMMEDIATE")
         .map_err(|e| err("DEMO_JOB_CLAIM", e))?;
     let now = now_ms();
-    let claimed: Option<(i64, i64, String, i64)> = db.query_row("SELECT j.id,j.demo_id,d.path,COALESCE(CAST(json_extract(j.log_tail,'$.samplingHz') AS INTEGER),8) FROM analysis_jobs j JOIN demo_files d ON d.id=j.demo_id WHERE j.kind='spatial' AND j.stage='queued' AND j.cancel_requested=0 AND (j.lease_until IS NULL OR j.lease_until<?1) ORDER BY j.created_at,j.id LIMIT 1", [now], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?))).optional().map_err(|e| err("DEMO_JOB_CLAIM", e))?;
+    let claimed: Option<(i64, i64, String, i64)> = db.query_row("SELECT j.id,j.demo_id,d.path,COALESCE(CAST(json_extract(j.log_tail,'$.samplingHz') AS INTEGER),8) FROM analysis_jobs j JOIN demo_files d ON d.id=j.demo_id WHERE j.kind='spatial' AND d.map_source='official' AND j.stage='queued' AND j.cancel_requested=0 AND (j.lease_until IS NULL OR j.lease_until<?1) ORDER BY j.created_at,j.id LIMIT 1", [now], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?))).optional().map_err(|e| err("DEMO_JOB_CLAIM", e))?;
     if let Some((job_id, demo_id, path, sampling_hz)) = claimed {
         db.execute("UPDATE analysis_jobs SET stage='parsing_spatial',progress=10,attempts=attempts+1,started_at=COALESCE(started_at,?2),lease_owner=?3,lease_until=?4,worker_id=?3 WHERE id=?1", params![job_id, now, worker_id, now + 300_000]).map_err(|e| err("DEMO_JOB_CLAIM", e))?;
         db.execute_batch("COMMIT")
@@ -2018,7 +2153,15 @@ pub fn cancel_analysis_job(app: &AppHandle, job_id: i64) -> Result<(), AppError>
 
 pub fn retry_analysis_job(app: &AppHandle, job_id: i64) -> Result<(), AppError> {
     parse_gate::assert_parse_allowed()?;
-    let changed = open_db(app)?
+    let db = open_db(app)?;
+    let source: Option<String> = db.query_row("SELECT d.map_source FROM analysis_jobs j JOIN demo_files d ON d.id=j.demo_id WHERE j.id=?1", [job_id], |r| r.get(0)).optional().map_err(|e| err("DEMO_JOB_QUERY", e))?;
+    if source.as_deref() != Some(DEMO_SOURCE_OFFICIAL) {
+        return Err(err(
+            "DEMO_PARSE_SKIPPED_NON_OFFICIAL_MAP",
+            "非官方或未知地图 Demo 已保留，禁止重试解析。",
+        ));
+    }
+    let changed = db
         .execute(
             "UPDATE analysis_jobs SET stage='queued',progress=0,attempts=0,error_code=NULL,error_detail=NULL,cancel_requested=0,lease_owner=NULL,lease_until=NULL,worker_id=NULL,started_at=NULL,finished_at=NULL WHERE id=?1 AND stage IN ('error','canceled')",
             [job_id],
@@ -2033,6 +2176,26 @@ pub fn retry_analysis_job(app: &AppHandle, job_id: i64) -> Result<(), AppError> 
     Ok(())
 }
 
+fn delete_analysis_job_record(db: &Connection, job_id: i64) -> Result<(), AppError> {
+    let changed = db
+        .execute(
+            "DELETE FROM analysis_jobs WHERE id=?1 AND stage IN ('error','canceled')",
+            [job_id],
+        )
+        .map_err(|e| err("DEMO_JOB_DELETE", e))?;
+    if changed == 0 {
+        return Err(err(
+            "DEMO_JOB_NOT_DELETABLE",
+            "任务不存在，或当前仍在运行，无法删除。",
+        ));
+    }
+    Ok(())
+}
+
+pub fn delete_analysis_job(app: &AppHandle, job_id: i64) -> Result<(), AppError> {
+    delete_analysis_job_record(&open_db(app)?, job_id)
+}
+
 pub fn scan(app: &AppHandle, root_id: Option<i64>) -> Result<DemoScanResult, AppError> {
     parse_gate::assert_parse_allowed()?;
     let last_scan_at = now_ms();
@@ -2044,6 +2207,7 @@ pub fn scan(app: &AppHandle, root_id: Option<i64>) -> Result<DemoScanResult, App
         cache_hits: 0,
         parsed: 0,
         failed: 0,
+        skipped: 0,
         permission_errors: 0,
         last_scan_at,
     };
@@ -2061,6 +2225,9 @@ pub fn scan(app: &AppHandle, root_id: Option<i64>) -> Result<DemoScanResult, App
                 Ok(v) if v.cache_hit => out.cache_hits += 1,
                 Ok(v) if v.status == "queued" => {
                     out.imported += 1;
+                }
+                Ok(v) if v.status == "skipped" => {
+                    out.skipped += 1;
                 }
                 _ => out.failed += 1,
             }
@@ -2094,7 +2261,7 @@ pub fn list(
     let status_arg = if status == "all" { "" } else { status };
     let db = open_db(app)?;
     let total=db.query_row("SELECT COUNT(*) FROM demo_files WHERE (?1='' OR file_name LIKE ?2 OR map_name LIKE ?2) AND (?3='' OR status=?3)",params![query.trim(),q,status_arg],|r|r.get(0)).map_err(|e|err("DEMO_DB_QUERY",e))?;
-    let mut stmt=db.prepare("SELECT id,file_name,path,size_bytes,mtime_ms,status,error_code,map_name,total_rounds,kills,parsed_at FROM demo_files WHERE (?1='' OR file_name LIKE ?2 OR map_name LIKE ?2) AND (?3='' OR status=?3) ORDER BY mtime_ms DESC LIMIT ?4 OFFSET ?5").map_err(|e|err("DEMO_DB_QUERY",e))?;
+    let mut stmt=db.prepare("SELECT id,file_name,path,size_bytes,mtime_ms,status,error_code,map_name,total_rounds,kills,parsed_at,map_source,error_detail FROM demo_files WHERE (?1='' OR file_name LIKE ?2 OR map_name LIKE ?2) AND (?3='' OR status=?3) ORDER BY mtime_ms DESC LIMIT ?4 OFFSET ?5").map_err(|e|err("DEMO_DB_QUERY",e))?;
     let rows = stmt
         .query_map(
             params![query.trim(), q, status_arg, size, (page - 1) * size],
@@ -2111,6 +2278,8 @@ pub fn list(
                     total_rounds: r.get(8)?,
                     kills: r.get(9)?,
                     parsed_at: r.get(10)?,
+                    map_source: r.get(11)?,
+                    skipped_reason: r.get(12)?,
                 })
             },
         )
@@ -2126,7 +2295,7 @@ pub fn list(
 pub(crate) fn list_all_for_session(app: &AppHandle) -> Result<Vec<DemoListItem>, AppError> {
     let db = open_db(app)?;
     let mut stmt = db
-        .prepare("SELECT id,file_name,path,size_bytes,mtime_ms,status,error_code,map_name,total_rounds,kills,parsed_at FROM demo_files ORDER BY mtime_ms DESC,id DESC")
+        .prepare("SELECT id,file_name,path,size_bytes,mtime_ms,status,error_code,map_name,total_rounds,kills,parsed_at,map_source,error_detail FROM demo_files ORDER BY mtime_ms DESC,id DESC")
         .map_err(|error| err("DEMO_DB_QUERY", error))?;
     let rows = stmt
         .query_map([], |row| {
@@ -2142,6 +2311,8 @@ pub(crate) fn list_all_for_session(app: &AppHandle) -> Result<Vec<DemoListItem>,
                 total_rounds: row.get(8)?,
                 kills: row.get(9)?,
                 parsed_at: row.get(10)?,
+                map_source: row.get(11)?,
+                skipped_reason: row.get(12)?,
             })
         })
         .map_err(|error| err("DEMO_DB_QUERY", error))?;
@@ -2250,6 +2421,481 @@ pub fn match_scoreboard(
         })
         .map_err(|e| err("DEMO_DB_QUERY", e))?;
     Ok(rows.filter_map(Result::ok).collect())
+}
+
+#[derive(Debug)]
+struct PerformanceRadarInputs {
+    stable_key: String,
+    name: Option<String>,
+    is_bot: bool,
+    team_number: Option<i64>,
+    team_name: Option<String>,
+    match_rounds: Option<i64>,
+    match_kills: Option<i64>,
+    match_deaths: Option<i64>,
+    match_assists: Option<i64>,
+    match_damage: Option<i64>,
+    first_kills: Option<i64>,
+    first_deaths: Option<i64>,
+    trade_kills: Option<i64>,
+    match_kast_rounds: Option<i64>,
+    ranking_rating: Option<f64>,
+    ranking_rating_model: Option<String>,
+    round_count: i64,
+    round_kills: Option<i64>,
+    round_kills_count: i64,
+    round_deaths: Option<i64>,
+    round_deaths_count: i64,
+    round_assists: Option<i64>,
+    round_assists_count: i64,
+    round_damage: Option<i64>,
+    round_damage_count: i64,
+    survived_rounds: Option<i64>,
+    survived_count: i64,
+    kast_rounds: Option<i64>,
+    kast_count: i64,
+    multi_kill_rounds: Option<i64>,
+}
+
+fn bounded_score(value: f64) -> Option<f64> {
+    // 100 is the benchmark ring. Keep a separate safety ceiling so exceptional
+    // values remain distinguishable while malformed data cannot explode the SVG.
+    value.is_finite().then(|| value.clamp(0.0, 500.0))
+}
+
+fn radar_dimension(
+    key: &str,
+    label: &str,
+    raw: Option<f64>,
+    score: Option<f64>,
+    unit: &str,
+    benchmark: f64,
+    source: &str,
+    quality: &str,
+) -> PerformanceRadarDimension {
+    let raw = raw.filter(|value| value.is_finite());
+    let score = score.and_then(bounded_score);
+    let raw_label = match (raw, unit) {
+        (Some(value), "百分比") => format!("{:.1}%", value * 100.0),
+        (Some(value), _) => format!("{value:.2}"),
+        (None, _) => "--".into(),
+    };
+    PerformanceRadarDimension {
+        key: key.into(),
+        label: label.into(),
+        score,
+        raw,
+        raw_label,
+        unit: unit.into(),
+        benchmark,
+        source: source.into(),
+        quality: if raw.is_some() && score.is_some() {
+            quality.into()
+        } else {
+            "unavailable".into()
+        },
+    }
+}
+
+fn unavailable_radar_player(
+    input: PerformanceRadarInputs,
+    warning: &str,
+) -> PerformanceRadarPlayer {
+    let dimensions = [
+        ("firepower", "火力", "KPR", 0.80),
+        ("damage", "输出", "ADR", 70.0),
+        ("survival", "生存", "百分比", 0.50),
+        ("participation", "参战", "百分比", 0.70),
+        ("teamwork", "协同", "协同事件/回合", 0.45),
+        ("opening", "先手影响", "先手净值/回合", 0.0),
+    ]
+    .into_iter()
+    .map(|(key, label, unit, benchmark)| {
+        radar_dimension(
+            key,
+            label,
+            None,
+            None,
+            unit,
+            benchmark,
+            "unavailable",
+            "unavailable",
+        )
+    })
+    .collect();
+    PerformanceRadarPlayer {
+        stable_key: input.stable_key,
+        name: input.name,
+        is_bot: input.is_bot,
+        team_number: input.team_number,
+        team_name: input.team_name,
+        rounds_played: None,
+        raw_stats: PerformanceRadarRawStats::default(),
+        dimensions,
+        warnings: vec![warning.into()],
+        ranking_rating: input.ranking_rating,
+        ranking_rating_model: input.ranking_rating_model,
+    }
+}
+
+fn calculate_performance_radar(input: PerformanceRadarInputs) -> PerformanceRadarPlayer {
+    if !matches!(input.team_number, Some(2 | 3)) {
+        return unavailable_radar_player(input, "观战者或无队伍身份不参与表现计算。");
+    }
+    let (rounds, source, quality, kills, deaths, assists, damage, _survived, kast, multi_kills) =
+        if input.round_count > 0 {
+            let complete = |count: i64| count == input.round_count;
+            (
+                Some(input.round_count),
+                "player_round_stats",
+                "complete",
+                complete(input.round_kills_count)
+                    .then_some(input.round_kills)
+                    .flatten(),
+                complete(input.round_deaths_count)
+                    .then_some(input.round_deaths)
+                    .flatten(),
+                complete(input.round_assists_count)
+                    .then_some(input.round_assists)
+                    .flatten(),
+                complete(input.round_damage_count)
+                    .then_some(input.round_damage)
+                    .flatten(),
+                complete(input.survived_count)
+                    .then_some(input.survived_rounds)
+                    .flatten(),
+                complete(input.kast_count)
+                    .then_some(input.kast_rounds)
+                    .flatten(),
+                complete(input.round_kills_count)
+                    .then_some(input.multi_kill_rounds)
+                    .flatten(),
+            )
+        } else if input.match_rounds.is_some_and(|rounds| rounds > 0) {
+            (
+                input.match_rounds,
+                "match_players_totals",
+                "partial",
+                input.match_kills,
+                input.match_deaths,
+                input.match_assists,
+                input.match_damage,
+                None,
+                input.match_kast_rounds,
+                None,
+            )
+        } else {
+            return unavailable_radar_player(input, "没有正式参赛回合，六维表现不可用。");
+        };
+    let rounds = rounds.unwrap_or_default();
+    if rounds <= 0 {
+        return unavailable_radar_player(input, "没有正式参赛回合，六维表现不可用。");
+    }
+    let denominator = rounds as f64;
+    let ratio = |value: Option<i64>| value.map(|value| value.max(0) as f64 / denominator);
+    let firepower = ratio(kills);
+    let adr = ratio(damage);
+    let mut survival_source = source;
+    let mut survival_quality = quality;
+    let (survived, survival_warning) = if input.round_count > 0 {
+        let round_stats_complete = input.survived_count == input.round_count
+            && input.round_deaths_count == input.round_count
+            && input.round_deaths.is_some();
+        let totals_valid = input.match_deaths.is_some_and(|deaths| {
+            let survival_rounds = input.match_rounds.unwrap_or(input.round_count);
+            survival_rounds > 0 && deaths >= 0 && deaths <= survival_rounds
+        });
+        let totals_match =
+            round_stats_complete && totals_valid && input.round_deaths == input.match_deaths;
+        if totals_match {
+            (input.survived_rounds, None)
+        } else if totals_valid {
+            let survival_rounds = input.match_rounds.unwrap_or(input.round_count);
+            survival_source = "match_players_totals";
+            survival_quality = "partial";
+            (
+                input.match_deaths.map(|deaths| survival_rounds - deaths),
+                Some("逐回合死亡统计与本场总表不一致，生存轴已按本场死亡总数回退计算。"),
+            )
+        } else {
+            survival_source = "unavailable";
+            survival_quality = "unavailable";
+            (None, Some("回合数或死亡总数缺失或非法，生存轴不可用。"))
+        }
+    } else {
+        survival_source = "unavailable";
+        survival_quality = "unavailable";
+        (None, Some("没有完整逐回合死亡统计，生存轴不可用。"))
+    };
+    let survival_denominator = input
+        .match_rounds
+        .filter(|rounds| *rounds > 0)
+        .unwrap_or(rounds) as f64;
+    let survival = survived.map(|value| value as f64 / survival_denominator);
+    let participation = ratio(kast);
+    let teamwork = assists
+        .zip(input.trade_kills)
+        .map(|(assists, trades)| (assists.max(0) + trades.max(0)) as f64 / denominator);
+    let opening_delta = input
+        .first_kills
+        .zip(input.first_deaths)
+        .map(|(kills, deaths)| kills - deaths);
+    let opening = opening_delta.map(|delta| delta as f64 / denominator);
+    let opening_score =
+        opening_delta.map(|delta| 50.0 + 50.0 * delta as f64 / (denominator * 0.25).max(1.0));
+    let mut warnings = Vec::new();
+    if quality == "partial" {
+        warnings.push("缺少逐回合明细，已使用总表统计；无法计算的维度保持不可用。".into());
+    }
+    if input.first_kills == Some(0) && input.first_deaths == Some(0) {
+        warnings.push("无首杀事件记录，先手影响显示中性 50。".into());
+    } else if input.first_kills.is_none() || input.first_deaths.is_none() {
+        warnings.push("先手字段不可用，先手影响保持不可用。".into());
+    }
+    if let Some(warning) = survival_warning {
+        warnings.push(warning.into());
+    }
+    let dimensions = vec![
+        radar_dimension(
+            "firepower",
+            "火力",
+            firepower,
+            firepower.map(|raw| raw / 0.80 * 100.0),
+            "KPR",
+            0.80,
+            source,
+            quality,
+        ),
+        radar_dimension(
+            "damage",
+            "输出",
+            adr,
+            adr.map(|raw| raw / 70.0 * 100.0),
+            "ADR",
+            70.0,
+            source,
+            quality,
+        ),
+        radar_dimension(
+            "survival",
+            "生存",
+            survival,
+            survival.map(|raw| raw / 0.50 * 100.0),
+            "百分比",
+            0.50,
+            survival_source,
+            survival_quality,
+        ),
+        radar_dimension(
+            "participation",
+            "参战",
+            participation,
+            participation.map(|raw| raw / 0.70 * 100.0),
+            "百分比",
+            0.70,
+            source,
+            quality,
+        ),
+        radar_dimension(
+            "teamwork",
+            "协同",
+            teamwork,
+            teamwork.map(|raw| raw / 0.45 * 100.0),
+            "协同事件/回合",
+            0.45,
+            source,
+            quality,
+        ),
+        radar_dimension(
+            "opening",
+            "先手影响",
+            opening,
+            opening_score,
+            "先手净值/回合",
+            0.0,
+            "match_players",
+            quality,
+        ),
+    ];
+    PerformanceRadarPlayer {
+        stable_key: input.stable_key,
+        name: input.name,
+        is_bot: input.is_bot,
+        team_number: input.team_number,
+        team_name: input.team_name,
+        rounds_played: Some(rounds),
+        raw_stats: PerformanceRadarRawStats {
+            participated_rounds: Some(rounds),
+            kills,
+            deaths,
+            assists,
+            damage_health: damage,
+            survived_rounds: survived,
+            kast_rounds: kast,
+            multi_kill_rounds: multi_kills,
+            first_kills: input.first_kills,
+            first_deaths: input.first_deaths,
+            trade_kills: input.trade_kills,
+        },
+        dimensions,
+        warnings,
+        ranking_rating: input.ranking_rating,
+        ranking_rating_model: input.ranking_rating_model,
+    }
+}
+
+fn performance_radar_from_db(
+    db: &Connection,
+    demo_id: i64,
+    player_keys: Option<Vec<String>>,
+) -> Result<MatchPerformanceRadar, AppError> {
+    let exists: bool = db
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM demo_files WHERE id=?1)",
+            [demo_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| err("DEMO_DB_QUERY", error))?;
+    if !exists {
+        return Err(err("DEMO_MATCH_NOT_FOUND", "Demo 未登记或尚未生成报告。"));
+    }
+    let requested = player_keys.unwrap_or_default();
+    if requested.len() > 3 {
+        return Err(err("DEMO_PLAYER_LIMIT", "表现雷达最多比较三名玩家。"));
+    }
+    let mut stmt = db.prepare(
+        "SELECT p.stable_key,p.current_name,p.is_bot,mp.team_number,mp.team_name,
+                mp.rounds_played,mp.kills,mp.deaths,mp.assists,mp.damage_health,mp.first_kills,mp.first_deaths,mp.trade_kills,mp.kast_rounds,
+                mp.rating,mp.rating_model,
+                COUNT(prs.round_number),SUM(prs.kills),COUNT(prs.kills),SUM(prs.deaths),COUNT(prs.deaths),SUM(prs.assists),COUNT(prs.assists),
+                SUM(prs.damage_health),COUNT(prs.damage_health),SUM(prs.survived),COUNT(prs.survived),SUM(prs.kast),COUNT(prs.kast),
+                SUM(CASE WHEN prs.kills>=2 THEN 1 ELSE 0 END)
+         FROM match_players mp JOIN players p ON p.id=mp.player_id
+         LEFT JOIN player_round_stats prs ON prs.demo_id=mp.demo_id AND prs.player_id=mp.player_id
+         WHERE mp.demo_id=?1
+         GROUP BY p.id,p.stable_key,p.current_name,p.is_bot,mp.team_number,mp.team_name,mp.rounds_played,mp.kills,mp.deaths,mp.assists,mp.damage_health,mp.first_kills,mp.first_deaths,mp.trade_kills,mp.kast_rounds
+         ORDER BY COALESCE(mp.team_number,99),p.stable_key"
+    ).map_err(|error| err("DEMO_DB_QUERY", error))?;
+    let rows = stmt
+        .query_map([demo_id], |row| {
+            Ok(PerformanceRadarInputs {
+                stable_key: row.get(0)?,
+                name: row.get(1)?,
+                is_bot: row.get::<_, i64>(2)? != 0,
+                team_number: row.get(3)?,
+                team_name: row.get(4)?,
+                match_rounds: row.get(5)?,
+                match_kills: row.get(6)?,
+                match_deaths: row.get(7)?,
+                match_assists: row.get(8)?,
+                match_damage: row.get(9)?,
+                first_kills: row.get(10)?,
+                first_deaths: row.get(11)?,
+                trade_kills: row.get(12)?,
+                match_kast_rounds: row.get(13)?,
+                ranking_rating: row.get(14)?,
+                ranking_rating_model: row.get(15)?,
+                round_count: row.get(16)?,
+                round_kills: row.get(17)?,
+                round_kills_count: row.get(18)?,
+                round_deaths: row.get(19)?,
+                round_deaths_count: row.get(20)?,
+                round_assists: row.get(21)?,
+                round_assists_count: row.get(22)?,
+                round_damage: row.get(23)?,
+                round_damage_count: row.get(24)?,
+                survived_rounds: row.get(25)?,
+                survived_count: row.get(26)?,
+                kast_rounds: row.get(27)?,
+                kast_count: row.get(28)?,
+                multi_kill_rounds: row.get(29)?,
+            })
+        })
+        .map_err(|error| err("DEMO_DB_QUERY", error))?;
+    let mut inputs = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| err("DEMO_DB_QUERY", error))?;
+    let requested_keys = requested.clone();
+    if !requested.is_empty() {
+        for key in &requested {
+            if !inputs.iter().any(|player| &player.stable_key == key) {
+                return Err(err(
+                    "DEMO_PLAYER_NOT_FOUND",
+                    format!("玩家 {key} 不属于当前 Demo。"),
+                ));
+            }
+        }
+    }
+    let mut players: Vec<_> = inputs
+        .into_iter()
+        .map(calculate_performance_radar)
+        .collect();
+    let cohort_size = players
+        .iter()
+        .filter(|player| matches!(player.team_number, Some(2 | 3)))
+        .count();
+    for axis in [
+        "firepower",
+        "damage",
+        "survival",
+        "participation",
+        "teamwork",
+        "opening",
+    ] {
+        let mut values: Vec<f64> = players
+            .iter()
+            .filter(|player| matches!(player.team_number, Some(2 | 3)))
+            .filter_map(|player| {
+                player
+                    .dimensions
+                    .iter()
+                    .find(|dimension| dimension.key == axis)
+                    .and_then(|dimension| dimension.raw)
+            })
+            .filter(|value| value.is_finite() && *value >= 0.0)
+            .collect();
+        values.sort_by(|a, b| b.total_cmp(a));
+        values.dedup_by(|a, b| (*a - *b).abs() < f64::EPSILON);
+        let benchmark = values.get(1).copied().or_else(|| values.first().copied());
+        for player in &mut players {
+            if let Some(dimension) = player
+                .dimensions
+                .iter_mut()
+                .find(|dimension| dimension.key == axis)
+            {
+                dimension.benchmark = benchmark.unwrap_or(0.0);
+                dimension.score = match (dimension.raw, benchmark) {
+                    (Some(raw), Some(base)) if base > 0.0 => Some((raw / base * 100.0).min(400.0)),
+                    (Some(_), Some(_)) => Some(0.0),
+                    _ => None,
+                };
+                if benchmark.is_none() {
+                    dimension.quality = "unavailable".into();
+                }
+            }
+        }
+    }
+    if !requested_keys.is_empty() {
+        let requested = requested_keys.into_iter().collect::<BTreeSet<_>>();
+        players.retain(|player| requested.contains(&player.stable_key));
+    }
+    Ok(MatchPerformanceRadar {
+        demo_file_id: demo_id,
+        model_version: PERFORMANCE_RADAR_MODEL_VERSION.into(),
+        denominator: "player_participated_rounds".into(),
+        players,
+        warnings: Vec::new(),
+        benchmark_method: "second-highest-per-axis".into(),
+        cohort_size,
+    })
+}
+
+pub fn match_performance_radar(
+    app: &AppHandle,
+    demo_id: i64,
+    player_keys: Option<Vec<String>>,
+) -> Result<MatchPerformanceRadar, AppError> {
+    performance_radar_from_db(&open_db(app)?, demo_id, player_keys)
 }
 
 pub fn match_rounds(app: &AppHandle, demo_id: i64) -> Result<Vec<MatchRoundSummary>, AppError> {
@@ -3359,12 +4005,15 @@ fn build_scoreboard(
         "partial"
     };
     let rating_warnings = if !metric_inputs_complete {
-        vec!["Demo 末尾包含未完成回合，终局 totals 已混入该回合；ADR 与简易 Rating 不可用。".into()]
+        vec![
+            "Demo 末尾包含未完成回合，终局 totals 已混入该回合；ADR 与 LBRating 2.0 不可用。"
+                .into(),
+        ]
     } else {
         match rating_status {
-            "partial" => vec!["部分玩家缺少 K/D/A、伤害或报告回合，未计算简易 Rating。".into()],
+            "partial" => vec!["部分玩家缺少 K/D/A、伤害或报告回合，未计算 LBRating 2.0。".into()],
             "unavailable" => {
-                vec!["当前 Demo 缺少 K/D/A、伤害或已完成回合，无法计算简易 Rating。".into()]
+                vec!["当前 Demo 缺少 K/D/A、伤害或已完成回合，无法计算 LBRating 2.0。".into()]
             }
             _ => vec![],
         }
@@ -3759,6 +4408,297 @@ pub fn set_recording_desired(app: &AppHandle, enabled: bool) -> Result<(), AppEr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn classifies_workshop_paths_before_metadata() {
+        let path = PathBuf::from(r"D:\Steam\steamapps\workshop\content\730\123\demo.dem");
+        assert_eq!(classify_demo_source(&path), DemoSource::Workshop);
+        let path = PathBuf::from(r"C:\x\UGC\demo.dem");
+        assert_eq!(classify_demo_source(&path), DemoSource::Workshop);
+    }
+
+    #[test]
+    fn unknown_demo_source_is_never_official() {
+        let path = std::env::temp_dir().join(format!("unknown-demo-{}.dem", std::process::id()));
+        fs::write(&path, b"PBDEMS2\0unrecognized").unwrap();
+        assert_eq!(classify_demo_source(&path), DemoSource::Unknown);
+        let _ = fs::remove_file(path);
+    }
+
+    fn radar_input() -> PerformanceRadarInputs {
+        PerformanceRadarInputs {
+            stable_key: "steam:test".into(),
+            name: Some("测试玩家".into()),
+            is_bot: false,
+            team_number: Some(3),
+            team_name: Some("CT".into()),
+            match_rounds: Some(20),
+            match_kills: Some(16),
+            match_deaths: Some(8),
+            match_assists: Some(4),
+            match_damage: Some(1400),
+            first_kills: Some(3),
+            first_deaths: Some(2),
+            trade_kills: Some(5),
+            match_kast_rounds: Some(14),
+            ranking_rating: None,
+            ranking_rating_model: None,
+            round_count: 20,
+            round_kills: Some(16),
+            round_kills_count: 20,
+            round_deaths: Some(8),
+            round_deaths_count: 20,
+            round_assists: Some(4),
+            round_assists_count: 20,
+            round_damage: Some(1400),
+            round_damage_count: 20,
+            survived_rounds: Some(10),
+            survived_count: 20,
+            kast_rounds: Some(14),
+            kast_count: 20,
+            multi_kill_rounds: Some(3),
+        }
+    }
+
+    #[test]
+    fn performance_radar_fixed_vector_keeps_benchmark_scores() {
+        let player = calculate_performance_radar(radar_input());
+        assert_eq!(
+            player
+                .dimensions
+                .iter()
+                .map(|dimension| dimension.key.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "firepower",
+                "damage",
+                "survival",
+                "participation",
+                "teamwork",
+                "opening"
+            ]
+        );
+        assert_eq!(player.dimensions[0].score, Some(100.0));
+        assert_eq!(player.dimensions[1].score, Some(100.0));
+        assert_eq!(player.dimensions[2].score, Some(100.0));
+        assert_eq!(player.dimensions[3].score, Some(100.0));
+        assert_eq!(player.dimensions[4].score, Some(100.0));
+        assert_eq!(player.dimensions[5].score, Some(60.0));
+        assert!(player.dimensions.iter().all(|dimension| dimension
+            .score
+            .is_none_or(|score| score.is_finite() && (0.0..=100.0).contains(&score))));
+    }
+
+    #[test]
+    fn performance_radar_preserves_high_output_score_difference() {
+        let mut high = radar_input();
+        high.match_damage = Some(7285);
+        high.round_damage = high.match_damage;
+        let mut lower = radar_input();
+        lower.match_damage = Some(2416);
+        lower.round_damage = lower.match_damage;
+        let high_score = calculate_performance_radar(high).dimensions[1].score;
+        let lower_score = calculate_performance_radar(lower).dimensions[1].score;
+        assert!(high_score.unwrap() > 400.0);
+        assert!(lower_score.unwrap() > 100.0);
+        assert_ne!(high_score, lower_score);
+    }
+
+    #[test]
+    fn performance_radar_survival_falls_back_to_match_deaths() {
+        let mut input = radar_input();
+        input.match_rounds = Some(23);
+        input.round_count = 23;
+        input.match_deaths = Some(17);
+        input.round_deaths = Some(14);
+        input.round_deaths_count = 23;
+        input.survived_rounds = Some(9);
+        input.survived_count = 23;
+        let player = calculate_performance_radar(input);
+        let survival = &player.dimensions[2];
+        assert_eq!(survival.source, "match_players_totals");
+        assert_eq!(survival.quality, "partial");
+        assert_eq!(survival.raw, Some(6.0 / 23.0));
+        assert_eq!(survival.score, Some(6.0 / 23.0 / 0.5 * 100.0));
+        assert!(player
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("不一致")));
+    }
+
+    #[test]
+    fn performance_radar_rejects_invalid_match_deaths() {
+        let mut input = radar_input();
+        input.match_rounds = Some(23);
+        input.round_count = 23;
+        input.match_deaths = Some(24);
+        input.round_deaths = Some(24);
+        input.round_deaths_count = 23;
+        let player = calculate_performance_radar(input);
+        assert_eq!(player.dimensions[2].score, None);
+        assert_eq!(player.dimensions[2].quality, "unavailable");
+        assert!(player
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("非法")));
+    }
+
+    #[test]
+    fn performance_radar_zero_partial_observer_and_opening_are_isolated() {
+        let mut zero = radar_input();
+        zero.round_count = 0;
+        zero.match_rounds = Some(0);
+        assert!(calculate_performance_radar(zero)
+            .dimensions
+            .iter()
+            .all(|dimension| dimension.score.is_none()));
+        let mut partial = radar_input();
+        partial.round_count = 0;
+        partial.survived_rounds = None;
+        let partial = calculate_performance_radar(partial);
+        assert_eq!(partial.dimensions[2].score, None);
+        assert_eq!(partial.dimensions[0].score, Some(100.0));
+        assert_eq!(partial.dimensions[5].score, Some(60.0));
+        let mut no_opening = radar_input();
+        no_opening.first_kills = None;
+        no_opening.first_deaths = None;
+        let no_opening = calculate_performance_radar(no_opening);
+        assert_eq!(no_opening.dimensions[5].score, None);
+        assert!(no_opening.dimensions[..5]
+            .iter()
+            .all(|dimension| dimension.score.is_some()));
+        let mut neutral = radar_input();
+        neutral.first_kills = Some(0);
+        neutral.first_deaths = Some(0);
+        let neutral = calculate_performance_radar(neutral);
+        assert_eq!(neutral.dimensions[5].score, Some(50.0));
+        assert!(neutral
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("无首杀事件")));
+        let mut observer = radar_input();
+        observer.team_number = Some(1);
+        assert!(calculate_performance_radar(observer)
+            .dimensions
+            .iter()
+            .all(|dimension| dimension.score.is_none()));
+    }
+
+    fn radar_test_db() -> Connection {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE demo_files(id INTEGER PRIMARY KEY); CREATE TABLE players(id INTEGER PRIMARY KEY,stable_key TEXT UNIQUE,current_name TEXT,is_bot INTEGER); CREATE TABLE match_players(demo_id INTEGER,player_id INTEGER,team_name TEXT,team_number INTEGER,rounds_played INTEGER,kills INTEGER,deaths INTEGER,assists INTEGER,damage_health INTEGER,first_kills INTEGER,first_deaths INTEGER,trade_kills INTEGER,kast_rounds INTEGER,rating REAL,rating_model TEXT); CREATE TABLE player_round_stats(demo_id INTEGER,round_number INTEGER,player_id INTEGER,kills INTEGER,deaths INTEGER,assists INTEGER,damage_health INTEGER,survived INTEGER,kast INTEGER);").unwrap();
+        db.execute_batch("INSERT INTO demo_files VALUES(1); INSERT INTO demo_files VALUES(2); INSERT INTO players VALUES(1,'steam:a','A',0); INSERT INTO players VALUES(2,'steam:b','B',0); INSERT INTO players VALUES(3,'observer:c','C',0); INSERT INTO match_players(demo_id,player_id,team_name,team_number,rounds_played,kills,deaths,assists,damage_health,first_kills,first_deaths,trade_kills,kast_rounds) VALUES (1,1,'T',2,1,1,0,0,80,1,0,0,1); INSERT INTO match_players(demo_id,player_id,team_name,team_number,rounds_played,kills,deaths,assists,damage_health,first_kills,first_deaths,trade_kills,kast_rounds) VALUES (1,2,'CT',3,1,0,1,1,20,0,1,1,1); INSERT INTO match_players(demo_id,player_id,team_name,team_number,rounds_played,kills,deaths,assists,damage_health,first_kills,first_deaths,trade_kills,kast_rounds) VALUES (1,3,NULL,1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL); INSERT INTO match_players(demo_id,player_id,team_name,team_number,rounds_played,kills,deaths,assists,damage_health,first_kills,first_deaths,trade_kills,kast_rounds) VALUES (2,2,'T',2,1,9,0,0,900,1,0,0,1); INSERT INTO player_round_stats VALUES(1,1,1,1,0,0,80,1,1); INSERT INTO player_round_stats VALUES(1,1,2,0,1,1,20,0,1);").unwrap();
+        db
+    }
+
+    fn analysis_job_test_db() -> Connection {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE demo_files(id INTEGER PRIMARY KEY); CREATE TABLE analysis_jobs(id INTEGER PRIMARY KEY,demo_id INTEGER NOT NULL,stage TEXT NOT NULL); INSERT INTO demo_files VALUES(1);").unwrap();
+        db
+    }
+
+    #[test]
+    fn analysis_job_delete_only_removes_terminal_failure_records() {
+        let db = analysis_job_test_db();
+        db.execute("INSERT INTO analysis_jobs(id,demo_id,stage) VALUES(1,1,'error'),(2,1,'canceled'),(3,1,'queued'),(4,1,'parsing_core'),(5,1,'done')", []).unwrap();
+        assert!(delete_analysis_job_record(&db, 1).is_ok());
+        assert!(delete_analysis_job_record(&db, 2).is_ok());
+        for id in [3, 4, 5, 999] {
+            let error = delete_analysis_job_record(&db, id).unwrap_err();
+            assert!(error.into_string().contains("DEMO_JOB_NOT_DELETABLE"));
+        }
+        assert_eq!(
+            db.query_row("SELECT COUNT(*) FROM analysis_jobs", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            3
+        );
+        assert_eq!(
+            db.query_row("SELECT COUNT(*) FROM demo_files", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn performance_radar_query_enforces_demo_keys_limit_and_stable_order() {
+        let db = radar_test_db();
+        let all = performance_radar_from_db(&db, 1, None).unwrap();
+        assert_eq!(all.model_version, "performance-radar-v1");
+        assert_eq!(
+            all.players
+                .iter()
+                .map(|player| player.stable_key.as_str())
+                .collect::<Vec<_>>(),
+            ["observer:c", "steam:a", "steam:b"]
+        );
+        assert!(all.players[0]
+            .dimensions
+            .iter()
+            .all(|dimension| dimension.score.is_none()));
+        let reversed =
+            performance_radar_from_db(&db, 1, Some(vec!["steam:b".into(), "steam:a".into()]))
+                .unwrap();
+        assert_eq!(
+            reversed
+                .players
+                .iter()
+                .map(|player| player.stable_key.as_str())
+                .collect::<Vec<_>>(),
+            ["steam:a", "steam:b"]
+        );
+        let foreign = performance_radar_from_db(&db, 1, Some(vec!["missing".into()]))
+            .unwrap_err()
+            .into_string();
+        assert!(foreign.contains("DEMO_PLAYER_NOT_FOUND"));
+        let over_limit = performance_radar_from_db(
+            &db,
+            1,
+            Some(vec!["a".into(), "b".into(), "c".into(), "d".into()]),
+        )
+        .unwrap_err()
+        .into_string();
+        assert!(over_limit.contains("DEMO_PLAYER_LIMIT"));
+    }
+
+    #[test]
+    #[ignore = "requires CS2AS_RADAR_DB, CS2AS_RADAR_DEMO_ID and CS2AS_RADAR_OUTPUT"]
+    fn preflight_real_db_performance_radar() {
+        let db_path = std::env::var("CS2AS_RADAR_DB").expect("radar DB path");
+        let demo_id = std::env::var("CS2AS_RADAR_DEMO_ID")
+            .expect("radar Demo id")
+            .parse::<i64>()
+            .expect("numeric Demo id");
+        let output = PathBuf::from(std::env::var("CS2AS_RADAR_OUTPUT").expect("radar output"));
+        let db = Connection::open_with_flags(
+            db_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .expect("open radar DB read-only");
+        let report = performance_radar_from_db(&db, demo_id, None).expect("real radar response");
+        let stored_report: String = db
+            .query_row(
+                "SELECT report_json FROM demo_files WHERE id=?1",
+                [demo_id],
+                |row| row.get(0),
+            )
+            .expect("stored Demo report");
+        let report_hash = format!("{:X}", Sha256::digest(stored_report.as_bytes()));
+        assert_eq!(report.model_version, "performance-radar-v1");
+        assert!(!report.players.is_empty());
+        assert!(report.players.iter().all(|player| {
+            player.dimensions.iter().all(|dimension| {
+                dimension
+                    .score
+                    .is_none_or(|score| score.is_finite() && (0.0..=100.0).contains(&score))
+            })
+        }));
+        let bytes = serde_json::to_vec_pretty(&report).unwrap();
+        let output_hash = format!("{:X}", Sha256::digest(&bytes));
+        fs::write(&output, bytes).expect("write radar JSON");
+        println!("demo_id={demo_id} players={} report_hash={report_hash} output_hash={output_hash} output={}", report.players.len(), output.display());
+    }
 
     #[test]
     fn position_cache_reuses_and_invalidates_spatial_results() {
@@ -4192,7 +5132,7 @@ mod tests {
             (10, 20),
             5,
             "2",
-            "simple-rating-v1"
+            "lb-rating-2.0"
         ));
         assert!(cache_is_current(
             "done",
@@ -4200,7 +5140,7 @@ mod tests {
             (10, 20),
             6,
             "9",
-            "simple-rating-v1"
+            "lb-rating-2.0"
         ));
     }
 
@@ -4251,7 +5191,7 @@ mod tests {
             report.data_quality.score_warnings
         );
         assert_eq!(report.schema_version, REPORT_SCHEMA_VERSION);
-        assert_eq!(report.metrics_version, "simple-rating-v1");
+        assert_eq!(report.metrics_version, "lb-rating-2.0");
         assert_eq!(report.summary.map_name.as_deref(), Some("de_nuke"));
         assert_eq!(report.summary.team_a_score, Some(16));
         assert_eq!(report.summary.team_b_score, Some(12));

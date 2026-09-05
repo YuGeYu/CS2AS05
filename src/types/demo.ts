@@ -30,6 +30,12 @@ export interface MatchEventRow { id: number; roundNumber: number | null; tick: n
 export interface MatchEventPage { items: MatchEventRow[]; total: number; page: number; pageSize: number }
 export interface PlayerRoundDetail { roundNumber: number; side: string | null; kills: number | null; deaths: number | null; assists: number | null; damageHealth: number | null; survived: boolean | null; traded: boolean | null; kast: boolean | null }
 export interface PlayerMatchDetail { player: MatchScoreboardPlayer; rounds: PlayerRoundDetail[] }
+export type PerformanceRadarQuality = 'complete' | 'partial' | 'unavailable'
+export type PerformanceRadarDimensionKey = 'firepower' | 'damage' | 'survival' | 'participation' | 'teamwork' | 'opening'
+export interface PerformanceRadarRawStats { participatedRounds: number | null; kills: number | null; deaths: number | null; assists: number | null; damageHealth: number | null; survivedRounds: number | null; kastRounds: number | null; multiKillRounds: number | null; firstKills: number | null; firstDeaths: number | null; tradeKills: number | null }
+export interface PerformanceRadarDimension { key: PerformanceRadarDimensionKey; label: string; score: number | null; raw: number | null; rawLabel: string; unit: string; benchmark: number; source: string; quality: PerformanceRadarQuality }
+export interface PerformanceRadarPlayer { stableKey: string; name: string | null; isBot: boolean; teamNumber: number | null; teamName: string | null; roundsPlayed: number | null; rawStats: PerformanceRadarRawStats; dimensions: PerformanceRadarDimension[]; warnings: string[]; rankingRating?: number | null; rankingRatingModel?: string | null }
+export interface MatchPerformanceRadar { demoFileId: number; modelVersion: 'performance-radar-v1'; denominator: string; players: PerformanceRadarPlayer[]; warnings: string[]; benchmarkMethod: 'second-highest-per-axis'; cohortSize: number }
 export interface ExportMatchResult { path: string; bytesWritten: number }
 export type HeatmapLayer = 'upper' | 'lower' | 'all'
 export interface HeatmapFilters { kind: string; roundNumbers?: number[]; playerKeys?: string[]; teamNumbers?: Array<2 | 3>; layer?: HeatmapLayer; radius?: number; opacity?: number }

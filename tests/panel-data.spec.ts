@@ -6,7 +6,7 @@ import { COMMANDS_TXT, parseCommands, parseTeams, TEAMS } from '@/data/panel/com
 import { KNIVES } from '@/data/panel/knives'
 import { captureKeyName } from '@/features/panel/key-capture'
 
-describe('Panel v1.4.3 static contract', () => {
+describe('Panel v1.4.4 static contract', () => {
   it('bundles the pinned upstream commands plus the two 0.5.4 commands', () => {
     const bytes = readFileSync('src/data/panel/commands.txt')
     expect(createHash('sha256').update(bytes).digest('hex').toUpperCase()).toBe('E0D7C5F1247DE1E766A75CA656AFBED22BF9309FB104FFA2E83AD505E53101E7')
@@ -16,13 +16,13 @@ describe('Panel v1.4.3 static contract', () => {
     expect(parseCommands().filter(entry => entry.copy === 'bot_nades less')).toHaveLength(1)
   })
 
-  it('pins the v1.4.3 fixture to the bundled resource and Panel summaries', () => {
+  it('pins the v1.4.4 fixture to the bundled resource and Panel summaries', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/panel-v1.4.3/manifest.json', 'utf8'))
     const bundle = readFileSync('src-tauri/resources/CS2BotImprover.zip')
     expect(createHash('sha256').update(bundle).digest('hex').toUpperCase()).toBe(fixture.bundleSha256)
     expect(fixture).toMatchObject({
-      source: 'ed0ard/CS2-Bot-Improver@d1d83982db88fbdb686b2bf13aa8c6f9d65a4604',
-      panelSha256: '3FD93DC7AF2702C50B9A7E4FCF1BB11387B107ABC863EE8A3067255022408CCD',
+      source: 'ed0ard/CS2-Bot-Improver@v1.4.4',
+      panelSha256: '2797A3FE85E65959CAE9501525B67B3876CEF65152E88DC716F64D5485AC2182',
       commands: { sha256: 'E0D7C5F1247DE1E766A75CA656AFBED22BF9309FB104FFA2E83AD505E53101E7', parsedEntries: 178, teams: 40 },
     })
   })

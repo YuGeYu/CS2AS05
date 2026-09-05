@@ -48,7 +48,7 @@ describe('desktop design contract', () => {
       expect(view).not.toMatch(/showOpenFilePicker|webkitdirectory/i)
     }
     const demo = read('src/views/DemoReviewView.vue')
-    expect(demo).toContain("import('@tauri-apps/plugin-dialog')")
+    expect(demo).toMatch(/import\(["']@tauri-apps\/plugin-dialog["']\)/)
     expect(demo).toContain('role="tablist"')
     expect(demo).toContain(':aria-selected="tab === \'library\'"')
     expect(demo).toContain(':data-team="group.key"')

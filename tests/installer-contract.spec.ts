@@ -19,7 +19,7 @@ describe('0.5.5 integrated Panel contract', () => {
     expect(service).toContain('verify_custom_zip(&zip_path)?')
     expect(service).toContain('最小定制')
     expect(read('src/views/InstallView.vue')).toContain('appConfig.appVersion')
-    expect(read('src/views/InstallView.vue')).toContain('CS2-Bot-Improver v1.4.3')
+    expect(read('src/views/InstallView.vue')).toContain('CS2-Bot-Improver v1.4.4')
     expect(read('src-tauri/src/services/cs2.rs')).not.toContain('bot_randomizer_options.json')
   })
 
@@ -65,7 +65,7 @@ describe('0.5.5 integrated Panel contract', () => {
     for (const command of ['get_assistant_preferences', 'set_assistant_autostart', 'clear_assistant_data', 'submit_fault_report']) {
       expect(commands).toContain(`commands::support::${command}`)
     }
-    expect(support).toContain('["skin-forge/cache", "cache", "logs"]')
+    expect(support).toContain('AI_CHAT_SESSIONS_FILE')
     expect(support).toContain('CS2 文件、插件、Demo 与复盘记录均已保留')
     expect(support).not.toContain('remove_dir_all(root_path)')
   })

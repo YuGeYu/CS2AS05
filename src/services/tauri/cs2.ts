@@ -5,6 +5,7 @@ import type {
   Cs2RootCandidate,
   DiagnosticsPayload,
   OperationResult,
+  Cs2ProcessSnapshot,
   Cs2RootScanEvent,
   Cs2RootScanSummary,
 } from '@/types/cs2'
@@ -35,8 +36,16 @@ export function checkCs2Process() {
     : unavailable('运行状态检查仅可在桌面程序中使用。')
 }
 
-export function installBotPackage(rootPath: string) {
-  return invoke<OperationResult>('install_bot_package', { rootPath })
+export function getCs2ProcessSnapshot() {
+  return isTauriRuntime() ? invoke<Cs2ProcessSnapshot>('get_cs2_process_snapshot') : unavailable('运行状态检查仅可在桌面程序中使用。')
+}
+
+export function closeCs2(force = false) {
+  return isTauriRuntime() ? invoke<OperationResult>('close_cs2', { force }) : unavailable('关闭 CS2 仅可在桌面程序中使用。')
+}
+
+export function installBotPackage(rootPath: string, keepBackup = false) {
+  return invoke<OperationResult>('install_bot_package', { rootPath, keepBackup })
 }
 
 export function openUpstreamPanel() {

@@ -26,6 +26,8 @@ pub struct DemoListItem {
     pub total_rounds: Option<i64>,
     pub kills: Option<i64>,
     pub parsed_at: Option<i64>,
+    pub map_source: String,
+    pub skipped_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -43,6 +45,7 @@ pub struct DemoImportResult {
     pub demo_file_id: i64,
     pub status: String,
     pub cache_hit: bool,
+    pub skipped_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -92,6 +95,7 @@ pub struct DemoScanResult {
     pub cache_hits: u64,
     pub parsed: u64,
     pub failed: u64,
+    pub skipped: u64,
     pub permission_errors: u64,
     pub last_scan_at: i64,
 }
@@ -266,6 +270,64 @@ pub struct PlayerRoundDetail {
 pub struct PlayerMatchDetail {
     pub player: MatchScoreboardPlayer,
     pub rounds: Vec<PlayerRoundDetail>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchPerformanceRadar {
+    pub demo_file_id: i64,
+    pub model_version: String,
+    pub denominator: String,
+    pub players: Vec<PerformanceRadarPlayer>,
+    pub warnings: Vec<String>,
+    pub benchmark_method: String,
+    pub cohort_size: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PerformanceRadarPlayer {
+    pub stable_key: String,
+    pub name: Option<String>,
+    pub is_bot: bool,
+    pub team_number: Option<i64>,
+    pub team_name: Option<String>,
+    pub rounds_played: Option<i64>,
+    pub raw_stats: PerformanceRadarRawStats,
+    pub dimensions: Vec<PerformanceRadarDimension>,
+    pub warnings: Vec<String>,
+    pub ranking_rating: Option<f64>,
+    pub ranking_rating_model: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PerformanceRadarRawStats {
+    pub participated_rounds: Option<i64>,
+    pub kills: Option<i64>,
+    pub deaths: Option<i64>,
+    pub assists: Option<i64>,
+    pub damage_health: Option<i64>,
+    pub survived_rounds: Option<i64>,
+    pub kast_rounds: Option<i64>,
+    pub multi_kill_rounds: Option<i64>,
+    pub first_kills: Option<i64>,
+    pub first_deaths: Option<i64>,
+    pub trade_kills: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PerformanceRadarDimension {
+    pub key: String,
+    pub label: String,
+    pub score: Option<f64>,
+    pub raw: Option<f64>,
+    pub raw_label: String,
+    pub unit: String,
+    pub benchmark: f64,
+    pub source: String,
+    pub quality: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -524,7 +586,7 @@ impl Default for DemoDataQuality {
             entity_parse_status: "failed".into(),
             rating_status: "unavailable".into(),
             rating_warnings: vec![
-                "当前 Demo 缺少 K/D/A、伤害或已完成回合，无法计算简易 Rating。".into(),
+                "当前 Demo 缺少 K/D/A、伤害或已完成回合，无法计算 LBRating 2.0。".into(),
             ],
             score_source: "unavailable".into(),
             score_quality: "unavailable".into(),

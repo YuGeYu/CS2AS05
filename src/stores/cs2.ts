@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 
 import {
   checkCs2Process,
+  closeCs2,
   discoverCs2Roots,
   guessCs2Roots,
   inspectCs2Root,
@@ -31,6 +32,7 @@ export const useCs2Store = defineStore('cs2', () => {
   const cs2Running = computed(() => cs2ProcessState.value === 'running')
   const message = ref<ToastMessage | null>(null)
   const busy = ref(false)
+  const closing = ref(false)
   const rootScan = ref<{ running: boolean; elapsedMs: number; checkedLocations: number; currentLocation: string; candidates: Cs2SuggestedRoot[]; summary: Cs2RootScanSummary | null }>({ running: false, elapsedMs: 0, checkedLocations: 0, currentLocation: '', candidates: [], summary: null })
   let processCheckInFlight: Promise<void> | null = null
 
@@ -60,11 +62,28 @@ export const useCs2Store = defineStore('cs2', () => {
 
   function refreshProcessStatus() {
     if (processCheckInFlight) return processCheckInFlight
-    processCheckInFlight = checkCs2Process()
-      .then((running) => { cs2ProcessState.value = running ? 'running' : 'stopped' })
+    const snapshotCheck = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+      ? import('@/services/tauri/cs2').then(api => api.getCs2ProcessSnapshot())
+      : Promise.reject(new Error('snapshot api unavailable'))
+    processCheckInFlight = snapshotCheck
+      .then((snapshot) => { cs2ProcessState.value = snapshot.processes.length ? 'running' : 'stopped' })
+      .catch(async () => { const running = await checkCs2Process(); cs2ProcessState.value = running ? 'running' : 'stopped' })
       .catch(() => { cs2ProcessState.value = 'unknown' })
       .finally(() => { processCheckInFlight = null })
     return processCheckInFlight
+  }
+
+  async function shutdown(force = false) {
+    if (closing.value) return
+    closing.value = true; cs2ProcessState.value = 'checking'
+    try {
+      const result = await closeCs2(force)
+      await refreshProcessStatus()
+      if (!result.success) { cs2ProcessState.value = 'running'; message.value = { tone: 'warn', title: 'CS2 仍在运行', message: result.message }; return result }
+      message.value = { tone: 'ready', title: 'CS2 已关闭', message: result.message }; return result
+    } catch (error) {
+      cs2ProcessState.value = 'unknown'; message.value = failure(error); throw error
+    } finally { closing.value = false }
   }
 
   async function refresh() {
@@ -76,11 +95,11 @@ export const useCs2Store = defineStore('cs2', () => {
     }
   }
 
-  async function install() {
+  async function install(keepBackup = false) {
     if (!selectedRoot.value) throw new Error('请先选择 CS2 游戏目录。')
     busy.value = true
     try {
-      const result = await installBotPackage(selectedRoot.value)
+      const result = await installBotPackage(selectedRoot.value, keepBackup)
       message.value = { tone: 'ready', title: '安装完成', message: result.message }
       await refresh()
     } catch (error) {
@@ -149,7 +168,7 @@ export const useCs2Store = defineStore('cs2', () => {
     return stopGuessCs2Roots()
   }
 
-  return { candidates, selectedRoot, environment, cs2ProcessState, cs2Running, message, busy, rootScan, selectRoot, scanRoots, refreshProcessStatus, refresh, install, openPanel, uninstall, scanSuggestedRoots, stopSuggestedRoots }
+  return { candidates, selectedRoot, environment, cs2ProcessState, cs2Running, message, busy, closing, rootScan, selectRoot, scanRoots, refreshProcessStatus, refresh, shutdown, install, openPanel, uninstall, scanSuggestedRoots, stopSuggestedRoots }
 })
 
 function dedupe(candidates: Cs2RootCandidate[]) {

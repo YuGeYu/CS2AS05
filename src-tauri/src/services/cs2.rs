@@ -13,33 +13,46 @@ use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 use tauri::{AppHandle, Manager};
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_NO_MORE_FILES, HANDLE, INVALID_HANDLE_VALUE,
+    CloseHandle, GetLastError, ERROR_NO_MORE_FILES, FILETIME, HANDLE, HWND, INVALID_HANDLE_VALUE,
 };
 #[cfg(windows)]
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
+#[cfg(windows)]
+use windows_sys::Win32::System::Threading::{
+    GetProcessTimes, OpenProcess, QueryFullProcessImageNameW, TerminateProcess,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE,
+};
+#[cfg(windows)]
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    EnumWindows, GetWindowThreadProcessId, PostMessageW, WM_CLOSE,
+};
 use zip::ZipArchive;
 
 use crate::errors::AppError;
 use crate::models::cs2::{
-    Cs2EnvironmentStatus, Cs2RootCandidate, DiagnosticsPayload, OperationResult,
+    Cs2EnvironmentStatus, Cs2ProcessInfo, Cs2ProcessSnapshot, Cs2RootCandidate, DiagnosticsPayload,
+    OperationResult,
 };
 use crate::services::panel;
 
 const CS2_FOLDER_NAME: &str = "Counter-Strike Global Offensive";
 const BUNDLED_ZIP_NAME: &str = "CS2BotImprover.zip";
-const CUSTOM_ZIP_SHA256: &str = "43EC171AA3D6530B68DEFB4B2EF1911C1AB13531F4907EAF5B24B54A12DA5B95";
-const PANEL_FILE_NAME: &str = "Panel v1.4.3.exe";
-const PANEL_SHA256: &str = "3FD93DC7AF2702C50B9A7E4FCF1BB11387B107ABC863EE8A3067255022408CCD";
-const PANEL_SIZE: u64 = 5_844_480;
+const CUSTOM_ZIP_SHA256: &str = "634BC9B854A0F39349474EC73463E4CAED6454BB0344DA7C89B9A1D2D268FE7F";
+const PANEL_FILE_NAME: &str = "Panel v1.4.4.exe";
+const PANEL_SHA256: &str = "2797A3FE85E65959CAE9501525B67B3876CEF65152E88DC716F64D5485AC2182";
+const PANEL_SIZE: u64 = 5_890_560;
 const PLUGIN_MARKER: &str = "addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json";
+const MAP_ROTATION_DEFAULT_CONFIG: &str =
+    "addons/counterstrikesharp/configs/plugins/MapRotation/MapRotation.json";
 const BOTVISION_SOURCE_SHA256: &str =
     "40B596D34BF336D9E59E663DAC2F94BD7C61D951C56E421EF66B5190B8787290";
 const BOTVISION_ENTRIES: &[&str] = &[
     "addons/BotVision/gamedata.json",
     "addons/BotVision/bin/win64/BotVision.dll",
     "addons/metamod/BotVision.vdf",
+    "addons/counterstrikesharp/plugins/MapRotation/MapRotation.dll",
 ];
 const PLUGIN_PRODUCT: &str = "cs2-bot-improver";
 const PLUGIN_ID: &str = "cs2as05-custom-package";
@@ -56,6 +69,8 @@ const REQUIRED_ZIP_ENTRIES: &[&str] = &[
     "addons/BotVision/gamedata.json",
     "addons/BotVision/bin/win64/BotVision.dll",
     "addons/metamod/BotVision.vdf",
+    "addons/counterstrikesharp/plugins/MapRotation/MapRotation.dll",
+    MAP_ROTATION_DEFAULT_CONFIG,
 ];
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +82,8 @@ struct PluginMarker {
     version: String,
     payload_sha256: String,
     payload_entries: Vec<String>,
+    #[serde(default)]
+    mutable_config_entries: Vec<String>,
     #[serde(default)]
     components: Vec<PluginComponent>,
 }
@@ -161,7 +178,7 @@ pub fn inspect_cs2_root(root_path: &str) -> Result<Cs2EnvironmentStatus, AppErro
 }
 
 pub fn check_cs2_process() -> Result<bool, AppError> {
-    check_cs2_process_platform()
+    Ok(!list_cs2_processes()?.is_empty())
 }
 
 fn is_cs2_process_name(name: &str) -> bool {
@@ -170,7 +187,43 @@ fn is_cs2_process_name(name: &str) -> bool {
 }
 
 #[cfg(windows)]
-fn check_cs2_process_platform() -> Result<bool, AppError> {
+unsafe fn process_metadata(pid: u32) -> (Option<String>, Option<u64>) {
+    let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+    if handle.is_null() {
+        return (None, None);
+    }
+    let mut buffer = [0u16; 1024];
+    let mut length = buffer.len() as u32;
+    let exe_path = if QueryFullProcessImageNameW(handle, 0, buffer.as_mut_ptr(), &mut length) != 0 {
+        Some(String::from_utf16_lossy(&buffer[..length as usize]))
+    } else {
+        None
+    };
+    let mut creation = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let mut exit = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let mut kernel = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let mut user = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let start_time = (GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user)
+        != 0)
+        .then(|| ((creation.dwHighDateTime as u64) << 32) | creation.dwLowDateTime as u64);
+    CloseHandle(handle);
+    (exe_path, start_time)
+}
+
+#[cfg(windows)]
+fn list_cs2_processes() -> Result<Vec<Cs2ProcessInfo>, AppError> {
     struct Snapshot(HANDLE);
 
     impl Drop for Snapshot {
@@ -193,7 +246,7 @@ fn check_cs2_process_platform() -> Result<bool, AppError> {
     if unsafe { Process32FirstW(snapshot.0, &mut entry) } == 0 {
         let error = unsafe { GetLastError() };
         if error == ERROR_NO_MORE_FILES {
-            return Ok(false);
+            return Ok(Vec::new());
         }
         return Err(AppError::runtime(format!(
             "枚举 Windows 进程失败：{}",
@@ -201,6 +254,7 @@ fn check_cs2_process_platform() -> Result<bool, AppError> {
         )));
     }
 
+    let mut result = Vec::new();
     loop {
         let name_end = entry
             .szExeFile
@@ -209,12 +263,19 @@ fn check_cs2_process_platform() -> Result<bool, AppError> {
             .unwrap_or(entry.szExeFile.len());
         let name = String::from_utf16_lossy(&entry.szExeFile[..name_end]);
         if is_cs2_process_name(&name) {
-            return Ok(true);
+            let (exe_path, start_time) = unsafe { process_metadata(entry.th32ProcessID) };
+            result.push(Cs2ProcessInfo {
+                pid: entry.th32ProcessID,
+                exe_name: name,
+                exe_path,
+                parent_pid: Some(entry.th32ParentProcessID),
+                start_time,
+            });
         }
         if unsafe { Process32NextW(snapshot.0, &mut entry) } == 0 {
             let error = unsafe { GetLastError() };
             if error == ERROR_NO_MORE_FILES {
-                return Ok(false);
+                return Ok(result);
             }
             return Err(AppError::runtime(format!(
                 "枚举 Windows 进程失败：{}",
@@ -225,17 +286,203 @@ fn check_cs2_process_platform() -> Result<bool, AppError> {
 }
 
 #[cfg(not(windows))]
-fn check_cs2_process_platform() -> Result<bool, AppError> {
+fn list_cs2_processes() -> Result<Vec<Cs2ProcessInfo>, AppError> {
     let system = System::new_with_specifics(
         RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing()),
     );
     Ok(system
         .processes()
         .values()
-        .any(|process| is_cs2_process_name(&process.name().to_string_lossy())))
+        .filter(|process| is_cs2_process_name(&process.name().to_string_lossy()))
+        .map(|process| Cs2ProcessInfo {
+            pid: process.pid().as_u32(),
+            exe_name: process.name().to_string_lossy().into_owned(),
+            exe_path: process.exe().map(|path| path.display().to_string()),
+            parent_pid: process.parent().map(|pid| pid.as_u32()),
+            start_time: Some(process.start_time()),
+        })
+        .collect())
 }
 
-pub fn install_bot_package(app: &AppHandle, root_path: &str) -> Result<OperationResult, AppError> {
+pub fn get_cs2_process_snapshot() -> Result<Cs2ProcessSnapshot, AppError> {
+    let first = list_cs2_processes()?;
+    std::thread::sleep(std::time::Duration::from_millis(180));
+    let second = list_cs2_processes()?;
+    let processes = if first.is_empty() && second.is_empty() {
+        Vec::new()
+    } else if !second.is_empty() {
+        second
+    } else {
+        first
+    };
+    Ok(Cs2ProcessSnapshot {
+        observed_at: chrono::Utc::now().timestamp_millis(),
+        processes,
+        confidence: "high".into(),
+        sample_count: 2,
+    })
+}
+
+pub fn close_cs2(force: bool) -> Result<OperationResult, AppError> {
+    write_runtime_log("INFO", &format!("[CS2_CLOSE_BEGIN] force={}。", force));
+    let snapshot = get_cs2_process_snapshot()?;
+    write_runtime_log(
+        "INFO",
+        &format!(
+            "[CS2_CLOSE_SNAPSHOT] {}。",
+            format_process_snapshot(&snapshot)
+        ),
+    );
+    if snapshot.processes.is_empty() {
+        write_runtime_log("INFO", "[CS2_CLOSE_FINAL] processes=0，CS2 已关闭。");
+        return Ok(OperationResult {
+            success: true,
+            message: "CS2 已关闭。".into(),
+        });
+    }
+    for process in &snapshot.processes {
+        #[cfg(windows)]
+        {
+            if force {
+                write_runtime_log(
+                    "INFO",
+                    &format!("[CS2_CLOSE_SIGNAL] stage=terminate pid={}。", process.pid),
+                );
+                unsafe {
+                    terminate_process_by_pid(process.pid)?;
+                }
+            } else {
+                write_runtime_log(
+                    "INFO",
+                    &format!("[CS2_CLOSE_SIGNAL] stage=wm_close pid={}。", process.pid),
+                );
+                let sent = unsafe { post_close_by_pid(process.pid) };
+                if !sent {
+                    write_log(
+                        "WARN",
+                        &format!(
+                            "[CS2_CLOSE_NO_WINDOW] PID {} 没有可发送 WM_CLOSE 的窗口。",
+                            process.pid
+                        ),
+                    );
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let mut command = Command::new("kill");
+            command.args(["-TERM", &process.pid.to_string()]);
+            command.output().map_err(|error| {
+                AppError::runtime(format!(
+                    "[CS2_CLOSE_SIGNAL] PID {} 操作失败：{error}",
+                    process.pid
+                ))
+            })?;
+        }
+    }
+    let deadline =
+        std::time::Instant::now() + std::time::Duration::from_secs(if force { 5 } else { 8 });
+    loop {
+        let current = list_cs2_processes()?;
+        if current.is_empty() {
+            write_runtime_log("INFO", "[CS2_CLOSE_FINAL] processes=0，关闭确认成功。");
+            return Ok(OperationResult {
+                success: true,
+                message: if force {
+                    "CS2 已强制关闭。".into()
+                } else {
+                    "CS2 已关闭。".into()
+                },
+            });
+        }
+        if std::time::Instant::now() >= deadline {
+            write_runtime_log(
+                "WARN",
+                &format!(
+                    "[CS2_CLOSE_TIMEOUT] processes={}，仍有 CS2 进程。",
+                    current
+                        .iter()
+                        .map(|p| p.pid.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ),
+            );
+            return Ok(OperationResult {
+                success: false,
+                message: "CS2 仍在运行，可能未响应；确认后可强制关闭。".into(),
+            });
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+}
+
+fn format_process_snapshot(snapshot: &Cs2ProcessSnapshot) -> String {
+    let pids = snapshot
+        .processes
+        .iter()
+        .map(|process| process.pid.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "observedAt={} sampleCount={} confidence={} pids=[{}]",
+        snapshot.observed_at, snapshot.sample_count, snapshot.confidence, pids
+    )
+}
+
+#[cfg(windows)]
+struct CloseWindowContext {
+    pid: u32,
+    sent: bool,
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn find_window_for_pid(window: HWND, lparam: isize) -> i32 {
+    let context = &mut *(lparam as *mut CloseWindowContext);
+    let mut pid = 0u32;
+    GetWindowThreadProcessId(window, &mut pid);
+    if pid == context.pid {
+        context.sent |= PostMessageW(window, WM_CLOSE, 0, 0) != 0;
+    }
+    1
+}
+
+#[cfg(windows)]
+unsafe fn post_close_by_pid(pid: u32) -> bool {
+    let mut context = CloseWindowContext { pid, sent: false };
+    let _ = EnumWindows(
+        Some(find_window_for_pid),
+        (&mut context as *mut CloseWindowContext) as isize,
+    );
+    context.sent
+}
+
+#[cfg(windows)]
+unsafe fn terminate_process_by_pid(pid: u32) -> Result<(), AppError> {
+    let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
+    if handle.is_null() {
+        return Err(AppError::runtime(format!(
+            "[CS2_CLOSE_OPEN_PROCESS] 无法打开 CS2 PID {}：{}",
+            pid,
+            std::io::Error::last_os_error()
+        )));
+    }
+    let result = TerminateProcess(handle, 1);
+    CloseHandle(handle);
+    if result == 0 {
+        return Err(AppError::runtime(format!(
+            "[CS2_CLOSE_TERMINATE] 无法强制关闭 CS2 PID {}：{}",
+            pid,
+            std::io::Error::last_os_error()
+        )));
+    }
+    Ok(())
+}
+
+pub fn install_bot_package(
+    app: &AppHandle,
+    root_path: &str,
+    keep_backup: bool,
+) -> Result<OperationResult, AppError> {
     ensure_cs2_not_running()?;
     let root = normalize_root(root_path)?;
     let destination = root.join("game").join("csgo");
@@ -248,7 +495,7 @@ pub fn install_bot_package(app: &AppHandle, root_path: &str) -> Result<Operation
 
     let zip_path = resolve_zip_path(app)?;
     verify_custom_zip(&zip_path)?;
-    install_game_files_transactionally(&zip_path, &destination)?;
+    let retained_backup = install_game_files_transactionally(&zip_path, &destination, keep_backup)?;
 
     write_log(
         "INFO",
@@ -262,7 +509,7 @@ pub fn install_bot_package(app: &AppHandle, root_path: &str) -> Result<Operation
         message: format!(
             "基于上游 CS2-Bot-Improver v1.4.3 的最小定制包已安装。\n目标目录：{}\n已保留可识别的模式、难度、Aim、Nades、Bot 物品和刀具选择。",
             destination.display()
-        ),
+        ) + &retained_backup.map_or_else(String::new, |path| format!("\n本次写前备份已保留：{}", path.display())),
     })
 }
 
@@ -374,11 +621,72 @@ fn verify_custom_zip(path: &Path) -> Result<(), AppError> {
     let mut archive = ZipArchive::new(file)
         .map_err(|error| AppError::runtime(format!("无法读取内置资源包：{error}")))?;
     for required in REQUIRED_ZIP_ENTRIES {
-        archive.by_name(required).map_err(|_| {
-            AppError::runtime(format!(
+        let present = if required.ends_with('/') {
+            // ZIP creators commonly omit explicit directory entries. Treat a
+            // directory as present when it has at least one child entry.
+            archive.file_names().any(|name| name.starts_with(required))
+        } else {
+            archive.by_name(required).is_ok()
+        };
+        if !present {
+            return Err(AppError::runtime(format!(
                 "[ZIP_STRUCTURE_INVALID]\n内置定制资源缺少必需条目：{required}"
-            ))
+            )));
+        }
+    }
+    let manifest_bytes = archive
+        .by_name("gameinfo.manifest.json")
+        .map_err(|_| {
+            AppError::runtime("[GAMEINFO_ASSET_INVALID] 内置资源缺少 gameinfo manifest。")
+        })?
+        .bytes()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            AppError::runtime(format!("[GAMEINFO_ASSET_INVALID] manifest 读取失败：{e}"))
         })?;
+    let manifest: serde_json::Value = serde_json::from_slice(&manifest_bytes)
+        .map_err(|_| AppError::runtime("[GAMEINFO_ASSET_INVALID] gameinfo manifest 无法解析。"))?;
+    let marker_bytes = archive
+        .by_name(PLUGIN_MARKER)
+        .map_err(|_| AppError::runtime("[BOT_PLUGIN_PAYLOAD_INVALID] 内置包缺少 marker。"))?
+        .bytes()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(io_error)?;
+    let marker: PluginMarker = serde_json::from_slice(&marker_bytes)
+        .map_err(|_| AppError::runtime("[BOT_PLUGIN_PAYLOAD_INVALID] marker 无法解析。"))?;
+    if marker
+        .payload_entries
+        .iter()
+        .any(|entry| entry == MAP_ROTATION_DEFAULT_CONFIG)
+        || !marker
+            .mutable_config_entries
+            .iter()
+            .any(|entry| entry == MAP_ROTATION_DEFAULT_CONFIG)
+    {
+        return Err(AppError::runtime(
+            "[BOT_PLUGIN_PAYLOAD_INVALID] 可变 MapRotation 配置分组无效。",
+        ));
+    }
+    for name in [
+        "gameinfo.gi",
+        "backup/Online/gameinfo.gi",
+        "backup/WithBots/gameinfo.gi",
+    ] {
+        let expected = manifest["entries"][name]["sha256"]
+            .as_str()
+            .unwrap_or_default();
+        let mut entry = archive
+            .by_name(name)
+            .map_err(|_| AppError::runtime("[GAMEINFO_ASSET_INVALID] gameinfo 条目缺失。"))?;
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes).map_err(io_error)?;
+        let mut hasher = Sha256::new();
+        hasher.update(&bytes);
+        if format!("{:X}", hasher.finalize()) != expected {
+            return Err(AppError::runtime(format!(
+                "[GAMEINFO_ASSET_INVALID] {name} 摘要不匹配。"
+            )));
+        }
     }
     let entry = archive
         .by_name(PANEL_FILE_NAME)
@@ -402,22 +710,24 @@ pub fn ensure_bot_plugin_current(app: &AppHandle, root_path: &str) -> Result<Str
     let destination = root.join("game/csgo");
     let zip_path = resolve_zip_path(app)?;
     verify_custom_zip(&zip_path)?;
-    install_game_files_transactionally(&zip_path, &destination)?;
+    let zip_hash = sha256_file(&zip_path)?;
+    let _ = install_game_files_transactionally(&zip_path, &destination, false)?;
+    let expected = current_plugin_version()?;
     match inspect_bot_plugin_version_at(&destination)? {
         PluginVersionStatus::Valid { version }
-            if version_core_at_least(&version, &current_plugin_version()?) =>
+            if version == expected =>
         {
             write_log("INFO", &format!("BOT 插件已自动更新到 {version}。"));
             Ok(version.to_string())
         }
         PluginVersionStatus::Invalid { reason, .. } => Err(AppError::runtime(format!(
-            "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后插件校验失败：{reason}"
+            "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后插件校验失败：{reason}\nexpectedVersion={expected}\ninstalledVersion=invalid\nzipSha256={zip_hash}\nmarkerPath={}", destination.join(PLUGIN_MARKER).display()
         ))),
         PluginVersionStatus::Missing => Err(AppError::runtime(
-            "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后未找到插件版本标记。",
+            format!("[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后未找到插件版本标记。\nexpectedVersion={expected}\ninstalledVersion=missing\nzipSha256={zip_hash}\nmarkerPath={}", destination.join(PLUGIN_MARKER).display()),
         )),
         PluginVersionStatus::Valid { version } => Err(AppError::runtime(format!(
-            "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后的插件版本 {version} 低于当前程序版本。"
+            "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后的插件版本 {version} 与当前程序版本 {expected} 不一致。\nexpectedVersion={expected}\ninstalledVersion={version}\nzipSha256={zip_hash}\nmarkerPath={}", destination.join(PLUGIN_MARKER).display()
         ))),
     }
 }
@@ -428,11 +738,6 @@ fn current_plugin_version() -> Result<Version, AppError> {
             "[BOT_PLUGIN_VERSION_INVALID] 当前程序版本无效：{error}"
         ))
     })
-}
-
-fn version_core_at_least(installed: &Version, current: &Version) -> bool {
-    (installed.major, installed.minor, installed.patch)
-        >= (current.major, current.minor, current.patch)
 }
 
 fn inspect_bot_plugin_version_at(csgo: &Path) -> Result<PluginVersionStatus, AppError> {
@@ -475,6 +780,15 @@ fn inspect_bot_plugin_version_at(csgo: &Path) -> Result<PluginVersionStatus, App
             .payload_entries
             .iter()
             .any(|entry| safe_zip_path(entry).is_err())
+        || marker
+            .payload_entries
+            .iter()
+            .any(|entry| entry == MAP_ROTATION_DEFAULT_CONFIG)
+        || (csgo.join(MAP_ROTATION_DEFAULT_CONFIG).exists()
+            && !marker
+                .mutable_config_entries
+                .iter()
+                .any(|entry| entry == MAP_ROTATION_DEFAULT_CONFIG))
     {
         return Ok(PluginVersionStatus::Invalid {
             reason: "[BOT_PLUGIN_PAYLOAD_INVALID] payload 条目无效。".into(),
@@ -550,7 +864,11 @@ fn payload_digest_from_files(base: &Path, entries: &[String]) -> Result<String, 
     Ok(format!("{:X}", hasher.finalize()))
 }
 
-fn install_game_files_transactionally(zip_path: &Path, destination: &Path) -> Result<(), AppError> {
+fn install_game_files_transactionally(
+    zip_path: &Path,
+    destination: &Path,
+    keep_backup: bool,
+) -> Result<Option<PathBuf>, AppError> {
     let parent = destination
         .parent()
         .ok_or_else(|| AppError::runtime("[BOT_PLUGIN_AUTO_INSTALL_FAILED] CS2 目录层级无效。"))?;
@@ -587,7 +905,31 @@ fn install_game_files_transactionally(zip_path: &Path, destination: &Path) -> Re
             fs::copy(&state_target, &saved).map_err(io_error)?;
         }
         touched.push((state_relative, state_existed));
+        let gameinfo_state_relative = PathBuf::from("cfg/cs2as05-gameinfo-state.json");
+        let gameinfo_state_target = destination.join(&gameinfo_state_relative);
+        let gameinfo_state_existed = gameinfo_state_target.is_file();
+        if gameinfo_state_existed {
+            let saved = backup.join(&gameinfo_state_relative);
+            if let Some(parent) = saved.parent() {
+                fs::create_dir_all(parent).map_err(io_error)?;
+            }
+            fs::copy(&gameinfo_state_target, &saved).map_err(io_error)?;
+        }
+        touched.push((gameinfo_state_relative, gameinfo_state_existed));
+        let official_relative = PathBuf::from("gameinfo.gi.official.bin");
+        let official_target = destination.join(&official_relative);
+        let official_existed = official_target.is_file();
+        if official_existed {
+            let saved = backup.join(&official_relative);
+            fs::copy(&official_target, &saved).map_err(io_error)?;
+        }
+        touched.push((official_relative, official_existed));
         for relative in &files {
+            if relative == Path::new(MAP_ROTATION_DEFAULT_CONFIG)
+                && destination.join(relative).is_file()
+            {
+                continue;
+            }
             let source = staging.join(relative);
             let target = destination.join(relative);
             let existed = target.is_file();
@@ -604,14 +946,25 @@ fn install_game_files_transactionally(zip_path: &Path, destination: &Path) -> Re
             }
             fs::copy(&source, &target).map_err(io_error)?;
         }
+        let online_bytes =
+            fs::read(destination.join("backup/Online/gameinfo.gi")).map_err(io_error)?;
+        fs::write(destination.join("gameinfo.gi.official.bin"), &online_bytes).map_err(io_error)?;
+        panel::write_gameinfo_sidecar(destination, env!("CARGO_PKG_VERSION"), "2026-08-26")?;
         panel::restore_panel_preferences(destination, &preferences, preferences.is_empty())?;
         Ok(())
     })();
     let _ = fs::remove_dir_all(&staging);
     match result {
         Ok(()) => {
-            let _ = fs::remove_dir_all(&backup);
-            Ok(())
+            if keep_backup {
+                write_log(
+                    "INFO",
+                    &format!("已按本次操作请求保留写前备份：{}。", backup.display()),
+                );
+            } else {
+                let _ = fs::remove_dir_all(&backup);
+            }
+            Ok(if keep_backup { Some(backup) } else { None })
         }
         Err(error) => match rollback_transaction(&touched, &backup, destination) {
             Ok(()) => {
@@ -947,6 +1300,7 @@ mod tests {
             "addons/BotVision/gamedata.json",
             "addons/BotVision/bin/win64/BotVision.dll",
             "addons/metamod/BotVision.vdf",
+            "addons/counterstrikesharp/plugins/MapRotation/MapRotation.dll",
         ]
         .into_iter()
         .map(String::from)
@@ -1058,7 +1412,7 @@ mod tests {
         assert!(assertions.2, "Panel must not be installed into game files");
         assert_eq!(
             assertions.3,
-            "87E68BF9C0B4C46845F36A16981C7F4A0A5754ECDA9A1D5CCC016F73C1AF490A"
+            "2668B41B019F2BDBB7C89051136B95EFD0E46A7A044553408FDF33048B4A2654"
         );
         assert!(
             assertions.4,
@@ -1075,7 +1429,7 @@ mod tests {
         let csgo = root.join("game/csgo");
         fs::create_dir_all(csgo.join("addons/unknown-plugin")).unwrap();
         fs::write(csgo.join("addons/unknown-plugin/user.txt"), b"keep").unwrap();
-        install_game_files_transactionally(&zip_path, &csgo).unwrap();
+        install_game_files_transactionally(&zip_path, &csgo, false).unwrap();
         assert_eq!(
             fs::read(csgo.join("addons/unknown-plugin/user.txt")).unwrap(),
             b"keep"
@@ -1083,6 +1437,29 @@ mod tests {
         assert!(
             matches!(inspect_bot_plugin_version_at(&csgo).unwrap(), PluginVersionStatus::Valid { version } if version == Version::parse(env!("CARGO_PKG_VERSION")).unwrap())
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn transactional_install_returns_retained_backup_path_when_requested() {
+        let zip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join(BUNDLED_ZIP_NAME);
+        let root =
+            std::env::temp_dir().join(format!("plugin-backup-retain-{}", std::process::id()));
+        let csgo = root.join("game/csgo");
+        fs::create_dir_all(&csgo).unwrap();
+        install_game_files_transactionally(&zip_path, &csgo, false).unwrap();
+        let retained = install_game_files_transactionally(&zip_path, &csgo, true)
+            .unwrap()
+            .expect("keep_backup=true must return the transaction backup path");
+        assert!(retained.is_absolute());
+        assert!(retained.is_dir());
+        assert!(retained
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .contains("-backup"));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1101,7 +1478,7 @@ mod tests {
         ));
         let csgo = root.join("game/csgo");
         fs::create_dir_all(&csgo).unwrap();
-        install_game_files_transactionally(&zip_path, &csgo).unwrap();
+        install_game_files_transactionally(&zip_path, &csgo, false).unwrap();
         let bot_items_path = csgo.join("addons/counterstrikesharp/configs/core.json");
         fs::write(
             &bot_items_path,
@@ -1120,7 +1497,7 @@ mod tests {
         }
         panel::set_drop_knives(&root_text, "f8", &[]).unwrap();
 
-        install_game_files_transactionally(&zip_path, &csgo).unwrap();
+        install_game_files_transactionally(&zip_path, &csgo, false).unwrap();
         let snapshot = panel::snapshot(&root_text).unwrap();
         assert_eq!(snapshot.mode.current.as_deref(), Some("online"));
         assert_eq!(snapshot.difficulty.current.as_deref(), Some("High"));

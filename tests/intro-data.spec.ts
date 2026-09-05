@@ -23,30 +23,27 @@ describe('intro data', () => {
     expect(parseUpstream({ full_name: 'ed0ard/CS2-Bot-Improver', description: null, html_url: FALLBACK_UPSTREAM.url, license: null })).toMatchObject({ stars: null, forks: null, license: 'AGPL-3.0' })
   })
 
-  it('falls back when both public endpoints fail', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+  it('uses build-time data without public endpoint requests', async () => {
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
     const result = await loadIntroData()
-    expect(result.supporters).toEqual([])
-    expect(result.upstream).toEqual(FALLBACK_UPSTREAM)
+    expect(result.supporters).toHaveLength(6)
+    expect(result.upstream.fullName).toBe(FALLBACK_UPSTREAM.fullName)
     expect(result.sources).toEqual({ supporters: 'fallback', upstream: 'fallback' })
+    expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('treats an empty network list as authoritative and replaces cached names', async () => {
+  it('ignores legacy cached supporter records', async () => {
     localStorage.setItem('cs2as:intro:supporters:v1', JSON.stringify({ savedAt: Date.now(), value: { supporters: [{ id: 'old', nickname: '旧记录', amountCents: 100 }] } }))
-    vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ supporters: [] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ full_name: 'ed0ard/CS2-Bot-Improver', html_url: FALLBACK_UPSTREAM.url }), { status: 200 })))
     const result = await loadIntroData()
-    expect(result.supporters).toEqual([])
-    expect(result.sources.supporters).toBe('network')
-    expect(localStorage.getItem('cs2as:intro:supporters:v1')).not.toContain('旧记录')
+    expect(result.supporters).toHaveLength(6)
+    expect(result.sources.supporters).toBe('fallback')
   })
 
-  it('returns cached supporters synchronously before network refresh', () => {
+  it('ignores browser cache in favor of the build-time archive', () => {
     localStorage.setItem('cs2as:intro:supporters:v1', JSON.stringify({ savedAt: Date.now(), value: { supporters: [{ id: 'cached', nickname: '缓存同路人', message: '先亮馆，再刷新', amountCents: 600, updatedAt: 'now' }] } }))
     const result = loadCachedIntroData()
-    expect(result.supporters).toHaveLength(1)
-    expect(result.supporters[0]?.nickname).toBe('缓存同路人')
-    expect(result.sources.supporters).toBe('cache')
+    expect(result.supporters).toHaveLength(6)
+    expect(result.sources.supporters).toBe('fallback')
   })
 })

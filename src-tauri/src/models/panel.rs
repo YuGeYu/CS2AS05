@@ -8,10 +8,21 @@ pub struct PanelSnapshot {
     pub missing_files: Vec<String>,
     pub cs2_running: bool,
     pub mode: ModeState,
+    pub gameinfo: GameInfoState,
     pub difficulty: DifficultyState,
     pub presets: PresetsState,
     pub bot_items: BotItemsState,
     pub drop_knives: DropKnivesState,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameInfoState {
+    pub status: String,
+    pub active_sha256: Option<String>,
+    pub official_sha256: Option<String>,
+    pub resource_version: Option<String>,
+    pub writable: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -75,6 +86,8 @@ pub struct LaunchResult {
     pub insecure: bool,
     pub plugin_action: String,
     pub plugin_version: String,
+    pub final_mode: String,
+    pub gameinfo_sha256: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

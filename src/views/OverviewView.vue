@@ -3,6 +3,7 @@ import { computed, onMounted, ref, toRef, watch } from 'vue'
 import { FolderOpen, Play, RefreshCw, ScanSearch, Wrench } from 'lucide-vue-next'
 
 import Cs2RootSuggestionsDialog from '@/components/Cs2RootSuggestionsDialog.vue'
+import BotDifficultyWorkbench from '@/components/BotDifficultyWorkbench.vue'
 import LaunchExperience from '@/components/LaunchExperience.vue'
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
@@ -16,6 +17,7 @@ const cs2 = useCs2Store()
 const panel = usePanelStore()
 const demo = useDemoStore()
 const suggestionsOpen = ref(false)
+const botWorkbenchOpen = ref(false)
 const launchExperience = useCs2LaunchExperience(toRef(cs2, 'selectedRoot'))
 const modeOptions = [{ value: 'online', label: '在线模式' }, { value: 'bots', label: 'BOT 模式' }] as const
 const difficultyOptions = [{ value: 'Low', label: '低' }, { value: 'Medium', label: '中' }, { value: 'High', label: '高' }] as const
@@ -55,12 +57,13 @@ onMounted(() => void demo.loadSettings(cs2.selectedRoot))
     </section>
     <section class="control-grid">
       <div class="control-group"><div><h2>启动模式</h2><p>BOT 模式会加载 Metamod 并使用 -insecure。</p></div><SegmentedControl :model-value="panel.snapshot?.mode.current ?? null" :options="modeOptions" label="启动模式" :disabled="blocked || cs2.cs2Running" :pending="panel.mutationKey === 'mode'" @update:model-value="changeMode" /></div>
-      <div class="control-group"><div><h2>BOT 难度</h2><p>切换当前使用的 botprofile.vpk。</p></div><SegmentedControl :model-value="panel.snapshot?.difficulty.current ?? null" :options="difficultyOptions" label="BOT 难度" :disabled="blocked" :pending="panel.mutationKey === 'difficulty'" @update:model-value="changeDifficulty" /></div>
+      <div class="control-group"><div><h2>BOT 难度</h2><p>切换当前使用的 botprofile.vpk，或建立自己的强度档案。</p></div><div class="difficulty-actions"><SegmentedControl :model-value="panel.snapshot?.difficulty.current ?? null" :options="difficultyOptions" label="BOT 难度" :disabled="blocked" :pending="panel.mutationKey === 'difficulty'" @update:model-value="changeDifficulty" /><button class="secondary-button" type="button" :disabled="!cs2.selectedRoot" @click="botWorkbenchOpen = true">自定义强度</button></div></div>
       <div class="control-group demo-recording-control"><div><h2>本地对局记录</h2><p>官方匹配是否提供 Demo 由服务器或平台决定。</p></div><ToggleSwitch :model-value="demo.settings?.desiredEnabled ?? false" label="自动录制本地对局 Demo" description="助手启动 BOT/本地对局前写入 CSTV 自动录制设置；CS2 退出后可在对局复盘中扫描战报。" :disabled="blocked || cs2.cs2Running || demo.busy === 'recording'" @update:model-value="changeRecording" /><p v-if="demo.settings?.drifted" class="warning-note">配置已漂移，切换开关可重新应用到两个受管 cfg。</p></div>
     </section>
     <section class="launch-band"><div><p class="overline">主操作</p><h2>启动 Counter-Strike 2</h2><p>{{ panel.snapshot?.mode.current === 'bots' ? '将以 -insecure -console -condebug 启动。' : '将以正常在线模式启动。' }}</p></div><button class="launch-button" :disabled="blocked || cs2.cs2Running || panel.mutationKey === 'launch'" @click="launch"><Play :size="21" fill="currentColor" />启动 CS2</button></section>
     <p v-if="panel.lastError" class="inline-error" role="alert">{{ panel.lastError }}</p>
   </section>
   <Cs2RootSuggestionsDialog :open="suggestionsOpen" @close="suggestionsOpen = false" @browse="browse" />
+  <BotDifficultyWorkbench :open="botWorkbenchOpen" :root-path="cs2.selectedRoot" @close="botWorkbenchOpen = false" />
   <LaunchExperience :active="launchExperience.active.value" :elapsed-ms="launchExperience.elapsedMs.value" :mode="launchExperience.mode.value" @dismiss="launchExperience.dismiss" />
 </template>

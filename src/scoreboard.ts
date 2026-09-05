@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import ScoreboardApp from '@/ScoreboardApp.vue'
 import '@/styles/scoreboard.css'
+import { initializeAppearancePreferences } from '@/composables/useAppearancePreferences'
 
 function reportBootError(value: unknown) {
   const message = value instanceof Error ? value.message : String(value)
@@ -12,6 +13,7 @@ window.addEventListener('error', event => reportBootError(event.error ?? event.m
 window.addEventListener('unhandledrejection', event => reportBootError(event.reason))
 
 try {
+  initializeAppearancePreferences()
   createApp(ScoreboardApp).mount('#scoreboard-app')
   document.body.dataset.scoreboardMounted = 'true'
 } catch (error) {

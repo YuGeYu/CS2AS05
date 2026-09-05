@@ -5,6 +5,7 @@
     "browser": true
   },
   "ignorePatterns": [
+    "artifacts/**",
     "backups/**",
     "src-tauri/resources/**",
     "src/features/skin-forge/data/generated/**",

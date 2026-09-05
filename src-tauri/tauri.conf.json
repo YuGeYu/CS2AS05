@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "CS2人机增强助手",
   "mainBinaryName": "CS2BotImproverAssistant",
-  "version": "0.5.7",
+  "version": "0.5.11",
   "identifier": "com.aipc.cs2botimprover",
   "build": {
     "frontendDist": "../dist",
@@ -40,19 +40,14 @@
       }
     ],
       "security": {
-        "csp": null,
-        "assetProtocol": {
-          "enable": true,
-          "scope": [
-            "$APPLOCALDATA/skin-forge/cache/images/**"
-          ]
-        }
+        "csp": null
       }
   },
   "bundle": {
     "active": true,
     "targets": "nsis",
     "createUpdaterArtifacts": true,
+    "externalBin": ["binaries/vpkeditcli"],
     "windows": {
       "nsis": {
         "installerHooks": "nsis-hooks.nsh"
@@ -61,7 +56,8 @@
     "resources": [
       "resources/CS2BotImprover.zip",
       "resources/demo-maps",
-      "resources/skin-forge",
+      "resources/inventory-simulator",
+      "resources/vpkedit",
       "../LICENSE",
       "../NOTICE.md"
     ],

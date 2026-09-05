@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { DemoAnalysisJob, DemoListPage, DemoPlaybackResult, DemoRecordingSettings, DemoReport, DemoRoot, DemoScanResult, ExportMatchResult, HeatmapExportResult, HeatmapFilters, HeatmapPoint, MatchDuelMatrix, MatchEconomyRow, MatchEventFilters, MatchEventPage, MatchOverview, MatchRoundSummary, MatchScoreboardPlayer, MatchUtilityRow, PlayerMatchDetail, RevealDemoResult, RoundPositions } from '@/types/demo'
+import type { DemoAnalysisJob, DemoListPage, DemoPlaybackResult, DemoRecordingSettings, DemoReport, DemoRoot, DemoScanResult, ExportMatchResult, HeatmapExportResult, HeatmapFilters, HeatmapPoint, MatchDuelMatrix, MatchEconomyRow, MatchEventFilters, MatchEventPage, MatchOverview, MatchPerformanceRadar, MatchRoundSummary, MatchScoreboardPlayer, MatchUtilityRow, PlayerMatchDetail, RevealDemoResult, RoundPositions } from '@/types/demo'
 
 export const listDemoRoots = () => invoke<DemoRoot[]>('list_demo_roots')
 export const playDemo = (demoId: number, rootPath: string) => invoke<DemoPlaybackResult>('play_demo', { demoId, rootPath })
@@ -15,6 +15,7 @@ export const listDemos = (query: string, status: string, page: number, pageSize:
 export const listAnalysisJobs = (activeOnly = false) => invoke<DemoAnalysisJob[]>('list_analysis_jobs', { activeOnly })
 export const cancelAnalysisJob = (jobId: number) => invoke<void>('cancel_analysis_job', { jobId })
 export const retryAnalysisJob = (jobId: number) => invoke<void>('retry_analysis_job', { jobId })
+export const deleteAnalysisJob = (jobId: number) => invoke<void>('delete_analysis_job', { jobId })
 export const getMatchOverview = (demoId: number) => invoke<MatchOverview>('get_match_overview', { demoId })
 export const getMatchScoreboard = (demoId: number) => invoke<MatchScoreboardPlayer[]>('get_match_scoreboard', { demoId })
 export const getMatchRounds = (demoId: number) => invoke<MatchRoundSummary[]>('get_match_rounds', { demoId })
@@ -23,6 +24,7 @@ export const getMatchDuels = (demoId: number) => invoke<MatchDuelMatrix>('get_ma
 export const getMatchUtility = (demoId: number) => invoke<MatchUtilityRow[]>('get_match_utility', { demoId })
 export const getMatchEvents = (demoId: number, filters: MatchEventFilters, page = 1, pageSize = 100) => invoke<MatchEventPage>('get_match_events', { demoId, filters, page, pageSize })
 export const getPlayerMatchDetail = (demoId: number, stableKey: string) => invoke<PlayerMatchDetail>('get_player_match_detail', { demoId, stableKey })
+export const getMatchPerformanceRadar = (demoId: number, playerKeys?: string[]) => invoke<MatchPerformanceRadar>('get_match_performance_radar', { demoId, playerKeys })
 export const exportMatch = (demoId: number, format: 'json' | 'csv', destinationPath: string) => invoke<ExportMatchResult>('export_match', { demoId, format, destinationPath })
 export const ensureSpatialAnalysis = (demoId: number, samplingHz = 8) => invoke<number>('ensure_spatial_analysis', { demoId, samplingHz })
 export const getRoundPositions = (demoId: number, roundNumber: number, samplingHz = 8) => invoke<RoundPositions>('get_round_positions', { demoId, roundNumber, samplingHz })

@@ -3,6 +3,8 @@ export const appConfig = {
   channel: import.meta.env.VITE_APP_CHANNEL ?? 'prod',
   updateFeedUrl: import.meta.env.VITE_UPDATE_FEED_URL
     ?? 'https://cs2as.600318.xyz/api/software-updates/cs2-bot-improver',
+  announcementFeedUrl: import.meta.env.VITE_ANNOUNCEMENT_FEED_URL
+    ?? 'https://cs2as.600318.xyz/api/site-notices?scope=idea',
   updaterEnabled: import.meta.env.VITE_ENABLE_UPDATER !== 'false',
   projectId: import.meta.env.VITE_DEFAULT_PROJECT_ID ?? 'cs2-bot-improver',
 } as const

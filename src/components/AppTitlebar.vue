@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Copy, Minus, Moon, Square, Sun, X } from 'lucide-vue-next'
+import { Copy, Megaphone, Minus, Moon, Square, Sun, X } from 'lucide-vue-next'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import appIcon from '@/assets/app-icon.png'
 
 import { useThemePreference } from '@/composables/useThemePreference'
+import { announcementState, openAnnouncementCenter } from '@/features/announcements/state'
 
 function isTauriRuntime() {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -12,6 +13,7 @@ function isTauriRuntime() {
 
 const appWindow = isTauriRuntime() ? getCurrentWindow() : null
 const isMaximized = ref(false)
+const windowActionBusy = ref(false)
 const { theme, toggleTheme } = useThemePreference()
 let unlistenResize: (() => void) | undefined
 
@@ -23,21 +25,28 @@ async function syncMaximized() {
 
 async function startDragging() {
   if (!appWindow) return
-  await appWindow.startDragging()
+  try { await appWindow.startDragging() } catch { /* native window may be closing */ }
 }
 
-async function toggleMaximize() {
-  if (!appWindow) return
-  await appWindow.toggleMaximize()
-  await syncMaximized()
+function toggleMaximize() {
+  if (!appWindow || windowActionBusy.value) return
+  windowActionBusy.value = true
+  let result: unknown
+  try { result = appWindow.toggleMaximize() } catch { windowActionBusy.value = false; return }
+  void Promise.resolve(result)
+    .then(() => syncMaximized())
+    .catch(() => undefined)
+    .finally(() => { windowActionBusy.value = false })
 }
 
 function minimizeWindow() {
-  if (appWindow) void appWindow.minimize()
+  if (!appWindow) return
+  void Promise.resolve(appWindow.minimize()).catch(() => undefined)
 }
 
 function closeWindow() {
-  if (appWindow) void appWindow.close()
+  if (!appWindow) return
+  void Promise.resolve(appWindow.close()).catch(() => undefined)
 }
 
 onMounted(async () => {
@@ -61,6 +70,18 @@ onBeforeUnmount(() => {
     </div>
     <div class="titlebar-spacer" />
     <div class="titlebar-controls" @mousedown.stop @dblclick.stop>
+      <button
+        class="titlebar-announcement-button"
+        type="button"
+        data-announcement-trigger
+        :data-tone="announcementState.latest?.severity || 'idle'"
+        :aria-expanded="announcementState.open"
+        title="查看官网公告"
+        aria-label="查看官网公告"
+        @click="openAnnouncementCenter"
+      >
+        <Megaphone :size="17" /><span>公告</span><b v-if="announcementState.notices.length">{{ announcementState.notices.length }}</b>
+      </button>
       <button
         class="titlebar-button"
         type="button"

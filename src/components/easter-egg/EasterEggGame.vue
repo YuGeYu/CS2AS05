@@ -1,74 +1,22 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Footprints, X } from 'lucide-vue-next'
-import ThreeStage from '@/components/three/ThreeStage.vue'
-import type { StageInteraction, ThreeStageFactory } from '@/components/three/stage'
-import { REFERENCE_PROJECTS } from '@/features/support/reference-projects'
-import type { IntroAcknowledgementCard, IntroData } from '@/features/intro/types'
-import { loadCachedIntroData, loadIntroData } from '@/services/intro-data'
-
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ExternalLink, X } from 'lucide-vue-next'
+import { appConfig } from '@/config/app'
+import { STATIC_REFERENCE_PROJECTS, STATIC_SUPPORTERS } from '@/features/intro/static-data'
+import { openReferenceProject, type ReferenceProjectId } from '@/services/tauri/support'
 const emit = defineEmits<{ close: [] }>()
-const dialog = ref<HTMLElement | null>(null)
-const closeButton = ref<HTMLButtonElement | null>(null)
-const inputLayer = ref<HTMLElement | null>(null)
-const stage = ref<InstanceType<typeof ThreeStage> | null>(null)
-const failed = ref(false)
-const data = ref<IntroData>(loadCachedIntroData())
-let activePointerId: number | null = null
-let closing = false
-
-const cards = computed<IntroAcknowledgementCard[]>(() => [
-  ...REFERENCE_PROJECTS.map(item => ({ id: `upstream:${item.id}`, kind: 'upstream' as const, eyebrow: '感谢上游项目', title: item.repository, message: item.description, detail: item.license || item.group, updatedAt: item.repository })),
-  ...data.value.supporters.slice(0, 8).map(item => ({ id: `supporter:${item.id}`, kind: 'supporter' as const, eyebrow: '鸣谢同路人', title: item.nickname || '青锋无名客', message: item.message || '长夜执剑，幸与诸君同路。', detail: `¥${(item.amountCents / 100).toFixed(2)}`, updatedAt: item.updatedAt })),
-])
-const sceneFactory: ThreeStageFactory = async (canvas, size) => {
-  const { createContributionGalleryScene } = await import('@/features/easter-egg/game-scene')
-  return createContributionGalleryScene(canvas, size, () => cards.value)
-}
-
-function releasePointer() {
-  if (activePointerId !== null && inputLayer.value?.hasPointerCapture?.(activePointerId)) inputLayer.value.releasePointerCapture(activePointerId)
-  activePointerId = null
-}
-function close() { if (closing) return; closing = true; releasePointer(); emit('close') }
-function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') { close(); return }
-  if (event.key === 'Tab') {
-    event.preventDefault(); closeButton.value?.focus(); return
-  }
-  if (['w', 'a', 's', 'd', 'W', 'A', 'S', 'D', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
-    event.preventDefault(); stage.value?.interact({ type: 'key-down', key: event.key.toLowerCase() })
-  }
-}
-function onKeyup(event: KeyboardEvent) { stage.value?.interact({ type: 'key-up', key: event.key.toLowerCase() }) }
-function pointer(event: PointerEvent, type: StageInteraction['type']) {
-  const target = inputLayer.value
-  if (!target || !['pointer-down', 'pointer-move', 'pointer-up'].includes(type)) return
-  if (type === 'pointer-down') { activePointerId = event.pointerId; target.setPointerCapture?.(event.pointerId) }
-  else if (activePointerId !== event.pointerId) return
-  const rect = target.getBoundingClientRect()
-  stage.value?.interact({ type, x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height })
-  if (type === 'pointer-up') releasePointer()
-}
-
-onMounted(async () => {
-  window.addEventListener('keydown', onKeydown)
-  window.addEventListener('keyup', onKeyup)
-  await nextTick(); closeButton.value?.focus()
-  void loadIntroData().then(value => { data.value = value })
-})
-onBeforeUnmount(() => { releasePointer(); window.removeEventListener('keydown', onKeydown); window.removeEventListener('keyup', onKeyup) })
+const closeButton = ref<HTMLButtonElement | null>(null); const errorMessage = ref('')
+const projects = STATIC_REFERENCE_PROJECTS; const supporters = STATIC_SUPPORTERS
+function close() { emit('close') }
+function onKeydown(event: KeyboardEvent) { if (event.key === 'Escape') close(); if (event.key === 'Tab') { event.preventDefault(); closeButton.value?.focus() } }
+async function openProject(id: ReferenceProjectId) { errorMessage.value = ''; try { await openReferenceProject(id) } catch { errorMessage.value = '暂时无法打开上游项目。' } }
+onMounted(async () => { window.addEventListener('keydown', onKeydown); await nextTick(); closeButton.value?.focus() })
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
-
 <template>
-  <section ref="dialog" class="cinema-overlay game-overlay gallery-overlay" role="dialog" aria-modal="true" aria-label="贡献陈列馆">
-    <ThreeStage v-if="!failed" ref="stage" :factory="sceneFactory" @error="failed = true" @context-lost="failed = true" />
-    <div v-else class="cinema-static" aria-hidden="true" />
-    <div ref="inputLayer" class="game-input-layer gallery-input-layer" aria-hidden="true" @pointerdown="pointer($event, 'pointer-down')" @pointermove="pointer($event, 'pointer-move')" @pointerup="pointer($event, 'pointer-up')" @pointercancel="pointer($event, 'pointer-up')" />
-    <header class="gallery-heading"><p>贡献陈列馆</p><h1>众行者，共铸此间</h1><span><Footprints :size="16" />WASD / 方向键行走 · 拖动鼠标环顾</span></header>
-    <aside class="gallery-artifact"><small>中央珍藏</small><strong>唐代彩绘仕女俑</strong><span>盛唐风华 · 高髻宽袖与彩绘余晖</span></aside>
-    <button ref="closeButton" type="button" class="cinema-icon-button" title="关闭" aria-label="关闭贡献陈列馆" @pointerdown.stop="close" @pointerup.stop @pointercancel.stop @click.stop="close"><X :size="20" /></button>
-    <div v-if="failed" class="game-center game-result"><p>贡献陈列馆</p><strong>当前设备无法启动三维展厅</strong><button type="button" class="cinema-primary-button" @click.stop="close">关闭</button></div>
-    <footer class="game-credit">中央展品来源：cultural-relics-museum · MulanPSL-2.0</footer>
+  <section class="cinema-overlay gallery-overlay static-gallery-overlay" role="dialog" aria-modal="true" aria-label="贡献陈列馆">
+    <div class="static-grid" aria-hidden="true" /><header class="gallery-static-header"><div><p class="cinema-kicker">CS2AS · {{ appConfig.appVersion }}</p><h1>众行者，共铸此间</h1><span>贡献陈列馆 · 固化鸣谢档案</span></div><button ref="closeButton" class="cinema-icon-button" type="button" title="关闭" aria-label="关闭贡献陈列馆" @click="close"><X :size="20" /></button></header>
+    <main class="ack-archive"><div class="ack-archive-toolbar"><span>鸣谢档案</span><small>随版本发布 · 固定快照，平等展示</small></div><div class="ack-archive-scroll"><table class="static-ack-table static-ack-table--gallery"><caption class="sr-only">上游项目与公开鸣谢名单</caption><thead><tr><th>类别</th><th>名称</th><th>贡献 / 说明</th><th>动作</th></tr></thead><tbody><tr v-for="project in projects" :key="project.id"><td><span class="ack-badge">上游</span></td><td><strong>{{ project.repository }}</strong></td><td>{{ project.description }}</td><td><button class="table-icon-button" type="button" :aria-label="`打开项目 ${project.repository}`" title="打开项目" @click="openProject(project.id)"><ExternalLink :size="16" /></button></td></tr><tr v-for="supporter in supporters" :key="supporter.id"><td><span class="ack-badge ack-badge--supporter">鸣谢</span></td><td><strong>{{ supporter.nickname || '匿名同路人' }}</strong></td><td>{{ supporter.message || '感谢你的支持与同行。' }}</td><td><span class="ack-static-mark">已收录</span></td></tr></tbody></table></div><p v-if="errorMessage" class="inline-error" role="alert">{{ errorMessage }}</p></main>
+    <footer class="gallery-static-footer"><span>鸣谢名单与上游项目按 {{ appConfig.appVersion }} 版本固化</span><span>CS2AS · 长期维护</span></footer>
   </section>
 </template>

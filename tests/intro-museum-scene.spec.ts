@@ -1,24 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { STATIC_REFERENCE_PROJECTS } from '@/features/intro/static-data'
 
-const scene = readFileSync('src/features/intro/scene.ts', 'utf8')
 const intro = readFileSync('src/components/intro/StartupIntro.vue', 'utf8')
+const gallery = readFileSync('src/components/easter-egg/EasterEggGame.vue', 'utf8')
 
 describe('intro museum scene contract', () => {
-  it('uses a fixed camera timeline and a supporter snapshot lock', () => {
-    expect(intro).toContain('const SUPPORTER_LOCK_MS = 2_800')
-    expect(intro).toContain('lockedCards.value = structuredClone(candidateCards.value)')
-    expect(intro).toContain("if (!closed && !locked.value) data.value = value")
-    expect(scene).toContain('function cameraAt(state: IntroSceneState)')
-    expect(scene).toContain('camera.position.set')
-    expect(scene).not.toContain('OrbitControls')
+  it('uses a static acknowledgement archive without remote loading', () => {
+    expect(intro).toContain('STATIC_REFERENCE_PROJECTS')
+    expect(intro).not.toContain('ThreeStage')
+    expect(gallery).toContain('STATIC_REFERENCE_PROJECTS')
+    expect(gallery).not.toContain('ThreeStage')
+    expect(intro).not.toContain('loadIntroData')
+    expect(gallery).not.toContain('loadIntroData')
   })
 
-  it('builds a procedural hall and fully releases WebGL resources', () => {
-    expect(scene).toContain('new THREE.CircleGeometry')
-    expect(scene).toContain('new THREE.CylinderGeometry')
-    expect(scene).toContain('renderer.forceContextLoss()')
-    expect(scene).not.toContain('GLTFLoader')
-    expect(scene).not.toContain('DRACOLoader')
+  it('keeps the fixed project archive populated', () => {
+    expect(STATIC_REFERENCE_PROJECTS.length).toBeGreaterThan(0)
+    expect(STATIC_REFERENCE_PROJECTS.map(item => item.repository)).toContain('ed0ard/CS2-Bot-Improver')
+  })
+
+  it('renders table semantics for both surfaces', () => {
+    expect(intro).toContain('<table')
+    expect(gallery).toContain('<table')
   })
 })

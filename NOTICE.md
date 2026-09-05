@@ -22,7 +22,7 @@ The preserved license and provenance are available in `third_party/demoparser/`.
 
 ## 简易 Rating
 
-The final `simple-rating-v1` formula is an independent project-local KDA-dominant multi-factor simplification, not an OpenRating or HLTV rating. It weights `(K + A / 5) / max(D, 1)` at 80%, damage at 10%, the report-level survival proxy at 5%, and assists per round at 5%.
+The final `simple-rating-v2` formula is an independent project-local impact-oriented multi-factor simplification, not an OpenRating or HLTV rating. It weights normalized kills per round at 70%, damage at 15%, the report-level survival proxy at 10%, and assists per round at 5%. This prevents low-death, low-output survival play from outweighing materially higher kills, damage, and assists.
 
 ## akiver/cs-demo-manager map resources
 
@@ -36,20 +36,18 @@ per-file asset manifest are available in `third_party/cs-demo-manager/`.
 No Electron, PostgreSQL, analyzer sidecar, or account integration from the
 upstream application is included.
 
-## kaecho/CS2-Skin-Forge
+## ianlucas/cs2-css-inventory-simulator
 
-The Skin Forge workbench includes mechanically converted catalog data and a
-fixed PlayerSkinMod build from the public migration repository
-https://github.com/kaecho/CS2-Skin-Forge at tag `v1.8.2`, commit
-`75f52fbd5fd0616dbbdd09a65c3a1981593400d1`. The original `emptysuns` URL was
-not anonymously accessible during verification. Upstream READMEs declare
-GPL-3.0, but this commit contains no standalone LICENSE file; that condition is
-preserved in `third_party/CS2-Skin-Forge/UPSTREAM.md`.
+The 0.5.9 inventory customization workflow redistributes Inventory Simulator
+from https://github.com/ianlucas/cs2-css-inventory-simulator at tag `3.1.0`,
+commit `5e3c96283b3d3f5aeba44822a38031df2e213376`, copyright Ian Lucas, under the
+MIT License. The complete license, fixed source snapshot, build instructions,
+patch and hashes are preserved in `third_party/cs2-css-inventory-simulator/`.
 
-Upstream plugin metadata remains `1.8.1` despite the repository `v1.8.2` tag.
-The bundled derivative applies the recorded two-line version patch and is
-reported as a downstream `1.8.2` build. Source, patch, complete hashes, and
-build evidence are retained under `third_party/CS2-Skin-Forge/`.
+The downstream `3.1.0-cs2as.1` build changes only the default value of
+`invsim_ws_enabled` from `false` to `true`, so the user-facing `!ws` refresh
+flow works without a transient server-console command. Inventory modeling,
+SteamID association and CS2 runtime hooks remain the upstream implementation.
 
 ## CS2-insight-agent behavior reference
 

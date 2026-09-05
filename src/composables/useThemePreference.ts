@@ -15,7 +15,7 @@ export function initializeTheme(): AppTheme {
 export function useThemePreference() {
   function setTheme(nextTheme: AppTheme) {
     applyTheme(nextTheme)
-    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme)
+    try { window.localStorage?.setItem(THEME_STORAGE_KEY, nextTheme) } catch { /* storage can be unavailable in restricted WebViews */ }
   }
 
   function toggleTheme() {
@@ -27,8 +27,10 @@ export function useThemePreference() {
 
 export function readStoredTheme(): AppTheme | null {
   if (typeof window === 'undefined') return null
-  const stored = window.localStorage.getItem(THEME_STORAGE_KEY)
-  return stored === 'light' || stored === 'dark' ? stored : null
+  try {
+    const stored = window.localStorage?.getItem(THEME_STORAGE_KEY)
+    return stored === 'light' || stored === 'dark' ? stored : null
+  } catch { return null }
 }
 
 export function getSystemTheme(): AppTheme {
@@ -41,4 +43,5 @@ export function applyTheme(nextTheme: AppTheme) {
   if (typeof document === 'undefined') return
   document.documentElement.dataset.theme = nextTheme
   document.documentElement.style.colorScheme = nextTheme
+  window.dispatchEvent(new CustomEvent('cs2as:theme-changed', { detail: nextTheme }))
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CircleArrowUp, Download, Globe2, Info, MessageSquareText, RotateCw } from 'lucide-vue-next'
+import { CircleArrowUp, Download, Globe2, HandHeart, Info, MessageSquareText, RotateCw } from 'lucide-vue-next'
+import DonateModal from '@/components/DonateModal.vue'
 
 import AboutSourcesModal from '@/components/AboutSourcesModal.vue'
 import { checkSoftwareUpdates, resumeSoftwareUpdate, softwareUpdateCoordinatorState, softwareUpdateStatusMessage } from '@/features/software-updates/coordinator'
@@ -8,6 +9,7 @@ import { softwareUpdaterState } from '@/features/software-updates/updater-state'
 import { openIdeaPage, openOfficialSite } from '@/services/tauri/support'
 
 const aboutOpen = ref(false)
+const donateOpen = ref(false)
 const checking = computed(() => softwareUpdateCoordinatorState.checking)
 const statusMessage = softwareUpdateStatusMessage
 const hasInstallAction = computed(() => softwareUpdaterState.phase === 'deferred-current-session')
@@ -47,8 +49,10 @@ async function openPage(action: () => Promise<void>, failure: string) {
       <button class="secondary-button" type="button" @click="openPage(openIdeaPage, '打开意见页失败，请稍后重试。')">
         <MessageSquareText :size="18" /><span>查看/编辑意见</span>
       </button>
+      <button class="secondary-button" type="button" @click="donateOpen = true"><HandHeart :size="18" /><span>赞助开发</span></button>
     </div>
   </section>
 
   <AboutSourcesModal :open="aboutOpen" @close="aboutOpen = false" />
+  <DonateModal :open="donateOpen" @close="donateOpen = false" />
 </template>

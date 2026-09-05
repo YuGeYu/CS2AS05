@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::models::demo::{DemoListItem, PostMatchReportFailed, PostMatchReportReady};
-use crate::services::{cs2, demo};
+use crate::{demo::parse_gate, services::demo};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SessionKind {
@@ -83,24 +83,29 @@ pub fn cancel_pending(app: &AppHandle, session_id: &str) {
 }
 
 fn observe(app: AppHandle) {
-    let mut was_running = cs2::check_cs2_process().unwrap_or(false);
-    if was_running {
+    let mut session_active = parse_gate::observe_process()
+        .map(|observation| observation.running)
+        .unwrap_or(false);
+    if session_active {
         begin_session(&app);
     }
     loop {
         std::thread::sleep(Duration::from_secs(1));
-        let running = cs2::check_cs2_process().unwrap_or(was_running);
-        if running && !was_running {
+        let Ok(observation) = parse_gate::observe_process() else {
+            continue;
+        };
+        if observation.running && !session_active {
             begin_session(&app);
-        } else if !running && was_running {
+            session_active = true;
+        } else if observation.confirmed_stopped && session_active {
             if let Some(session) = end_session(&app) {
                 let handle = app.clone();
                 let _ = std::thread::Builder::new()
                     .name(format!("post-match-{}", session.id))
                     .spawn(move || finish_session(handle, session));
             }
+            session_active = false;
         }
-        was_running = running;
     }
 }
 
@@ -177,16 +182,31 @@ fn finish_session(app: AppHandle, session: RunningSession) {
             return;
         }
     };
+    let has_skipped = items
+        .iter()
+        .any(|item| item.status == "skipped" && item.map_source != "official");
     let candidate = items
         .into_iter()
         .filter(|item| {
-            session
-                .baseline
-                .get(&item.id)
-                .map_or(true, |old| *old != (item.size_bytes, item.mtime_ms))
+            item.map_source == "official"
+                && item.status != "skipped"
+                && session
+                    .baseline
+                    .get(&item.id)
+                    .map_or(true, |old| *old != (item.size_bytes, item.mtime_ms))
         })
         .max_by_key(|item| (item.mtime_ms, item.id));
     let Some(candidate) = candidate else {
+        if has_skipped {
+            emit_failed(
+                &app,
+                &session.id,
+                None,
+                "POST_MATCH_WORKSHOP_DEMO_SKIPPED",
+                "录像已保存，创意工坊或来源未确认的 Demo 未解析。".into(),
+            );
+            return;
+        }
         emit_failed(
             &app,
             &session.id,

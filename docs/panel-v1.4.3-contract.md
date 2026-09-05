@@ -36,3 +36,7 @@
 ## 发布门槛
 
 本文记录自动化和固定资产契约，不替代真实 CS2 行为验收。`less`、八项 Bot Items、`br_reroll`、三类投掷入口和实际回合节奏仍需用户在备份后的真实游戏树验证后才能切换生产 latest 或发布 GitHub Release。
+
+## CS2 更新后的 gameinfo 动态基线
+
+资源包中的 `gameinfo.gi`、`backup/Online/gameinfo.gi`、`backup/WithBots/gameinfo.gi` 是由开发阶段当前官方主 mod 文件制作的静态资产。安装时写入 `cfg/cs2as05-gameinfo-state.json` 和 `gameinfo.gi.official.bin`，记录三份资源摘要、版本与生成日期；运行时只校验这些静态摘要并原子切换，不读取用户文件生成或编辑 gameinfo。若活动摘要与官方/BOT 变体均不匹配，快照状态为 `recoveryRequired`，Online 启动被阻止，用户必须先退出 CS2 并在 Steam 中验证文件，再重新制作发布资源。

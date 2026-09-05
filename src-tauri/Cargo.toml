@@ -2,7 +2,7 @@
 name = "ai_pc_fac"
 # 发布事故记录：2026-06-01 升级 0.3.7 时，曾因批量替换误改 Cargo.lock 中第三方依赖版本。
 # 改版本号时只能改本 package 版本，并让 Cargo 维护锁文件；禁止全局替换依赖版本。
-version = "0.5.7"
+version = "0.5.11"
 description = "CS2人机增强助手"
 authors = ["YuGeYu"]
 license = "AGPL-3.0-or-later"
@@ -23,7 +23,7 @@ tauri-build = { version = "2.5.6", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.10.3", features = ["protocol-asset", "unstable"] }
+tauri = { version = "2.10.3", features = ["unstable"] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-clipboard-manager = "2"
@@ -45,4 +45,4 @@ cs2-demoparser = { package = "parser", path = "../third_party/demoparser/parser"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_ToolHelp"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }

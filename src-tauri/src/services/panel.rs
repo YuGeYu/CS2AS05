@@ -5,18 +5,20 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Mutex, OnceLock};
 
 use chrono::Local;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 
 use crate::errors::AppError;
 use crate::models::demo::DemoRecordingSettings;
 use crate::models::panel::{
-    BotItemsState, DifficultyState, DropKnivesState, LaunchResult, ModeState,
+    BotItemsState, DifficultyState, DropKnivesState, GameInfoState, LaunchResult, ModeState,
     PanelInitializationResult, PanelSnapshot, PresetsState,
 };
 use crate::services::cs2;
@@ -30,6 +32,7 @@ const KNIVES: [u16; 20] = [
 const DEFAULT_KNIVES: [u16; 5] = [507, 508, 515, 519, 525];
 const CFG_FILES: [&str; 2] = ["cfg/my_bot_normal_config.cfg", "cfg/my_bot_ffa_config.cfg"];
 const PANEL_STATE_FILE: &str = "cfg/cs2as05-panel-state.json";
+const GAMEINFO_STATE_FILE: &str = "cfg/cs2as05-gameinfo-state.json";
 const CORE_CONFIG_FILE: &str = "addons/counterstrikesharp/configs/core.json";
 const BOT_ITEM_KEYS: [(&str, &str); 8] = [
     ("profiles", "bot_hider github.com/XBribo all"),
@@ -178,6 +181,8 @@ fn initialize_panel_defaults_at_with_running(
         });
     }
     let csgo = root.join("game/csgo");
+    // Startup cleanup is intentionally best-effort and scoped by cleanup_owned_backups.
+    let _ = cleanup_owned_backups(&csgo, false, None);
     let ready = panel_files_ready(&csgo);
     if !ready {
         return Ok(PanelInitializationResult {
@@ -403,9 +408,97 @@ fn disk_mode(csgo: &Path) -> Option<String> {
         || String::from_utf8_lossy(&active).contains("csgo/addons/metamod")
     {
         Some("bots".into())
+    } else if String::from_utf8_lossy(&active).contains("csgo/addons/metamod") {
+        Some("bots".into())
     } else {
-        Some("online".into())
+        None
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GameInfoSidecar {
+    pub schema: u32,
+    pub resource_version: String,
+    pub generated_at: String,
+    pub official_sha256: String,
+    pub online_sha256: String,
+    pub bots_sha256: String,
+    pub active_sha256: String,
+}
+
+fn sha256_bytes(bytes: &[u8]) -> String {
+    let mut h = Sha256::new();
+    h.update(bytes);
+    format!("{:X}", h.finalize())
+}
+
+pub(crate) fn write_gameinfo_sidecar(
+    csgo: &Path,
+    resource_version: &str,
+    generated_at: &str,
+) -> Result<(), AppError> {
+    let active = fs::read(csgo.join("gameinfo.gi")).map_err(io_error)?;
+    let online = fs::read(csgo.join("backup/Online/gameinfo.gi")).map_err(io_error)?;
+    let bots = fs::read(csgo.join("backup/WithBots/gameinfo.gi")).map_err(io_error)?;
+    let sidecar = GameInfoSidecar {
+        schema: 1,
+        resource_version: resource_version.into(),
+        generated_at: generated_at.into(),
+        official_sha256: sha256_bytes(&online),
+        online_sha256: sha256_bytes(&online),
+        bots_sha256: sha256_bytes(&bots),
+        active_sha256: sha256_bytes(&active),
+    };
+    let bytes = serde_json::to_vec_pretty(&sidecar)
+        .map_err(|e| invalid(format!("[GAMEINFO_STATE_WRITE] {e}")))?;
+    atomic_write(&csgo.join(GAMEINFO_STATE_FILE), &bytes)
+}
+
+fn gameinfo_state(csgo: &Path) -> Result<GameInfoState, AppError> {
+    let active = fs::read(csgo.join("gameinfo.gi")).ok();
+    let active_sha256 = active.as_deref().map(sha256_bytes);
+    let sidecar = fs::read(csgo.join(GAMEINFO_STATE_FILE))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<GameInfoSidecar>(&b).ok());
+    let Some(sidecar) = sidecar else {
+        return Ok(GameInfoState {
+            status: "recoveryRequired".into(),
+            active_sha256,
+            official_sha256: None,
+            resource_version: None,
+            writable: false,
+        });
+    };
+    let online_sha256 = fs::read(csgo.join("backup/Online/gameinfo.gi"))
+        .ok()
+        .map(|bytes| sha256_bytes(&bytes));
+    let bots_sha256 = fs::read(csgo.join("backup/WithBots/gameinfo.gi"))
+        .ok()
+        .map(|bytes| sha256_bytes(&bytes));
+    let official_bin_sha256 = fs::read(csgo.join("gameinfo.gi.official.bin"))
+        .ok()
+        .map(|bytes| sha256_bytes(&bytes));
+    let baseline_valid = online_sha256.as_deref() == Some(sidecar.online_sha256.as_str())
+        && bots_sha256.as_deref() == Some(sidecar.bots_sha256.as_str())
+        && official_bin_sha256.as_deref() == Some(sidecar.official_sha256.as_str());
+    let status = if !baseline_valid {
+        "recoveryRequired"
+    } else {
+        match active_sha256.as_deref() {
+            Some(v) if v == sidecar.official_sha256 => "official",
+            Some(v) if v == sidecar.bots_sha256 => "bots",
+            Some(_) => "recoveryRequired",
+            None => "unknown",
+        }
+    };
+    Ok(GameInfoState {
+        status: status.into(),
+        active_sha256,
+        official_sha256: Some(sidecar.official_sha256),
+        resource_version: Some(sidecar.resource_version),
+        writable: status != "recoveryRequired" && !cs2::check_cs2_process()?,
+    })
 }
 
 fn disk_difficulty(csgo: &Path) -> Option<String> {
@@ -582,12 +675,25 @@ fn bot_item_core_key(item: &str) -> Option<&'static str> {
 }
 
 fn write_mode_at(csgo: &Path, mode: &str) -> Result<(), AppError> {
+    let sidecar: GameInfoSidecar = fs::read(csgo.join(GAMEINFO_STATE_FILE))
+        .ok().and_then(|b| serde_json::from_slice(&b).ok())
+        .ok_or_else(|| invalid("[GAMEINFO_OFFICIAL_BASELINE_MISSING] 缺少静态 gameinfo 资源摘要，请先重新安装并完成 Steam 文件验证。"))?;
     let source = csgo.join(if mode == "online" {
         "backup/Online/gameinfo.gi"
     } else {
         "backup/WithBots/gameinfo.gi"
     });
     let bytes = fs::read(&source).map_err(|error| io_context("读取模式源文件", &source, error))?;
+    let expected = if mode == "online" {
+        &sidecar.online_sha256
+    } else {
+        &sidecar.bots_sha256
+    };
+    if sha256_bytes(&bytes) != *expected {
+        return Err(invalid(
+            "[GAMEINFO_ASSET_INVALID] 静态 gameinfo 资源摘要不匹配，已阻止写入。",
+        ));
+    }
     atomic_write(&csgo.join("gameinfo.gi"), &bytes)
 }
 
@@ -722,6 +828,8 @@ fn panel_transaction<T>(
 ) -> Result<T, AppError> {
     let paths = [
         "gameinfo.gi",
+        GAMEINFO_STATE_FILE,
+        "gameinfo.gi.official.bin",
         "overrides/botprofile.vpk",
         CFG_FILES[0],
         CFG_FILES[1],
@@ -736,7 +844,11 @@ fn panel_transaction<T>(
         })
         .collect::<Vec<_>>();
     match operation() {
-        Ok(value) => Ok(value),
+        Ok(value) => {
+            // Cleanup is best-effort; a locked backup must not turn a successful panel write into a failure.
+            let _ = cleanup_owned_backups(csgo, false, None);
+            Ok(value)
+        }
         Err(error) => {
             let mut rollback_errors = Vec::new();
             for (path, bytes) in original {
@@ -856,6 +968,7 @@ fn snapshot_at(root: &Path) -> Result<PanelSnapshot, AppError> {
             current: mode,
             writable: ready && !cs2_running,
         },
+        gameinfo: gameinfo_state(&csgo)?,
         difficulty: DifficultyState {
             current: difficulty,
             available: vec!["Low".into(), "Medium".into(), "High".into()],
@@ -875,6 +988,17 @@ fn snapshot_at(root: &Path) -> Result<PanelSnapshot, AppError> {
             writable: ready,
         },
     })
+}
+
+fn ensure_online_gameinfo_current(csgo: &Path) -> Result<(), AppError> {
+    let state = gameinfo_state(csgo)?;
+    if state.official_sha256.is_none() {
+        return Err(invalid("[GAMEINFO_OFFICIAL_BASELINE_MISSING] 未找到可信官方 gameinfo 基线。请退出 CS2 并在 Steam 中验证游戏文件。"));
+    }
+    if state.status == "recoveryRequired" || state.status == "unknown" {
+        return Err(invalid("[GAMEINFO_RECOVERY_REQUIRED] 当前 gameinfo 与已验证基线不一致，请先在 Steam 中验证游戏文件。"));
+    }
+    Ok(())
 }
 
 pub fn set_mode(root_path: &str, mode: &str) -> Result<PanelSnapshot, AppError> {
@@ -1039,11 +1163,14 @@ fn launch_cs2_inner(
     if cs2::check_cs2_process()? {
         return Err(invalid("[CS2_RUNNING] CS2 已在运行。"));
     }
+    if mode == "online" {
+        ensure_online_gameinfo_current(&root.join("game/csgo"))?;
+    }
     set_mode(root_path, mode)?;
     let insecure = mode == "bots";
     let mut options = vec!["-applaunch", "730"];
     if insecure {
-        options.extend(["-insecure", "-console", "-condebug"]);
+        options.push("-insecure");
     }
     cs2::write_runtime_log("INFO", &format!("使用 Steam 客户端：{}", steam.display()));
     let session_id = crate::demo::post_match::mark_next_live(app);
@@ -1056,6 +1183,10 @@ fn launch_cs2_inner(
         insecure,
         plugin_action,
         plugin_version,
+        final_mode: mode.to_string(),
+        gameinfo_sha256: sha256_bytes(
+            &fs::read(root.join("game/csgo/gameinfo.gi")).map_err(io_error)?,
+        ),
     })
 }
 
@@ -1116,7 +1247,7 @@ fn plugin_gate_decision(
 ) -> Result<PluginGateDecision, AppError> {
     match status {
         cs2::PluginVersionStatus::Valid { version }
-            if compare_version_core(&version, current) != Ordering::Less =>
+            if version == *current =>
         {
             Ok(PluginGateDecision::Unchanged(version.to_string()))
         }
@@ -1277,16 +1408,46 @@ fn validate_bind_key(key: &str) -> Result<(), AppError> {
         .ok_or_else(|| invalid("[PANEL_BIND_INVALID] 按键不在允许范围。"))
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BackupPolicy {
+    pub keep_backup: bool,
+    pub operation_id: Option<u64>,
+}
+
+static WRITE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
+    atomic_write_with_policy(
+        path,
+        bytes,
+        BackupPolicy {
+            keep_backup: false,
+            operation_id: None,
+        },
+    )
+}
+
+fn atomic_write_with_policy(
+    path: &Path,
+    bytes: &[u8],
+    policy: BackupPolicy,
+) -> Result<(), AppError> {
     let parent = path
         .parent()
         .ok_or_else(|| invalid("[PANEL_PATH_INVALID] 目标文件没有父目录。"))?;
     fs::create_dir_all(parent).map_err(|e| io_context("创建目标目录", parent, e))?;
     let backup = if path.is_file() {
+        let operation_id = policy
+            .operation_id
+            .unwrap_or_else(|| WRITE_SEQUENCE.fetch_add(1, AtomicOrdering::Relaxed));
         let backup = path.with_extension(format!(
             "{}.backup-{}",
             path.extension().and_then(|v| v.to_str()).unwrap_or("file"),
-            Local::now().format("%Y%m%d-%H%M%S%3f")
+            format!(
+                "{}-{}",
+                Local::now().format("%Y%m%d-%H%M%S%3f"),
+                operation_id
+            )
         ));
         fs::copy(path, &backup).map_err(|e| io_context("创建写前备份", path, e))?;
         Some(backup)
@@ -1328,8 +1489,91 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
                 let _ = fs::copy(backup, path);
             }
         }
+    } else if !policy.keep_backup {
+        if let Some(backup) = backup {
+            let _ = fs::remove_file(backup);
+        }
     }
     result
+}
+
+/// Remove only write-before backups created by this assistant under the active csgo root.
+/// The ordinary `backup` directory is plugin-managed and is intentionally never traversed.
+pub(crate) fn cleanup_owned_backups(
+    csgo_root: &Path,
+    dry_run: bool,
+    preserve_operation_id: Option<u64>,
+) -> Result<Vec<PathBuf>, AppError> {
+    let root = fs::canonicalize(csgo_root)
+        .map_err(|error| io_context("校验备份清理根目录", csgo_root, error))?;
+    let mut found = Vec::new();
+    fn visit(
+        dir: &Path,
+        root: &Path,
+        dry_run: bool,
+        preserve_operation_id: Option<u64>,
+        found: &mut Vec<PathBuf>,
+    ) -> Result<(), AppError> {
+        let entries = fs::read_dir(dir).map_err(|error| io_context("扫描备份目录", dir, error))?;
+        for entry in entries {
+            let entry = entry.map_err(|error| io_context("读取备份目录项", dir, error))?;
+            let path = entry.path();
+            let file_type = entry
+                .file_type()
+                .map_err(|error| io_context("读取备份文件类型", &path, error))?;
+            if file_type.is_dir() {
+                if entry
+                    .file_name()
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case("backup")
+                {
+                    continue;
+                }
+                visit(&path, root, dry_run, preserve_operation_id, found)?;
+                continue;
+            }
+            if !file_type.is_file() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            let Some(marker) = name.rfind(".backup-") else {
+                continue;
+            };
+            let suffix = &name[marker + ".backup-".len()..];
+            let Some((timestamp, sequence)) = suffix.rsplit_once('-') else {
+                continue;
+            };
+            if timestamp.len() != 18
+                || timestamp.as_bytes().get(8) != Some(&b'-')
+                || !timestamp
+                    .chars()
+                    .enumerate()
+                    .all(|(index, c)| index == 8 || c.is_ascii_digit())
+            {
+                continue;
+            }
+            let Ok(operation_id) = sequence.parse::<u64>() else {
+                continue;
+            };
+            if preserve_operation_id == Some(operation_id) {
+                continue;
+            }
+            let canonical = fs::canonicalize(&path)
+                .map_err(|error| io_context("校验备份路径", &path, error))?;
+            if !canonical.starts_with(root) {
+                continue;
+            }
+            found.push(path.clone());
+            if !dry_run {
+                fs::remove_file(&path).map_err(|error| io_context("清理写前备份", &path, error))?;
+            }
+        }
+        Ok(())
+    }
+    visit(&root, &root, dry_run, preserve_operation_id, &mut found)?;
+    Ok(found)
 }
 
 fn read_text(path: &Path) -> std::io::Result<String> {
@@ -1338,6 +1582,10 @@ fn read_text(path: &Path) -> std::io::Result<String> {
 
 fn invalid(message: impl Into<String>) -> AppError {
     AppError::runtime(message)
+}
+
+fn io_error(error: std::io::Error) -> AppError {
+    AppError::runtime(error.to_string())
 }
 
 fn io_context(action: &str, path: &Path, error: std::io::Error) -> AppError {
@@ -1384,6 +1632,22 @@ mod tests {
         fs::write(
             csgo.join("backup/WithBots/gameinfo.gi"),
             b"Game csgo/addons/metamod",
+        )
+        .unwrap();
+        let online_sha256 = sha256_bytes(b"online");
+        let bots_sha256 = sha256_bytes(b"Game csgo/addons/metamod");
+        let sidecar = GameInfoSidecar {
+            schema: 1,
+            resource_version: "test".into(),
+            generated_at: "test".into(),
+            official_sha256: online_sha256.clone(),
+            online_sha256,
+            bots_sha256,
+            active_sha256: sha256_bytes(b"online"),
+        };
+        fs::write(
+            csgo.join(GAMEINFO_STATE_FILE),
+            serde_json::to_vec_pretty(&sidecar).unwrap(),
         )
         .unwrap();
         fs::copy(
@@ -1473,7 +1737,7 @@ mod tests {
                 &current
             )
             .unwrap(),
-            PluginGateDecision::Unchanged("0.6.0-test".into())
+            PluginGateDecision::Install
         );
         let error = plugin_gate_decision(
             cs2::PluginVersionStatus::Invalid {
@@ -1578,6 +1842,7 @@ mod tests {
         }
         fs::create_dir_all(csgo.join("addons/counterstrikesharp/configs")).unwrap();
         fs::write(csgo.join(CORE_CONFIG_FILE), b"{}").unwrap();
+        write_gameinfo_sidecar(&csgo, "test", "test").unwrap();
 
         let root_text = root.to_string_lossy();
         set_mode(&root_text, "bots").unwrap();
@@ -1599,7 +1864,7 @@ mod tests {
         assert!(cfg.contains("bind f8 \"subclass_create 500;subclass_create 526\""));
         assert_eq!(cfg.matches("bot_aim head").count(), 1);
         assert_eq!(cfg.matches("bot_nades off").count(), 1);
-        assert!(fs::read_dir(&csgo).unwrap().flatten().any(|entry| entry
+        assert!(!fs::read_dir(&csgo).unwrap().flatten().any(|entry| entry
             .file_name()
             .to_string_lossy()
             .starts_with("gameinfo.gi.backup-")));
@@ -1859,6 +2124,54 @@ mod tests {
         assert!(text.contains("echo custom\n"));
         assert!(text.contains("tv_enable 0\n"));
         assert!(text.contains("tv_autorecord 0\n"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn cleanup_owned_backups_is_scoped_idempotent_and_preserves_requested_operation() {
+        let root = test_root("backup-cleanup");
+        let csgo = root.join("game/csgo");
+        fs::create_dir_all(csgo.join("cfg")).unwrap();
+        fs::create_dir_all(csgo.join("backup")).unwrap();
+        let old = csgo.join("cfg/gameinfo.gi.backup-20260828-010203004-41");
+        let kept = csgo.join("cfg/gameinfo.gi.backup-20260828-010203005-42");
+        let protected = csgo.join("backup/gameinfo.gi.backup-20260828-010203006-43");
+        let user_named = csgo.join("cfg/manual.backup-copy");
+        for path in [&old, &kept, &protected, &user_named] {
+            fs::write(path, b"x").unwrap();
+        }
+
+        let preview = cleanup_owned_backups(&csgo, true, Some(42)).unwrap();
+        assert_eq!(preview.len(), 1);
+        assert_eq!(preview[0].file_name(), old.file_name());
+        assert!(old.exists() && kept.exists() && protected.exists() && user_named.exists());
+        let removed = cleanup_owned_backups(&csgo, false, Some(42)).unwrap();
+        assert_eq!(removed.len(), 1);
+        assert_eq!(removed[0].file_name(), old.file_name());
+        assert!(!csgo
+            .join("cfg/gameinfo.gi.backup-20260828-010203004-41")
+            .exists());
+        assert!(kept.exists() && protected.exists() && user_named.exists());
+        assert!(cleanup_owned_backups(&csgo, false, Some(42))
+            .unwrap()
+            .is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn atomic_write_default_removes_write_before_backup_after_success() {
+        let root = test_root("backup-default");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("state.json");
+        fs::write(&path, b"before").unwrap();
+        atomic_write(&path, b"after").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"after");
+        let backups = fs::read_dir(&root)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".backup-"))
+            .count();
+        assert_eq!(backups, 0);
         fs::remove_dir_all(root).unwrap();
     }
 

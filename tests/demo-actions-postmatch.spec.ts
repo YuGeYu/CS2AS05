@@ -35,6 +35,19 @@ describe('Demo actions and post-match contracts', () => {
     expect(service).toContain("invoke<RevealDemoResult>('reveal_demo_file', { demoId })")
   })
 
+  it('exposes a separate terminal analysis-job delete action without deleting the Demo', () => {
+    const view = read('src/views/DemoReviewView.vue')
+    const frontend = read('src/services/tauri/demo.ts')
+    const command = read('src-tauri/src/commands/demo.rs')
+    const service = read('src-tauri/src/services/demo.rs')
+    expect(view).toContain('aria-label="删除任务记录"')
+    expect(view).toContain('删除这条分析任务？')
+    expect(view).toContain('原始 Demo 文件、录像库记录和已有对局报告不会删除')
+    expect(frontend).toContain("invoke<void>('delete_analysis_job', { jobId })")
+    expect(command).toContain('demo::delete_analysis_job(&app, job_id)')
+    expect(service).toContain("DELETE FROM analysis_jobs WHERE id=?1 AND stage IN ('error','canceled')")
+  })
+
   it('replaces the old done-list race with exact session events', () => {
     const service = read('src-tauri/src/services/demo.rs')
     const coordinator = read('src-tauri/src/demo/post_match.rs')

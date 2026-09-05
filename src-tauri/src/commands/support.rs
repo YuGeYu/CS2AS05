@@ -1,7 +1,9 @@
 use crate::errors::AppError;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
-use crate::models::cs2::{AssistantPreferences, FaultSubmissionResult, OperationResult};
+use crate::models::cs2::{
+    AssistantAccount, AssistantPreferences, FaultSubmissionResult, OperationResult,
+};
 use crate::services::support;
 
 #[tauri::command]
@@ -12,6 +14,79 @@ pub fn open_official_site() -> Result<(), String> {
 #[tauri::command]
 pub fn open_idea_page() -> Result<(), String> {
     support::open_idea_page().map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn open_api_purchase() -> Result<(), String> {
+    support::open_api_purchase().map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn get_ai_connection(app: AppHandle) -> Result<support::AiConnectionSummary, String> {
+    support::get_ai_connection(&app).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn save_ai_connection(
+    app: AppHandle,
+    url: String,
+    key: String,
+    model: String,
+) -> Result<support::AiConnectionSummary, String> {
+    support::save_ai_connection(&app, &url, &key, &model).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn get_ai_chat_sessions(app: AppHandle) -> Result<Vec<support::AiChatSession>, String> {
+    support::get_ai_chat_sessions(&app).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn save_ai_chat_sessions(
+    app: AppHandle,
+    sessions: Vec<support::AiChatSession>,
+) -> Result<(), String> {
+    support::save_ai_chat_sessions(&app, sessions).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn get_ai_models(
+    app: AppHandle,
+    url: String,
+    key: String,
+) -> Result<Vec<String>, String> {
+    support::get_ai_models(&app, &url, &key)
+        .await
+        .map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn run_ai_powershell(app: AppHandle, command: String) -> Result<String, String> {
+    let working_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|error| format!("无法定位 PowerShell 工作目录：{error}"))?
+        .join("quick-support");
+    tauri::async_runtime::spawn_blocking(move || support::run_ai_powershell(&command, &working_dir))
+        .await
+        .map_err(|error| format!("PowerShell 操作中断：{error}"))?
+        .map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn chat_ai(
+    app: AppHandle,
+    messages: Vec<support::AiChatMessage>,
+    context: Option<String>,
+) -> Result<String, String> {
+    support::chat_ai(&app, messages, context)
+        .await
+        .map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn open_fault_idea_page(ticket_id: String) -> Result<(), String> {
+    support::open_fault_idea_page(&ticket_id).map_err(AppError::into_string)
 }
 
 #[tauri::command]
@@ -58,4 +133,25 @@ pub async fn submit_fault_report(
     support::submit_fault_report(&app, &details, root_path.as_deref())
         .await
         .map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn get_assistant_account(app: AppHandle) -> Result<AssistantAccount, String> {
+    support::get_assistant_account(&app).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn login_assistant(
+    app: AppHandle,
+    username: String,
+    password: String,
+) -> Result<AssistantAccount, String> {
+    support::login_assistant(&app, &username, &password)
+        .await
+        .map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn logout_assistant(app: AppHandle) -> Result<AssistantAccount, String> {
+    support::logout_assistant(&app).map_err(AppError::into_string)
 }

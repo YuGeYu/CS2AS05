@@ -93,6 +93,10 @@ pub fn retry_analysis_job(app: AppHandle, job_id: i64) -> Result<(), String> {
     demo::retry_analysis_job(&app, job_id).map_err(|e| e.into_string())
 }
 #[tauri::command]
+pub fn delete_analysis_job(app: AppHandle, job_id: i64) -> Result<(), String> {
+    demo::delete_analysis_job(&app, job_id).map_err(|e| e.into_string())
+}
+#[tauri::command]
 pub fn get_match_overview(app: AppHandle, demo_id: i64) -> Result<MatchOverview, String> {
     demo::match_overview(&app, demo_id).map_err(|e| e.into_string())
 }
@@ -102,6 +106,14 @@ pub fn get_match_scoreboard(
     demo_id: i64,
 ) -> Result<Vec<MatchScoreboardPlayer>, String> {
     demo::match_scoreboard(&app, demo_id).map_err(|e| e.into_string())
+}
+#[tauri::command]
+pub fn get_match_performance_radar(
+    app: AppHandle,
+    demo_id: i64,
+    player_keys: Option<Vec<String>>,
+) -> Result<MatchPerformanceRadar, String> {
+    demo::match_performance_radar(&app, demo_id, player_keys).map_err(|e| e.into_string())
 }
 #[tauri::command]
 pub fn get_match_rounds(app: AppHandle, demo_id: i64) -> Result<Vec<MatchRoundSummary>, String> {

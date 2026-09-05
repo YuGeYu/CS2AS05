@@ -10,6 +10,7 @@ export interface PanelSnapshot {
   missingFiles: string[]
   cs2Running: boolean
   mode: { current: PanelMode | null; insecure: boolean; writable: boolean }
+  gameinfo?: { status: 'official' | 'bots' | 'unknown' | 'recoveryRequired'; activeSha256?: string | null; officialSha256?: string | null; resourceVersion?: string | null; writable: boolean }
   difficulty: { current: Difficulty | null; available: Difficulty[] }
   presets: { aim: AimValue | null; nades: NadesValue | null; writable: boolean }
   botItems: Record<BotItem, boolean> & { writable: boolean }
@@ -21,6 +22,8 @@ export interface LaunchResult {
   insecure: boolean
   pluginAction: 'unchanged' | 'installed'
   pluginVersion: string
+  finalMode?: PanelMode
+  gameinfoSha256?: string
 }
 
 export interface PanelInitializationResult {

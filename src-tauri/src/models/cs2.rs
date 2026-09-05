@@ -66,6 +66,25 @@ pub struct OperationResult {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Cs2ProcessInfo {
+    pub pid: u32,
+    pub exe_name: String,
+    pub exe_path: Option<String>,
+    pub parent_pid: Option<u32>,
+    pub start_time: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Cs2ProcessSnapshot {
+    pub observed_at: i64,
+    pub processes: Vec<Cs2ProcessInfo>,
+    pub confidence: String,
+    pub sample_count: u8,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticsPayload {
@@ -86,4 +105,14 @@ pub struct FaultSubmissionResult {
     pub success: bool,
     pub ticket_id: String,
     pub message: String,
+    pub idea_section_id: String,
+    pub account_username: String,
+    pub auto_registered: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssistantAccount {
+    pub username: Option<String>,
+    pub logged_in: bool,
 }

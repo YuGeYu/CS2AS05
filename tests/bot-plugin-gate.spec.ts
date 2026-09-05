@@ -15,7 +15,7 @@ describe('BOT plugin launch gate', () => {
   })
 
   it('does not change the manual installation IPC', () => {
-    expect(read('src/services/tauri/cs2.ts')).toContain("invoke<OperationResult>('install_bot_package', { rootPath })")
+    expect(read('src/services/tauri/cs2.ts')).toContain("invoke<OperationResult>('install_bot_package', { rootPath, keepBackup })")
     expect(read('src/views/InstallView.vue')).not.toContain('inspect_bot_plugin_version')
   })
 })

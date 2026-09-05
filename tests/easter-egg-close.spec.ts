@@ -1,24 +1,12 @@
 // @vitest-environment jsdom
 import { flushPromises, mount } from '@vue/test-utils'
-import { defineComponent, h } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import EasterEggGame from '@/components/easter-egg/EasterEggGame.vue'
 
-const interact = vi.fn()
-vi.mock('@/components/three/ThreeStage.vue', () => ({
-  default: defineComponent({
-    name: 'ThreeStage',
-    setup(_, { expose }) {
-      expose({ interact })
-      return () => h('div', { class: 'three-stage-stub' })
-    },
-  }),
-}))
 
 describe('EasterEggGame close control', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    interact.mockReset()
     Object.defineProperties(HTMLElement.prototype, {
       setPointerCapture: { configurable: true, writable: true, value: vi.fn() },
       releasePointerCapture: { configurable: true, writable: true, value: vi.fn() },
@@ -59,20 +47,10 @@ describe('EasterEggGame close control', () => {
   })
 
   it('releases input capture and closes once while exploring', async () => {
-    const captures = new Set<number>()
-    const setPointerCapture = vi.spyOn(HTMLElement.prototype, 'setPointerCapture').mockImplementation((id: number) => captures.add(id))
-    const releasePointerCapture = vi.spyOn(HTMLElement.prototype, 'releasePointerCapture').mockImplementation((id: number) => captures.delete(id))
-    vi.spyOn(HTMLElement.prototype, 'hasPointerCapture').mockImplementation((id: number) => captures.has(id))
     const wrapper = await mountGame()
-    const input = wrapper.get('.game-input-layer')
-    dispatchPointer(input.element, 'pointerdown', 7, 100, 100)
-    expect(setPointerCapture).toHaveBeenCalledWith(7)
-    expect(interact).toHaveBeenCalledWith(expect.objectContaining({ type: 'pointer-down' }))
     await wrapper.get('[aria-label="关闭贡献陈列馆"]').trigger('pointerdown', { pointerId: 8 })
     await wrapper.get('[aria-label="关闭贡献陈列馆"]').trigger('click')
-    expect(releasePointerCapture).toHaveBeenCalledWith(7)
     expect(wrapper.emitted('close')).toHaveLength(1)
-    expect(interact).toHaveBeenCalledTimes(1)
     wrapper.unmount()
   })
 
