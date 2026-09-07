@@ -16,8 +16,8 @@ describe('desktop design contract', () => {
     ]) expect(styles).toContain(token)
 
     expect(styles).toContain(":root[data-theme='dark']")
-    expect(styles).toContain('--app-bg: #0b1120')
-    expect(styles).toContain('--primary: #60a5fa')
+    expect(styles).toContain('--app-bg: #0b0c0c')
+    expect(styles).toContain('--primary: #d5b56a')
     expect(styles).not.toContain('font-family: Inter')
     expect(styles).toContain('"Microsoft YaHei UI", "Segoe UI", sans-serif')
     expect(styles).toContain('Consolas, "Cascadia Mono", monospace')
@@ -52,6 +52,22 @@ describe('desktop design contract', () => {
     expect(demo).toContain('role="tablist"')
     expect(demo).toContain(':aria-selected="tab === \'library\'"')
     expect(demo).toContain(':data-team="group.key"')
+  })
+
+  it('keeps installation diagnostics focused on one actionable primary path', () => {
+    const install = read('src/views/InstallView.vue')
+    expect(install).toContain('const diagnosis = computed')
+    expect(install).toContain('class="diagnosis-hero"')
+    expect(install).toContain('class="status-grid status-grid--diagnosis"')
+    expect(install).toContain('CS2 目录')
+    expect(install).toContain('游戏进程')
+    expect(install).toContain('定制插件包')
+    expect(install).toContain('class="primary-button install-cta"')
+    expect(install).toContain('class="operation-state"')
+    expect(install).toContain("activeOperation = ref<'scan' | 'install'")
+    expect(styles).toContain('.diagnosis-hero')
+    expect(styles).toContain('.install-section--primary')
+    expect(styles).toContain('.status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }')
   })
 
   it('gives icon buttons accessible names and preserves async state semantics', () => {

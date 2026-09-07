@@ -6,9 +6,11 @@ import SupportActions from '@/components/SupportActions.vue'
 import AppearanceSettingsDrawer from '@/components/AppearanceSettingsDrawer.vue'
 import { appConfig } from '@/config/app'
 import { useCs2Store } from '@/stores/cs2'
+import { usePanelStore } from '@/stores/panel'
 import { clearAssistantData, getAssistantAccount, getAssistantPreferences, loginAssistant, logoutAssistant, openFaultIdeaPage, setAssistantAutostart, submitFaultReport, type AssistantAccount } from '@/services/tauri/support'
 
 const store = useCs2Store()
+const panel = usePanelStore()
 const uninstallConfirmOpen = ref(false)
 const clearConfirmOpen = ref(false)
 const faultOpen = ref(false)
@@ -27,6 +29,8 @@ const accountBusy = ref(false)
 const lastTicketId = ref('')
 const appearanceOpen = ref(false)
 const keepBackup = ref(false)
+const activeOperation = ref<'scan' | 'install' | 'panel' | 'uninstall' | 'preference' | 'clear' | 'account' | 'fault' | null>(null)
+const operationMessage = ref('')
 
 const installBlocked = computed(() => !store.selectedRoot || store.cs2Running || store.busy)
 const installLabel = computed(() => {
@@ -53,6 +57,16 @@ const processVisualState = computed(() => ({
   stopped: 'ready',
   unknown: 'warn',
 }[store.cs2ProcessState]))
+const diagnosis = computed(() => {
+  if (!store.selectedRoot) return { tone: 'warning', title: '需要选择 CS2 目录', message: '先选择或扫描 Counter-Strike Global Offensive 目录。', action: '选择目录' }
+  if (store.cs2Running) return { tone: 'danger', title: '请先退出 CS2', message: '安装、覆盖更新和卸载都需要游戏完全退出。', action: '等待退出' }
+  if (store.environment?.baseEnvironmentReady) return { tone: 'ready', title: '环境可以更新', message: `已检测到定制插件包，可覆盖更新到 ${appConfig.appVersion}。`, action: '覆盖更新' }
+  return { tone: 'info', title: '环境可以安装', message: '目录有效，可以安装基于 CS2-Bot-Improver v1.4.4 的定制资源包。', action: '开始安装' }
+})
+const operationLabel = computed(() => {
+  if (!activeOperation.value) return ''
+  return ({ scan: '正在扫描目录…', install: '正在写入并验证资源包…', panel: '正在启动原版 Panel…', uninstall: '正在卸载插件…', preference: '正在保存助手设置…', clear: '正在清理助手数据…', account: '正在处理账号…', fault: '正在提交故障单…' }[activeOperation.value] ?? '')
+})
 
 async function browse() {
   const { open } = await import('@tauri-apps/plugin-dialog')
@@ -60,36 +74,62 @@ async function browse() {
   if (typeof result === 'string') await store.selectRoot(result)
 }
 
+async function scanRoots() {
+  activeOperation.value = 'scan'
+  operationMessage.value = ''
+  try {
+    await store.scanRoots()
+    operationMessage.value = '目录扫描完成。'
+  } catch (error) {
+    operationMessage.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    activeOperation.value = null
+  }
+}
+
 async function install() {
+  activeOperation.value = 'install'
+  operationMessage.value = ''
   try {
     await store.install(keepBackup.value)
+    operationMessage.value = '安装完成，环境已重新检查。'
   } catch {
     // The store exposes the actionable failure in the toast and diagnostics.
   } finally {
+    activeOperation.value = null
     keepBackup.value = false
   }
 }
 
 async function openPanel() {
+  activeOperation.value = 'panel'
+  operationMessage.value = ''
   try {
     await store.openPanel()
+    operationMessage.value = '原版 Panel 已启动。'
   } catch {
     // The store exposes the actionable failure in the toast and diagnostics.
   }
+  finally { activeOperation.value = null }
 }
 
 async function confirmUninstall() {
   uninstallConfirmOpen.value = false
+  activeOperation.value = 'uninstall'
+  operationMessage.value = ''
   try {
     await store.uninstall()
+    operationMessage.value = '插件已卸载，环境已重新检查。'
   } catch {
     // The store exposes the actionable failure in the toast and diagnostics.
   }
+  finally { activeOperation.value = null }
 }
 
 async function toggleAutostart(event: Event) {
   const enabled = (event.target as HTMLInputElement).checked
   preferenceBusy.value = true
+  activeOperation.value = 'preference'
   maintenanceState.value = ''
   try {
     autostartEnabled.value = (await setAssistantAutostart(enabled)).autostartEnabled
@@ -99,12 +139,14 @@ async function toggleAutostart(event: Event) {
     maintenanceState.value = error instanceof Error ? error.message : String(error)
   } finally {
     preferenceBusy.value = false
+    activeOperation.value = null
   }
 }
 
 async function confirmClearData() {
   clearConfirmOpen.value = false
   preferenceBusy.value = true
+  activeOperation.value = 'clear'
   try {
     const result = await clearAssistantData()
     localStorage.clear()
@@ -113,6 +155,7 @@ async function confirmClearData() {
     maintenanceState.value = error instanceof Error ? error.message : String(error)
   } finally {
     preferenceBusy.value = false
+    activeOperation.value = null
   }
 }
 
@@ -131,6 +174,7 @@ function openAccountDialog() {
 async function submitAccountLogin() {
   if (!accountUsername.value.trim() || !accountPassword.value || accountBusy.value) return
   accountBusy.value = true
+  activeOperation.value = 'account'
   accountState.value = ''
   try {
     account.value = await loginAssistant(accountUsername.value.trim(), accountPassword.value)
@@ -140,11 +184,13 @@ async function submitAccountLogin() {
     accountState.value = error instanceof Error ? error.message : String(error)
   } finally {
     accountBusy.value = false
+    activeOperation.value = null
   }
 }
 
 async function signOutAccount() {
   accountBusy.value = true
+  activeOperation.value = 'account'
   try {
     account.value = await logoutAssistant()
     accountState.value = '已退出助手账号。下次提交故障时会重新一键注册。'
@@ -152,12 +198,14 @@ async function signOutAccount() {
     accountState.value = error instanceof Error ? error.message : String(error)
   } finally {
     accountBusy.value = false
+    activeOperation.value = null
   }
 }
 
 async function submitFault() {
   if (faultDetails.value.trim().length < 10 || faultSubmitting.value) return
   faultSubmitting.value = true
+  activeOperation.value = 'fault'
   faultState.value = ''
   try {
     const result = await submitFaultReport(faultDetails.value.trim(), store.selectedRoot || undefined)
@@ -169,6 +217,7 @@ async function submitFault() {
     faultState.value = error instanceof Error ? error.message : String(error)
   } finally {
     faultSubmitting.value = false
+    activeOperation.value = null
   }
 }
 
@@ -196,6 +245,24 @@ onMounted(async () => {
         <div class="installer-header-actions"><span class="version-label">{{ appConfig.appVersion }}</span><button class="secondary-button appearance-trigger" type="button" aria-label="打开主题设置" @click="appearanceOpen = true"><Wrench :size="17" /><span>主题设置</span></button></div>
       </header>
 
+      <section class="diagnosis-hero" :data-tone="diagnosis.tone" aria-live="polite">
+        <div class="diagnosis-hero-icon" aria-hidden="true"><ShieldCheck :size="24" /></div>
+        <div class="diagnosis-hero-copy"><p class="overline">当前诊断结论</p><h2>{{ diagnosis.title }}</h2><p>{{ diagnosis.message }}</p></div>
+        <span class="diagnosis-hero-action">{{ diagnosis.action }}</span>
+      </section>
+
+      <section class="status-grid status-grid--diagnosis" aria-label="环境状态">
+        <div class="status-item" :data-state="store.selectedRoot ? 'ready' : 'warn'"><span>CS2 目录</span><strong>{{ store.selectedRoot ? '已选择' : '未选择' }}</strong></div>
+        <div class="status-item" :data-state="processVisualState"><span>游戏进程</span><strong>{{ processLabel }}</strong></div>
+        <div class="status-item" :data-state="store.environment?.baseEnvironmentReady ? 'ready' : 'warn'"><span>定制插件包</span><strong>{{ packageState }}</strong></div>
+        <div class="status-item" :data-state="panel.snapshot?.ready ? 'ready' : 'warn'"><span>Panel</span><strong>{{ panel.snapshot?.ready ? '可用' : '待检查' }}</strong></div>
+      </section>
+
+      <section class="install-section install-section--primary" aria-labelledby="install-title">
+        <div class="install-section-copy"><p class="overline">主任务 · 定制资源包</p><h2 id="install-title">{{ appConfig.appVersion }} 定制资源包</h2><p>基于上游 CS2-Bot-Improver v1.4.4，保留上游能力并叠加本项目定制。</p><p>{{ installHint }}</p></div>
+        <div class="install-action-stack"><label class="backup-choice"><input v-model="keepBackup" type="checkbox" :disabled="installBlocked" />本次操作保留写前备份</label><button class="primary-button install-cta" type="button" :disabled="installBlocked" @click="install"><ShieldCheck :size="20" /><span>{{ installLabel }}</span></button><p v-if="operationLabel" class="operation-state" aria-live="polite"><RefreshCw :size="14" class="spinning" />{{ operationLabel }}</p><p v-else-if="operationMessage" class="operation-state operation-state--done" aria-live="polite"><ShieldCheck :size="14" />{{ operationMessage }}</p></div>
+      </section>
+
       <SupportActions />
 
       <section class="directory-section" aria-labelledby="directory-title">
@@ -204,7 +271,7 @@ onMounted(async () => {
             <p class="overline">安装位置</p>
             <h2 id="directory-title">CS2 游戏目录</h2>
           </div>
-          <button class="icon-button" type="button" title="重新扫描 CS2 目录" aria-label="重新扫描 CS2 目录" :disabled="store.busy" @click="store.scanRoots">
+          <button class="icon-button" type="button" title="重新扫描 CS2 目录" aria-label="重新扫描 CS2 目录" :disabled="store.busy || Boolean(activeOperation)" @click="scanRoots">
             <RefreshCw :size="18" :class="{ spinning: store.busy }" />
           </button>
         </div>
@@ -218,18 +285,6 @@ onMounted(async () => {
           </button>
         </div>
         <p v-if="store.candidates.length" class="candidate-note">已找到 {{ store.candidates.length }} 个候选目录。</p>
-      </section>
-
-      <section class="status-grid" aria-label="当前状态">
-        <div class="status-item" :data-state="store.selectedRoot ? 'ready' : 'warn'">
-          <span>目录</span><strong>{{ store.selectedRoot ? '已选择' : '未选择' }}</strong>
-        </div>
-        <div class="status-item" :data-state="processVisualState">
-          <span>CS2</span><strong>{{ processLabel }}</strong>
-        </div>
-        <div class="status-item" :data-state="store.environment?.baseEnvironmentReady ? 'ready' : 'warn'">
-          <span>插件</span><strong>{{ packageState }}</strong>
-        </div>
       </section>
 
       <section class="assistant-settings" aria-labelledby="assistant-settings-title">
@@ -251,20 +306,6 @@ onMounted(async () => {
           </label>
         </div>
         <p v-if="maintenanceState" class="maintenance-state" aria-live="polite">{{ maintenanceState }}</p>
-      </section>
-
-      <section class="install-section" aria-labelledby="install-title">
-        <div>
-          <p class="overline">定制资源包</p>
-          <h2 id="install-title">{{ appConfig.appVersion }} 定制资源包</h2>
-          <p>基于上游 CS2-Bot-Improver v1.4.4，保留上游完整能力并叠加本项目定制。</p>
-          <p>{{ installHint }}</p>
-        </div>
-        <label class="backup-choice"><input v-model="keepBackup" type="checkbox" :disabled="installBlocked" />本次操作保留写前备份</label>
-        <button class="primary-button" type="button" :disabled="installBlocked" @click="install">
-          <ShieldCheck :size="20" />
-          <span>{{ installLabel }}</span>
-        </button>
       </section>
 
       <section class="panel-section" aria-labelledby="panel-title">

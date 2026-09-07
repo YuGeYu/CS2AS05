@@ -21,6 +21,6 @@ describe('MapRotation release contract', () => {
   it('ships the external default config in the release zip', () => {
     const zip = readFileSync('src-tauri/resources/CS2BotImprover.zip')
     expect(zip.length).toBeGreaterThan(1)
-    expect(createHash('sha256').update(zip).digest('hex').toUpperCase()).toBe('634BC9B854A0F39349474EC73463E4CAED6454BB0344DA7C89B9A1D2D268FE7F')
+    expect(createHash('sha256').update(zip).digest('hex').toUpperCase()).toBe('AD5F049C8E5DA59FDD175E786FE13F90D3EF8A41DF8629F91A127561A0ACE600')
   })
 })

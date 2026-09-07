@@ -1,0 +1,11 @@
+diff --git a/source/InventorySimulator/Services/ConVars.cs b/source/InventorySimulator/Services/ConVars.cs
+index 7b6ea4d..3cd7813 100644
+--- a/source/InventorySimulator/Services/ConVars.cs
++++ b/source/InventorySimulator/Services/ConVars.cs
+@@ -31,7 +31,7 @@ public static class ConVars
+     public static readonly FakeConVar<bool> IsWsEnabled = new(
+         "invsim_ws_enabled",
+         "Allow players to refresh their inventory using the !ws command.",
+-        false
++        true
+     );

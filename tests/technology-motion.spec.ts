@@ -61,23 +61,25 @@ describe('technology motion interaction boundaries', () => {
     vi.useRealTimers()
   })
 
-  it('moves the navigation cursor with the single authoritative current page', async () => {
+  it('keeps exactly one authoritative current page with the active style', async () => {
     const wrapper = mount(AppShell, {
       global: { plugins: [createPinia()], stubs: { OverviewView: true, PresetsView: true, BotItemsView: true, KnivesView: true, CommandsView: true, InstallView: true } },
     })
     await flushPromises()
-    expect(wrapper.get('nav').attributes('style')).toContain('--nav-index: 0')
+    const overviewActive = wrapper.get('[aria-current="page"]')
+    expect(overviewActive.attributes('aria-label')).toBe('概览')
+    expect(overviewActive.classes()).toContain('is-active')
     expect(wrapper.findAll('[aria-current="page"]')).toHaveLength(1)
     expect(wrapper.get('main').attributes('data-current-view')).toBe('overview')
 
     await wrapper.get('button[aria-label="刀具"]').trigger('click')
     await vi.advanceTimersByTimeAsync(220)
-    expect(wrapper.get('nav').attributes('style')).toContain('--nav-index: 3')
+    expect(wrapper.get('[aria-current="page"]').attributes('aria-label')).toBe('刀具')
     expect(wrapper.findAll('[aria-current="page"]')).toHaveLength(1)
     expect(wrapper.get('main').attributes('data-current-view')).toBe('knives')
     expect(wrapper.get('.view-swap-frame').element.childElementCount).toBeGreaterThan(0)
     await wrapper.get('button[aria-label="刀具"]').trigger('click')
-    expect(wrapper.get('nav').attributes('style')).toContain('--nav-index: 3')
+    expect(wrapper.get('[aria-current="page"]').attributes('aria-label')).toBe('刀具')
     wrapper.unmount()
   })
 

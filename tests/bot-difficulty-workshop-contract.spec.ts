@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 const overview = readFileSync(resolve('src/views/OverviewView.vue'), 'utf8')
 const workbench = readFileSync(resolve('src/components/BotDifficultyWorkbench.vue'), 'utf8')
 const service = readFileSync(resolve('src/services/tauri/bot-difficulty.ts'), 'utf8')
+const commands = readFileSync(resolve('src-tauri/src/commands/bot_difficulty.rs'), 'utf8')
+const serviceRust = readFileSync(resolve('src-tauri/src/services/bot_difficulty.rs'), 'utf8')
 
 describe('BOT 强度工坊契约', () => {
   it('生产概览提供受控入口并保留工坊组件', () => {
@@ -18,6 +20,26 @@ describe('BOT 强度工坊契约', () => {
     expect(service).toContain("invoke<BotProfileList>('list_bot_profiles'")
     expect(service).toContain("invoke<BotProfileDocument>('open_bot_profile'")
     expect(service).toContain("invoke<BotProfileOperation>('save_bot_profile'")
+    expect(service).toContain("invoke<BotProfileOperation>('rename_bot_profile'")
+    expect(service).toContain("invoke<BotProfileOperation>('delete_bot_profile'")
     expect(workbench).not.toContain('localStorage')
+  })
+
+  it('把 VPK 工作移出 Tauri 主线程，并丢弃过期的档案读取结果', () => {
+    expect(commands).toContain('spawn_blocking')
+    expect(commands).toContain('pub async fn open_bot_profile')
+    expect(workbench).toContain('requestSequence')
+    expect(workbench).toContain('sequence !== requestSequence.value')
+    expect(workbench).toContain('requestDelete(profile)')
+    expect(workbench).toContain('当前档案有未保存修改')
+  })
+
+  it('提取失败具备独立错误码、有限重试、可写性探测与陈旧目录清理', () => {
+    expect(serviceRust).toContain('BOT_WORKSHOP_EXTRACT_FAILED')
+    expect(serviceRust).toContain('BOT_WORKSHOP_WORKSPACE_UNWRITABLE')
+    expect(serviceRust).toContain('EXTRACT_MAX_ATTEMPTS')
+    expect(serviceRust).toContain('cleanup_stale_workspace')
+    expect(serviceRust).toContain('STALE_WORKSPACE_AGE')
+    expect(serviceRust).not.toContain('[BOT_WORKSHOP_TOOL_DEPENDENCY_INVALID] extract 退出码')
   })
 })

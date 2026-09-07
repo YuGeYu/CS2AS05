@@ -25,7 +25,7 @@ export default defineConfigWithVueTs(
     '**/backups/**',
     '**/src-tauri/resources/**',
     '**/src/features/skin-forge/data/generated/**',
-    '**/third_party/CS2-Skin-Forge/upstream/**',
+    '**/third_party/**',
     '**/output/**',
     '**/video-output/**',
     '**/video-cs2-*/**',

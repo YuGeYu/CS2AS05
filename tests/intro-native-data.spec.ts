@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true, invoke }))
 
-import { FALLBACK_UPSTREAM, loadIntroData } from '@/services/intro-data'
+import { loadIntroData } from '@/services/intro-data'
 
 describe('native intro data provider', () => {
   beforeEach(() => {

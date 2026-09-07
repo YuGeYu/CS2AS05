@@ -15,7 +15,16 @@ const appWindow = isTauriRuntime() ? getCurrentWindow() : null
 const isMaximized = ref(false)
 const windowActionBusy = ref(false)
 const { theme, toggleTheme } = useThemePreference()
+const currentContext = ref('概览')
+const contextLabels: Record<string, string> = {
+  overview: '概览', presets: '人机预设', items: 'Bot 物品', knives: '刀具', inventory: '库存换肤',
+  commands: '命令', demoReview: '对局复盘', quickSupport: '快快客服', install: '安装与诊断',
+}
 let unlistenResize: (() => void) | undefined
+function syncContext(event: Event) {
+  const key = (event as CustomEvent<string>).detail
+  if (key && contextLabels[key]) currentContext.value = contextLabels[key]
+}
 
 async function syncMaximized() {
   if (!appWindow) return
@@ -50,6 +59,7 @@ function closeWindow() {
 }
 
 onMounted(async () => {
+  window.addEventListener('cs2as:view-changed', syncContext)
   if (!isTauriRuntime() || !appWindow) return
   await syncMaximized()
   unlistenResize = await appWindow.onResized(() => {
@@ -58,18 +68,22 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('cs2as:view-changed', syncContext)
   unlistenResize?.()
 })
 </script>
 
 <template>
-  <header class="app-titlebar" @mousedown.left="startDragging" @dblclick="toggleMaximize">
-    <div class="titlebar-brand" aria-hidden="true">
+  <header class="app-titlebar" role="banner" @mousedown.left="startDragging" @dblclick="toggleMaximize">
+    <a class="skip-link" href="#main-content">跳转到主要内容</a>
+    <div class="titlebar-brand">
       <img class="titlebar-mark" :src="appIcon" alt="" />
-      <span class="titlebar-name">CS2 人机增强助手</span>
+      <span class="titlebar-brand-copy"><span class="titlebar-name">CS2 人机增强助手</span><span class="titlebar-context" aria-live="polite">{{ currentContext }}</span></span>
     </div>
+    <div class="titlebar-status" aria-label="当前工作区"><span class="titlebar-status-dot" aria-hidden="true" />工作台</div>
     <div class="titlebar-spacer" />
-    <div class="titlebar-controls" @mousedown.stop @dblclick.stop>
+    <div class="titlebar-controls" aria-label="应用控制" @mousedown.stop @dblclick.stop>
+      <div class="titlebar-control-group titlebar-control-group--app" aria-label="应用通知">
       <button
         class="titlebar-announcement-button"
         type="button"
@@ -82,6 +96,8 @@ onBeforeUnmount(() => {
       >
         <Megaphone :size="17" /><span>公告</span><b v-if="announcementState.notices.length">{{ announcementState.notices.length }}</b>
       </button>
+      </div>
+      <div class="titlebar-control-group titlebar-control-group--appearance" aria-label="外观设置">
       <button
         class="titlebar-button"
         type="button"
@@ -92,12 +108,15 @@ onBeforeUnmount(() => {
         <Sun v-if="theme === 'dark'" :size="18" />
         <Moon v-else :size="18" />
       </button>
+      </div>
+      <div class="titlebar-control-group titlebar-control-group--window" aria-label="窗口控制">
       <button class="titlebar-button" type="button" title="最小化" aria-label="最小化" @click="minimizeWindow"><Minus :size="18" /></button>
       <button class="titlebar-button" type="button" :title="isMaximized ? '还原窗口' : '最大化'" :aria-label="isMaximized ? '还原窗口' : '最大化'" @click="toggleMaximize">
         <Copy v-if="isMaximized" :size="17" />
         <Square v-else :size="17" />
       </button>
       <button class="titlebar-button titlebar-button--close" type="button" title="关闭" aria-label="关闭" @click="closeWindow"><X :size="18" /></button>
+      </div>
     </div>
   </header>
 </template>

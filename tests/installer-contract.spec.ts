@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -21,6 +22,15 @@ describe('0.5.5 integrated Panel contract', () => {
     expect(read('src/views/InstallView.vue')).toContain('appConfig.appVersion')
     expect(read('src/views/InstallView.vue')).toContain('CS2-Bot-Improver v1.4.4')
     expect(read('src-tauri/src/services/cs2.rs')).not.toContain('bot_randomizer_options.json')
+  })
+
+  it('pins CUSTOM_ZIP_SHA256 to the actual bundled resource zip', () => {
+    const service = read('src-tauri/src/services/cs2.rs')
+    const pinned = service.match(/const CUSTOM_ZIP_SHA256: &str = "([0-9A-F]+)"/)?.[1]
+    expect(pinned).toBeTruthy()
+    const zip = readFileSync('src-tauri/resources/CS2BotImprover.zip')
+    const actual = createHash('sha256').update(zip).digest('hex').toUpperCase()
+    expect(pinned).toBe(actual)
   })
 
   it('keeps support and sources in the installation diagnostics view', () => {

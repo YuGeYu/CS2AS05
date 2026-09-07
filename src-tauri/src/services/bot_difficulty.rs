@@ -2,6 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use sha2::{Digest, Sha256};
@@ -10,11 +11,15 @@ use tauri::{AppHandle, Manager};
 use crate::errors::AppError;
 use crate::models::bot_difficulty::{
     BotProfileDocument, BotProfileList, BotProfileOperation, BotProfileSummary, BotToolState,
-    CreateBotProfileRequest, SaveBotProfileRequest, VpkEntry,
+    CreateBotProfileRequest, RenameBotProfileRequest, SaveBotProfileRequest, VpkEntry,
 };
 
 const TOOL_VERSION: &str = "VPKEdit CLI v5.0.0.4";
 const TOOL_SHA256: &str = "df354e590d157abd633b4a047591363f17e066486e0f59184ff71c51a81b582a";
+const EXTRACT_MAX_ATTEMPTS: u32 = 3;
+const STALE_WORKSPACE_AGE: Duration = Duration::from_secs(48 * 60 * 60);
+static TOOL_STATE_CACHE: OnceLock<Mutex<Option<(PathBuf, BotToolState)>>> = OnceLock::new();
+static EXTRACT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 fn data_dir(app: &AppHandle) -> Result<PathBuf, AppError> {
     app.path()
@@ -88,6 +93,14 @@ pub fn inspect_vpk_tool(app: &AppHandle) -> Result<BotToolState, AppError> {
             detail: Some("未找到 VPKEdit CLI".into()),
         });
     };
+    let cache = TOOL_STATE_CACHE.get_or_init(|| Mutex::new(None));
+    if let Ok(guard) = cache.lock() {
+        if let Some((cached_path, state)) = guard.as_ref() {
+            if cached_path == &path && state.status == "ready" {
+                return Ok(state.clone());
+            }
+        }
+    }
     let bytes = fs::read(&path)
         .map_err(|e| AppError::runtime(format!("[BOT_WORKSHOP_TOOL_DEPENDENCY_INVALID] {e}")))?;
     let digest = hash(&bytes);
@@ -104,13 +117,17 @@ pub fn inspect_vpk_tool(app: &AppHandle) -> Result<BotToolState, AppError> {
     fs::create_dir_all(&cwd).map_err(|e| AppError::runtime(e.to_string()))?;
     let (_, _, code) = run_cli(&path, &["--help"], &cwd)?;
     let status = if code == 0 { "ready" } else { "invalid" };
-    Ok(BotToolState {
+    let state = BotToolState {
         status: status.into(),
         version: TOOL_VERSION.into(),
         sha256: Some(digest),
         path_hint: Some(path.display().to_string()),
         detail: (code != 0).then(|| format!("--help 退出码 {code}")),
-    })
+    };
+    if let Ok(mut guard) = cache.lock() {
+        *guard = Some((path, state.clone()));
+    }
+    Ok(state)
 }
 
 fn validate_entry_path(path: &str) -> bool {
@@ -187,6 +204,44 @@ pub fn list_vpk_entries(app: &AppHandle, input_path: &str) -> Result<Vec<VpkEntr
     Ok(entries)
 }
 
+fn cleanup_stale_workspace(app: &AppHandle) {
+    let Ok(workspace) = data_dir(app).map(|dir| dir.join("workspace")) else {
+        return;
+    };
+    let Ok(entries) = fs::read_dir(&workspace) else {
+        return;
+    };
+    let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        let managed = name.starts_with("open-")
+            || name.starts_with("tree-")
+            || name.starts_with("extract-")
+            || name.starts_with("verify-")
+            || name.starts_with("manifest")
+            || name.starts_with("tool-check");
+        if !managed {
+            continue;
+        }
+        let stale = entry
+            .metadata()
+            .and_then(|meta| meta.modified())
+            .ok()
+            .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|age| now.saturating_sub(age) > STALE_WORKSPACE_AGE)
+            .unwrap_or(false);
+        if stale {
+            let _ = fs::remove_dir_all(&path);
+        }
+    }
+}
+
 pub fn extract_db(
     app: &AppHandle,
     input_path: &str,
@@ -199,36 +254,71 @@ pub fn extract_db(
         .ok_or_else(|| {
             AppError::runtime("[BOT_WORKSHOP_TOOL_DEPENDENCY_INVALID] 未找到 VPKEdit CLI")
         })?;
-    fs::create_dir_all(workspace).map_err(|e| AppError::runtime(e.to_string()))?;
-    let output = workspace.join("botprofile.db");
-    let output_arg = output.to_string_lossy().to_string();
-    let input_arg = input.to_string_lossy().to_string();
-    let (stdout, stderr, code) = run_cli(
-        &tool,
-        &[
-            "--extract",
-            "botprofile.db",
-            "--output",
-            &output_arg,
-            "--no-progress",
-            &input_arg,
-        ],
-        workspace,
-    )?;
-    if code != 0 {
-        return Err(AppError::runtime(format!(
-            "[BOT_WORKSHOP_TOOL_DEPENDENCY_INVALID] extract 退出码 {code}: {}",
-            stderr.trim()
-        )));
+    let _guard = EXTRACT_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .map_err(|_| AppError::runtime("[BOT_WORKSHOP_EXTRACT_BUSY] 提取任务状态异常"))?;
+    cleanup_stale_workspace(app);
+    let mut last_stderr = String::new();
+    let mut last_code = 0;
+    for attempt in 0..EXTRACT_MAX_ATTEMPTS {
+        let unique_workspace = workspace.join(format!(
+            "extract-{}-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default(),
+            attempt
+        ));
+        fs::create_dir_all(&unique_workspace).map_err(|e| {
+            AppError::runtime(format!(
+                "[BOT_WORKSHOP_WORKSPACE_UNWRITABLE] 无法创建提取目录 {}: {e}",
+                unique_workspace.display()
+            ))
+        })?;
+        let probe = unique_workspace.join(".write-probe");
+        if let Err(e) = fs::write(&probe, b"ok") {
+            return Err(AppError::runtime(format!(
+                "[BOT_WORKSHOP_WORKSPACE_UNWRITABLE] 无法写入提取目录 {}: {e}；请检查磁盘空间、目录权限或安全软件（如受控文件夹访问）设置。",
+                unique_workspace.display()
+            )));
+        }
+        let _ = fs::remove_file(&probe);
+        let output = unique_workspace.join("botprofile.db");
+        let output_arg = output.to_string_lossy().to_string();
+        let input_arg = input.to_string_lossy().to_string();
+        let (stdout, stderr, code) = run_cli(
+            &tool,
+            &[
+                "--extract",
+                "botprofile.db",
+                "--output",
+                &output_arg,
+                "--no-progress",
+                &input_arg,
+            ],
+            &unique_workspace,
+        )?;
+        if code != 0 {
+            last_stderr = stderr.trim().to_string();
+            last_code = code;
+            if attempt + 1 < EXTRACT_MAX_ATTEMPTS {
+                std::thread::sleep(Duration::from_millis(400 * (attempt as u64 + 1)));
+                continue;
+            }
+            return Err(AppError::runtime(format!(
+                "[BOT_WORKSHOP_EXTRACT_FAILED] VPKEdit 提取失败（退出码 {last_code}，已尝试 {EXTRACT_MAX_ATTEMPTS} 次）：{last_stderr}；请确认 botprofile.vpk 未被其他程序占用，并检查安全软件是否拦截了文件写入。",
+            )));
+        }
+        if !output.is_file() {
+            return Err(AppError::runtime(format!(
+                "[BOT_WORKSHOP_ENTRY_MANIFEST_MISMATCH] botprofile.db 未成功提取: {}",
+                stderr.trim()
+            )));
+        }
+        let _ = stdout;
+        return Ok(output);
     }
-    if !output.is_file() {
-        return Err(AppError::runtime(format!(
-            "[BOT_WORKSHOP_ENTRY_MANIFEST_MISMATCH] botprofile.db 未成功提取: {}",
-            stderr.trim()
-        )));
-    }
-    let _ = stdout;
-    Ok(output)
+    Err(AppError::runtime(format!(
+        "[BOT_WORKSHOP_EXTRACT_FAILED] VPKEdit 提取失败（退出码 {last_code}）：{last_stderr}"
+    )))
 }
 
 fn walkdir(root: &Path) -> Result<Vec<PathBuf>, AppError> {
@@ -313,6 +403,47 @@ fn valid_id(id: &str) -> bool {
         && id
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || ['-', '_'].contains(&character))
+}
+
+fn valid_profile_name(name: &str) -> bool {
+    let trimmed = name.trim();
+    !trimmed.is_empty()
+        && trimmed.chars().count() <= 48
+        && !trimmed.chars().any(|character| {
+            character.is_control()
+                || ['\\', '/', ':', '*', '?', '"', '<', '>', '|'].contains(&character)
+        })
+        && trimmed != "."
+        && trimmed != ".."
+}
+
+fn read_custom_profile(
+    app: &AppHandle,
+    profile_id: &str,
+) -> Result<(PathBuf, BotProfileSummary), AppError> {
+    if !profile_id.starts_with("custom-") || !valid_id(profile_id) {
+        return Err(AppError::runtime(
+            "[BOT_WORKSHOP_PROFILE_NOT_FOUND] 非法自定义档案 ID",
+        ));
+    }
+    let dir = profile_dir(app, profile_id)?;
+    let json = fs::read_to_string(dir.join("profile.json"))
+        .map_err(|_| AppError::runtime("[BOT_WORKSHOP_PROFILE_NOT_FOUND] 自定义档案不存在"))?;
+    let profile: BotProfileSummary = serde_json::from_str(&json)
+        .map_err(|_| AppError::runtime("[BOT_WORKSHOP_PROFILE_CORRUPT] 档案元数据损坏"))?;
+    if profile.source != "custom" || profile.read_only {
+        return Err(AppError::runtime(
+            "[BOT_WORKSHOP_READ_ONLY] 内置档案不可管理",
+        ));
+    }
+    let metadata = fs::symlink_metadata(&dir)
+        .map_err(|_| AppError::runtime("[BOT_WORKSHOP_PROFILE_NOT_FOUND] 自定义档案不存在"))?;
+    if metadata.file_type().is_symlink() {
+        return Err(AppError::runtime(
+            "[BOT_WORKSHOP_PROFILE_INVALID] 不支持链接档案目录",
+        ));
+    }
+    Ok((dir, profile))
 }
 
 pub fn list(app: &AppHandle, root_path: &str) -> Result<BotProfileList, AppError> {
@@ -457,6 +588,7 @@ pub fn open(
     root_path: &str,
     profile_id: &str,
 ) -> Result<BotProfileDocument, AppError> {
+    require_cs2_closed()?;
     if !valid_id(profile_id) {
         return Err(AppError::runtime(
             "[BOT_WORKSHOP_PROFILE_NOT_FOUND] 非法档案 ID",
@@ -644,6 +776,118 @@ pub fn save(
         backup_path,
         applied: false,
         message: "已回写自定义 VPK，并完成提取回读校验。".into(),
+    })
+}
+
+pub fn rename(
+    app: &AppHandle,
+    request: RenameBotProfileRequest,
+) -> Result<BotProfileOperation, AppError> {
+    require_cs2_closed()?;
+    if !valid_profile_name(&request.name) {
+        return Err(AppError::runtime(
+            "[BOT_WORKSHOP_PROFILE_INVALID] 档案名称必须为 1-48 个字符，且不能包含路径或控制字符。",
+        ));
+    }
+    let (dir, mut profile) = read_custom_profile(app, &request.profile_id)?;
+    profile.name = request.name.trim().to_string();
+    atomic_write(
+        &dir.join("profile.json"),
+        serde_json::to_vec_pretty(&profile)
+            .map_err(|e| AppError::runtime(e.to_string()))?
+            .as_slice(),
+    )?;
+    Ok(BotProfileOperation {
+        profile,
+        backup_path: None,
+        applied: false,
+        message: "自定义档案名称已更新。".into(),
+    })
+}
+
+pub fn delete(
+    app: &AppHandle,
+    root_path: &str,
+    profile_id: &str,
+) -> Result<BotProfileOperation, AppError> {
+    require_cs2_closed()?;
+    let (dir, mut profile) = read_custom_profile(app, profile_id)?;
+    let root = crate::services::cs2::normalize_root(root_path)?;
+    let active_path = root.join("game/csgo/overrides/botprofile.vpk");
+    let active_bytes = fs::read(&active_path).ok();
+    let is_active = active_bytes.as_deref().map(hash).as_ref() == profile.vpk_sha256.as_ref();
+    let mut backup_path = None;
+    if is_active {
+        let base = profile
+            .base_difficulty
+            .as_deref()
+            .ok_or_else(|| AppError::runtime("[BOT_WORKSHOP_PROFILE_CORRUPT] 缺少基础难度"))?;
+        if !["Low", "Medium", "High"].contains(&base) {
+            return Err(AppError::runtime(
+                "[BOT_WORKSHOP_PROFILE_CORRUPT] 基础难度无效",
+            ));
+        }
+        let builtin = root
+            .join("game/csgo/overrides")
+            .join(base)
+            .join("botprofile.vpk");
+        let builtin_bytes = fs::read(&builtin).map_err(|_| {
+            AppError::runtime("[BOT_WORKSHOP_PROFILE_NOT_FOUND] 对应内置难度档案不存在")
+        })?;
+        backup_path = backup(&active_path, &data_dir(app)?.join("activation-backups"))?;
+        atomic_write(&active_path, &builtin_bytes)?;
+        if fs::read(&active_path).ok().as_deref() != Some(builtin_bytes.as_slice()) {
+            if let Some(previous) = active_bytes.as_deref() {
+                let _ = atomic_write(&active_path, previous);
+            }
+            return Err(AppError::runtime(
+                "[BOT_WORKSHOP_ACTIVE_ROLLBACK] 恢复内置档案回读不一致。",
+            ));
+        }
+        profile.active = false;
+    }
+    let archive_root = data_dir(app)?.join("deleted-profiles");
+    fs::create_dir_all(&archive_root).map_err(|e| AppError::runtime(e.to_string()))?;
+    let deleted_at = chrono::Utc::now();
+    let archive = archive_root.join(format!(
+        "{}-{}",
+        profile_id,
+        deleted_at.format("%Y%m%d-%H%M%S-%3f")
+    ));
+    let manifest = serde_json::json!({
+        "profileId": profile_id,
+        "name": profile.name.clone(),
+        "baseDifficulty": profile.base_difficulty.clone(),
+        "vpkSha256": profile.vpk_sha256.clone(),
+        "wasActive": is_active,
+        "deletedAt": deleted_at.to_rfc3339(),
+        "activationBackupPath": backup_path.clone(),
+    });
+    atomic_write(
+        &dir.join("deletion.json"),
+        serde_json::to_vec_pretty(&manifest)
+            .map_err(|e| AppError::runtime(e.to_string()))?
+            .as_slice(),
+    )?;
+    if let Err(error) = fs::rename(&dir, &archive) {
+        if is_active {
+            if let Some(previous) = active_bytes.as_deref() {
+                let _ = atomic_write(&active_path, previous);
+            }
+        }
+        return Err(AppError::runtime(format!(
+            "[BOT_WORKSHOP_DELETE] 无法归档档案：{error}"
+        )));
+    }
+    Ok(BotProfileOperation {
+        profile,
+        backup_path,
+        applied: is_active,
+        message: if is_active {
+            "已删除自定义档案，并恢复对应的内置 BOT 难度。".into()
+        } else {
+            "已删除自定义档案，原档案已移入可恢复归档。".into()
+        },
     })
 }
 

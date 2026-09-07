@@ -72,6 +72,8 @@ macro_rules! app_invoke_handler {
             commands::bot_difficulty::list_vpk_entries,
             commands::bot_difficulty::create_bot_profile,
             commands::bot_difficulty::save_bot_profile,
+            commands::bot_difficulty::rename_bot_profile,
+            commands::bot_difficulty::delete_bot_profile,
             commands::bot_difficulty::apply_bot_profile,
             commands::map_rotation::get_map_rotation_default,
             commands::map_rotation::set_map_rotation_default,

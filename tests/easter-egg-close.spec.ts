@@ -28,16 +28,6 @@ describe('EasterEggGame close control', () => {
     return wrapper
   }
 
-  function dispatchPointer(element: Element, type: string, pointerId: number, clientX = 0, clientY = 0) {
-    const event = new Event(type, { bubbles: true, cancelable: true })
-    Object.defineProperties(event, {
-      pointerId: { value: pointerId },
-      clientX: { value: clientX },
-      clientY: { value: clientY },
-    })
-    element.dispatchEvent(event)
-  }
-
   it('closes once from pointerdown in the contribution gallery', async () => {
     const wrapper = await mountGame()
     await wrapper.get('[aria-label="关闭贡献陈列馆"]').trigger('pointerdown', { pointerId: 1 })

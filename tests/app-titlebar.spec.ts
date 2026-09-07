@@ -18,6 +18,7 @@ const windowApi = {
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => windowApi }))
 
 import AppTitlebar from '@/components/AppTitlebar.vue'
+import { readFileSync } from 'node:fs'
 
 describe('app titlebar', () => {
   beforeEach(() => {
@@ -60,5 +61,12 @@ describe('app titlebar', () => {
     await flushPromises()
 
     expect(wrapper.find('[aria-label="还原窗口"]').exists()).toBe(true)
+  })
+
+  it('keeps the titlebar above teleported overlays and reserves its drag strip', () => {
+    const styles = readFileSync('src/styles/main.css', 'utf8')
+    expect(styles).toContain('.app-titlebar { position: relative; z-index: 100;')
+    expect(styles).toContain('.modal-backdrop { position: fixed; inset: 44px 0 0;')
+    expect(styles).toContain('.appearance-drawer-layer { position: fixed; z-index: 70; inset: 44px 0 0;')
   })
 })

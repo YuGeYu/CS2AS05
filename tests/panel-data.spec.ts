@@ -9,9 +9,9 @@ import { captureKeyName } from '@/features/panel/key-capture'
 describe('Panel v1.4.4 static contract', () => {
   it('bundles the pinned upstream commands plus the two 0.5.4 commands', () => {
     const bytes = readFileSync('src/data/panel/commands.txt')
-    expect(createHash('sha256').update(bytes).digest('hex').toUpperCase()).toBe('E0D7C5F1247DE1E766A75CA656AFBED22BF9309FB104FFA2E83AD505E53101E7')
+    expect(createHash('sha256').update(bytes).digest('hex').toUpperCase()).toBe('19BF9A3A2493DEA8355CDCC78E832D79EABD5950DB252B37BFE6F4C8652C7853')
     expect(COMMANDS_TXT).toContain('ADD TEAMS')
-    expect(parseCommands()).toHaveLength(178)
+    expect(parseCommands()).toHaveLength(184)
     expect(parseCommands().filter(entry => entry.copy === 'br_reroll')).toHaveLength(1)
     expect(parseCommands().filter(entry => entry.copy === 'bot_nades less')).toHaveLength(1)
   })
@@ -23,12 +23,13 @@ describe('Panel v1.4.4 static contract', () => {
     expect(fixture).toMatchObject({
       source: 'ed0ard/CS2-Bot-Improver@v1.4.4',
       panelSha256: '2797A3FE85E65959CAE9501525B67B3876CEF65152E88DC716F64D5485AC2182',
-      commands: { sha256: 'E0D7C5F1247DE1E766A75CA656AFBED22BF9309FB104FFA2E83AD505E53101E7', parsedEntries: 178, teams: 40 },
+      commands: { sha256: '19BF9A3A2493DEA8355CDCC78E832D79EABD5950DB252B37BFE6F4C8652C7853', parsedEntries: 184, teams: 42 },
     })
   })
 
-  it('parses all 40 complete CT/T team presets', () => {
-    expect(TEAMS).toHaveLength(40)
+  it('parses all 42 complete CT/T team presets', () => {
+    expect(TEAMS).toHaveLength(42)
+    expect(TEAMS.slice(-2).map(team => team.name)).toEqual(['9z', 'FUT'])
     expect(parseTeams(COMMANDS_TXT).every(team => team.ct.startsWith('bot_add_ct') && team.t.startsWith('bot_add_t'))).toBe(true)
   })
 

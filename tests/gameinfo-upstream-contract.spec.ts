@@ -36,7 +36,7 @@ describe('gameinfo official and BOT variants', () => {
 
   it('ships the v1.4.4 NadeSystem audio-enabled binary', () => {
     const bundled = zipEntry('addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll')
-    expect(sha(bundled)).toBe('2668B41B019F2BDBB7C89051136B95EFD0E46A7A044553408FDF33048B4A2654')
+    expect(sha(bundled)).toBe('8244EE9576AB5C5FD9FE3309C282C43D777DFFDE4D3E908B2571C68CBE492BB0')
   })
 
   it('ships a manifest matching every upstream gameinfo entry', () => {

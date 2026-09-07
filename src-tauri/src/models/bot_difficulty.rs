@@ -48,6 +48,13 @@ pub struct SaveBotProfileRequest {
     pub expected_db_sha256: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameBotProfileRequest {
+    pub profile_id: String,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BotProfileOperation {

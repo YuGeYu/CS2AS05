@@ -1,21 +1,21 @@
 param(
   [string]$ZipPath = 'src-tauri/resources/CS2BotImprover.zip',
-  [string]$DllPath = 'third_party/CS2-Bot-Improver-v1.4.3/nades-pacing/bin/Release/net10.0/NadeSystem.dll',
+  [string]$DllPath = 'third_party/CS2-Bot-Improver-v1.4.4/nades-pacing/bin/Release/net10.0/NadeSystem.dll',
   [string]$ReportDirectory = 'workspace/runtime/nadesystem-replacement'
 )
 
 $ErrorActionPreference = 'Stop'
 $entryName = 'addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll'
-$panelName = 'Panel v1.4.3.exe'
-$panelSha256 = '3FD93DC7AF2702C50B9A7E4FCF1BB11387B107ABC863EE8A3067255022408CCD'
-$panelSize = 5844480
+$panelName = 'Panel v1.4.4.exe'
+$panelSha256 = '2797A3FE85E65959CAE9501525B67B3876CEF65152E88DC716F64D5485AC2182'
+$panelSize = 5890560
 
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $zip = (Resolve-Path (Join-Path $workspace $ZipPath)).Path
 $dll = (Resolve-Path (Join-Path $workspace $DllPath)).Path
 $reportRoot = Join-Path $workspace $ReportDirectory
 $temporary = "$zip.tmp-$([guid]::NewGuid().ToString('N'))"
-$backup = "$zip.before-nades-pacing-1.1.7-$((Get-Date).ToString('yyyyMMdd-HHmmss')).bak"
+$backup = "$zip.before-nades-pacing-1.4.4-$((Get-Date).ToString('yyyyMMdd-HHmmss')).bak"
 
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem

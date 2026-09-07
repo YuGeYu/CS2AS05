@@ -273,6 +273,18 @@ bot_add_ct "tabseN";bot_add_ct "JDC";bot_add_ct "faveN";bot_add_ct "blameF";bot_
 
 bot_add_t "tabseN";bot_add_t "JDC";bot_add_t "faveN";bot_add_t "blameF";bot_add_t "gr1ks";mp_teamlogo_2 big;mp_teamname_2 BIG
 
+41. 9z
+
+bot_add_ct "max";bot_add_ct "HUASOPEEK";bot_add_ct "luchov";bot_add_ct "meyern";bot_add_ct "dgt";mp_teamlogo_1 9z;mp_teamname_1 9z
+
+bot_add_t "max";bot_add_t "HUASOPEEK";bot_add_t "luchov";bot_add_t "meyern";bot_add_t "dgt";mp_teamlogo_2 9z;mp_teamname_2 9z
+
+42. FUT
+
+bot_add_ct "xfl0ud";bot_add_ct "dem0n";bot_add_ct "Krabeni";bot_add_ct "cmtry";bot_add_ct "dziugss";mp_teamlogo_1 fut;mp_teamname_1 FUT
+
+bot_add_t "xfl0ud";bot_add_t "dem0n";bot_add_t "Krabeni";bot_add_t "cmtry";bot_add_t "dziugss";mp_teamlogo_2 fut;mp_teamname_2 FUT
+
 COORDINATED BUY
 
 elite

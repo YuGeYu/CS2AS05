@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import { Check, ChevronDown, ChevronUp, RotateCcw, X } from 'lucide-vue-next'
 import { NAV_ITEMS, type ViewKey } from '@/config/navigation'
 import { useAppearancePreferences, type AccentPalette, type DensityPreference, type RadiusPreference, type SidebarMode } from '@/composables/useAppearancePreferences'

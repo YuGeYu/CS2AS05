@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="UTF-8"><title>Thank-you scene renderer</title></head>
+  <body style="margin:0;background:#07111f;overflow:hidden">
+    <canvas id="scene" width="1280" height="720"></canvas>
+    <script type="module">
+      import { createIntroScene } from '/src/features/intro/scene.ts'
+      import { createContributionGalleryScene } from '/src/features/easter-egg/game-scene.ts'
+
+      const params = new URLSearchParams(location.search)
+      const kind = params.get('scene') || 'intro'
+      const elapsed = Number(params.get('t') || 0)
+      const canvas = document.querySelector('#scene')
+      const cards = [
+        { id: 'upstream:three', kind: 'upstream', eyebrow: '感谢上游项目', title: 'three.js', message: '让每一束光都能被看见。', detail: 'MIT License', updatedAt: 'three' },
+        { id: 'upstream:tauri', kind: 'upstream', eyebrow: '感谢上游项目', title: 'Tauri', message: '让桌面工具保持轻盈。', detail: 'MIT / Apache-2.0', updatedAt: 'tauri' },
+        { id: 'supporter:path', kind: 'supporter', eyebrow: '鸣谢同路人', title: '每一位同行者', message: '感谢你把建议带到下一局。', detail: 'CS2AS', updatedAt: 'path' },
+        { id: 'supporter:player', kind: 'supporter', eyebrow: '鸣谢同路人', title: '愿下一局仍然并肩', message: '长夜执剑，幸与诸君同路。', detail: '谢谢你', updatedAt: 'player' },
+      ]
+      const size = { width: 1280, height: 720, dpr: 1 }
+      const state = { elapsedMs: elapsed, durationMs: 9600, supporterLockMs: 2800, loading: false, cards }
+      const controller = kind === 'gallery'
+        ? await createContributionGalleryScene(canvas, size, () => cards)
+        : await createIntroScene(canvas, size, () => state)
+      await new Promise(resolve => setTimeout(resolve, kind === 'gallery' ? 700 : 60))
+      controller.frame(elapsed / 1000, 1 / 30)
+      document.body.dataset.ready = 'true'
+    </script>
+  </body>
+</html>
