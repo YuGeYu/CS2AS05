@@ -6,9 +6,43 @@
 
 - 版本：`0.5.12`
 - 上一正式版本：`0.5.11`
-- 当前状态：本机最终签名安装器、Tauri updater `.sig`、prod manifest 和官网更新日志已完成，签名已做独立密码学验证。
-- 本轮修复了一个会阻断 BOT 模式安装的发布缺陷：内置定制资源 ZIP 的摘要常量未随新 NadeSystem 资源包更新，已同步并新增契约测试防止复发。
-- R2、官网 updater、GitHub Release、夸克渠道和公开发布尚未执行。
+- 当前状态：**已公开线上发布**。GitHub Release、官网 D1 发布记录、R2 对象、官网 updater feed 与下载路由均已上线并通过线上核验；R2 对象内容回读由用户执行，旧对象清理待回读确认后进行。
+- 本版本修复了一个会阻断 BOT 模式安装的发布缺陷：内置定制资源 ZIP 的摘要常量未随新 NadeSystem 资源包更新，已同步并新增契约测试防止复发。
+
+## 线上发布记录
+
+### GitHub
+
+- 发布 commit：`85d8111`（`release: publish CS2 assistant 0.5.12`），tag `v0.5.12` 已推送。
+- Release：https://github.com/YuGeYu/CS2AS05/releases/tag/v0.5.12
+- 资产：`CS2._0.5.12_x64-setup.exe`（117,913,180 bytes）、同名 `.sig`（436 bytes）、`SHA256SUMS.txt`。
+- 更新日志：release body 使用 `docs/release-notes-0.5.12.md` 全文（【新增】【优化】【修复】【其他】四分类）。
+
+### 官网（D1 + R2 + Worker API）
+
+- R2 bucket：`cs2as-r2`，新对象：
+  - `software-updates/cs2-bot-improver/prod/0.5.12/CS2-Bot-Improver_0.5.12_x64-setup.exe`
+  - `software-updates/cs2-bot-improver/prod/0.5.12/CS2-Bot-Improver_0.5.12_x64-setup.exe.sig`
+  - `software-updates/cs2-bot-improver/prod/0.5.12/release-notes-0.5.12.md`
+  - `software-updates/cs2-bot-improver/prod/0.5.12/updater-prod.json`
+- D1 `software_releases`：新增/更新 `release_cs2_bot_improver_prod_0_5_12`，`is_active=1`、`updater_enabled=1`，artifact 字段（key/signature/sha256=3D227D8B…/size=117913180）完整；`0.5.11` 已设 `is_active=0`、`updater_enabled=0`。
+- 官网更新日志：`items_json` 已写入 0.5.12 的 34 条【新增】【优化】【修复】【其他】条目。
+- 全局开关 `software_update_settings.r2_push_enabled=1` 保持开启。
+- 夸克渠道：`https://pan.quark.cn/s/c3b94db940d9`（已写入 `download_url`，未使用带尾字符的错误地址）。
+
+### 线上核验
+
+- `GET /api/software-updates/cs2-bot-improver?currentVersion=0.5.11&channel=prod`：`hasUpdate=true`，latest `0.5.12`，夸克地址正确，selfUpdate available，size/sha256 与本地一致。
+- `GET /api/software-updater/…/windows/x86_64/0.5.11`：`200`，`version=0.5.12`，`signature` 与本地最终 `.sig` 逐字一致。
+- `GET /api/software-updater/…/0.5.12`：`204`（当前已是最新）。
+- 下载路由 HEAD：`200`，`Content-Length=117913180`，`application/octet-stream`，ASCII 文件名。未下载对象内容（R2 回读由用户执行）。
+
+## 发布边界
+
+- R2 对象内容回读与 SHA-256 比对：待用户执行。
+- 旧对象（0.5.10/0.5.11）暂未删除；待用户 R2 回读确认后，再清理 `software-updates/cs2-bot-improver/prod/` 下非当前对象。
+- Windows Authenticode 仍为 `NotSigned`，与 Tauri updater `.sig` 为不同签名机制。
+- 未执行真实 CS2 BOT 环境的自定义档案编辑、重命名、删除和活动档案恢复验收。
 
 ## 本版本正式更新内容
 
@@ -64,11 +98,3 @@ Windows Authenticode：`NotSigned`。这与 Tauri updater `.sig` 属于不同签
 - `cargo check --manifest-path src-tauri/Cargo.toml`：通过，仅有既有警告。
 - `npm run bundle:desktop`：通过，生成 0.5.12 NSIS 安装器和 436-byte updater `.sig`。
 - `npm run release:manifest`（`RELEASE_CHANNEL=prod`）：通过。
-
-## 发布边界
-
-- 当前只证明本机最终构建、签名与签名验证完成。
-- 没有执行 R2 上传或下载回读。
-- 没有启用官网 updater。
-- 没有上传 GitHub Release 或夸克渠道。
-- 没有执行真实 CS2 BOT 环境的自定义档案编辑、重命名、删除和活动档案恢复验收。
