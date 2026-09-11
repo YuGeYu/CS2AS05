@@ -3,6 +3,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 
 use chrono::Local;
 use semver::Version;
@@ -32,14 +33,15 @@ use zip::ZipArchive;
 
 use crate::errors::AppError;
 use crate::models::cs2::{
-    Cs2EnvironmentStatus, Cs2ProcessInfo, Cs2ProcessSnapshot, Cs2RootCandidate, DiagnosticsPayload,
-    OperationResult,
+    Cs2CloseOverride, Cs2EnvironmentStatus, Cs2ProcessInfo, Cs2ProcessSnapshot, Cs2RootCandidate,
+    DiagnosticsPayload, OperationResult,
 };
 use crate::services::panel;
 
 const CS2_FOLDER_NAME: &str = "Counter-Strike Global Offensive";
 const BUNDLED_ZIP_NAME: &str = "CS2BotImprover.zip";
-const CUSTOM_ZIP_SHA256: &str = "AD5F049C8E5DA59FDD175E786FE13F90D3EF8A41DF8629F91A127561A0ACE600";
+const SKIN_ONLY_GAMEINFO_ENTRY: &str = "backup/SkinOnly/gameinfo.gi";
+const CUSTOM_ZIP_SHA256: &str = "D9C277DAA37DEC4DE232E4A49CBF117F3B83C8B83FF075560AA7B32C1AE87117";
 const PANEL_FILE_NAME: &str = "Panel v1.4.4.exe";
 const PANEL_SHA256: &str = "2797A3FE85E65959CAE9501525B67B3876CEF65152E88DC716F64D5485AC2182";
 const PANEL_SIZE: u64 = 5_890_560;
@@ -62,6 +64,7 @@ const REQUIRED_ZIP_ENTRIES: &[&str] = &[
     "gameinfo.gi",
     "backup/Online/gameinfo.gi",
     "backup/WithBots/gameinfo.gi",
+    "backup/SkinOnly/gameinfo.gi",
     "addons/",
     "cfg/",
     "overrides/",
@@ -179,6 +182,110 @@ pub fn inspect_cs2_root(root_path: &str) -> Result<Cs2EnvironmentStatus, AppErro
 
 pub fn check_cs2_process() -> Result<bool, AppError> {
     Ok(!list_cs2_processes()?.is_empty())
+}
+
+struct ManualCloseState {
+    root_path: String,
+    confirmed_at: i64,
+    expires_at: i64,
+    process_count: usize,
+}
+static MANUAL_CLOSE_OVERRIDE: OnceLock<Mutex<Option<ManualCloseState>>> = OnceLock::new();
+
+fn normalized_override_root(root_path: &str) -> Result<String, AppError> {
+    normalize_root(root_path).map(|path| path.to_string_lossy().to_lowercase())
+}
+
+fn manual_close_active(root_path: &str) -> Result<bool, AppError> {
+    let root = normalized_override_root(root_path)?;
+    let now = chrono::Utc::now().timestamp_millis();
+    let state = MANUAL_CLOSE_OVERRIDE.get_or_init(|| Mutex::new(None));
+    let mut guard = state
+        .lock()
+        .map_err(|_| AppError::runtime("[CS2_MANUAL_CONFIRM_STATE] 状态锁异常"))?;
+    if guard
+        .as_ref()
+        .is_some_and(|value| value.expires_at <= now || value.root_path != root)
+    {
+        *guard = None;
+    }
+    Ok(guard.is_some())
+}
+
+pub fn confirm_cs2_closed(root_path: &str) -> Result<Cs2CloseOverride, AppError> {
+    let root = normalized_override_root(root_path)?;
+    let snapshot = get_cs2_process_snapshot()?;
+    if snapshot.processes.is_empty() {
+        return Err(AppError::runtime(
+            "[CS2_MANUAL_CONFIRM_NOT_NEEDED] 当前未发现 CS2 残留进程。",
+        ));
+    }
+    let confirmed_at = chrono::Utc::now().timestamp_millis();
+    let expires_at = confirmed_at + 5 * 60 * 1000;
+    let state = MANUAL_CLOSE_OVERRIDE.get_or_init(|| Mutex::new(None));
+    *state
+        .lock()
+        .map_err(|_| AppError::runtime("[CS2_MANUAL_CONFIRM_STATE] 状态锁异常"))? =
+        Some(ManualCloseState {
+            root_path: root.clone(),
+            confirmed_at,
+            expires_at,
+            process_count: snapshot.processes.len(),
+        });
+    write_runtime_log(
+        "WARN",
+        &format!(
+            "[CS2_MANUAL_CONFIRM] root={} process_count={} expires_at={}。",
+            root,
+            snapshot.processes.len(),
+            expires_at
+        ),
+    );
+    Ok(Cs2CloseOverride {
+        confirmed_at,
+        expires_at,
+        root_path: root,
+        process_count: snapshot.processes.len(),
+        active: true,
+    })
+}
+
+pub fn revoke_cs2_closed_confirmation(root_path: &str) -> Result<(), AppError> {
+    let root = normalized_override_root(root_path)?;
+    if let Some(state) = MANUAL_CLOSE_OVERRIDE.get() {
+        if let Ok(mut guard) = state.lock() {
+            if guard.as_ref().is_some_and(|value| value.root_path == root) {
+                *guard = None;
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn manual_close_override(root_path: &str) -> Result<Option<Cs2CloseOverride>, AppError> {
+    let root = normalized_override_root(root_path)?;
+    let now = chrono::Utc::now().timestamp_millis();
+    let state = MANUAL_CLOSE_OVERRIDE.get_or_init(|| Mutex::new(None));
+    let mut guard = state
+        .lock()
+        .map_err(|_| AppError::runtime("[CS2_MANUAL_CONFIRM_STATE] 状态锁异常"))?;
+    if guard
+        .as_ref()
+        .is_some_and(|value| value.expires_at <= now || value.root_path != root)
+    {
+        *guard = None;
+    }
+    Ok(guard.as_ref().map(|value| Cs2CloseOverride {
+        confirmed_at: value.confirmed_at,
+        expires_at: value.expires_at,
+        root_path: value.root_path.clone(),
+        process_count: value.process_count,
+        active: true,
+    }))
+}
+
+pub fn check_cs2_process_for_write(root_path: &str) -> Result<bool, AppError> {
+    Ok(check_cs2_process()? && !manual_close_active(root_path)?)
 }
 
 fn is_cs2_process_name(name: &str) -> bool {
@@ -483,7 +590,7 @@ pub fn install_bot_package(
     root_path: &str,
     keep_backup: bool,
 ) -> Result<OperationResult, AppError> {
-    ensure_cs2_not_running()?;
+    ensure_cs2_not_running(root_path)?;
     let root = normalize_root(root_path)?;
     let destination = root.join("game").join("csgo");
     if !destination.is_dir() {
@@ -547,7 +654,7 @@ pub fn open_upstream_panel(app: &AppHandle) -> Result<OperationResult, AppError>
 }
 
 pub fn uninstall_bot_package(root_path: &str) -> Result<OperationResult, AppError> {
-    ensure_cs2_not_running()?;
+    ensure_cs2_not_running(root_path)?;
     let root = normalize_root(root_path)?;
     let csgo = root.join("game").join("csgo");
     if !csgo.is_dir() {
@@ -612,6 +719,72 @@ fn resolve_zip_path(app: &AppHandle) -> Result<PathBuf, AppError> {
         .ok_or_else(|| AppError::runtime("未找到内置定制 CS2BotImprover.zip，无法继续。"))
 }
 
+/// Materialize the SkinOnly gameinfo for installations created before the
+/// resource was added to the bundled ZIP. This intentionally touches only the
+/// new backup file and leaves player BOT profiles and active gameinfo intact.
+pub fn ensure_skin_only_gameinfo(app: &AppHandle, root_path: &str) -> Result<(), AppError> {
+    let root = normalize_root(root_path)?;
+    let csgo = root.join("game").join("csgo");
+    if !csgo.is_dir() {
+        return Err(AppError::runtime(format!(
+            "[SKIN_ONLY_TARGET_MISSING] 未找到 CS2 游戏目录：{}",
+            csgo.display()
+        )));
+    }
+    let zip_path = resolve_zip_path(app)?;
+    verify_custom_zip(&zip_path)?;
+    let file = File::open(&zip_path).map_err(io_error)?;
+    let mut archive = ZipArchive::new(file).map_err(|error| {
+        AppError::runtime(format!(
+            "[SKIN_ONLY_RESOURCE_INVALID] 无法读取内置资源包：{error}"
+        ))
+    })?;
+    let mut entry = archive.by_name(SKIN_ONLY_GAMEINFO_ENTRY).map_err(|_| {
+        AppError::runtime("[SKIN_ONLY_RESOURCE_INVALID] 内置资源缺少 SkinOnly gameinfo。")
+    })?;
+    let mut bytes = Vec::new();
+    entry.read_to_end(&mut bytes).map_err(io_error)?;
+    let target = csgo.join(SKIN_ONLY_GAMEINFO_ENTRY);
+    if target.is_file() && fs::read(&target).ok().as_deref() == Some(bytes.as_slice()) {
+        return Ok(());
+    }
+    let parent = target
+        .parent()
+        .ok_or_else(|| AppError::runtime("[SKIN_ONLY_MIGRATION_FAILED] SkinOnly 目标路径无效。"))?;
+    fs::create_dir_all(parent).map_err(io_error)?;
+    let temporary = parent.join(format!(".gameinfo.gi.skin-only-{}.tmp", std::process::id()));
+    let backup = parent.join(format!(".gameinfo.gi.skin-only-{}.bak", std::process::id()));
+    fs::write(&temporary, &bytes).map_err(io_error)?;
+    let had_target = target.is_file();
+    if had_target {
+        let _ = fs::remove_file(&backup);
+        fs::rename(&target, &backup).map_err(io_error)?;
+    }
+    if let Err(error) = fs::rename(&temporary, &target) {
+        let _ = fs::remove_file(&temporary);
+        if had_target {
+            let _ = fs::rename(&backup, &target);
+        }
+        return Err(AppError::runtime(format!(
+            "[SKIN_ONLY_MIGRATION_FAILED] 无法写入 SkinOnly gameinfo：{error}"
+        )));
+    }
+    let _ = fs::remove_file(&backup);
+    if fs::read(&target).ok().as_deref() != Some(bytes.as_slice()) {
+        return Err(AppError::runtime(
+            "[SKIN_ONLY_MIGRATION_FAILED] SkinOnly gameinfo 写入后校验不一致。",
+        ));
+    }
+    write_log(
+        "INFO",
+        &format!(
+            "已为既有 CS2 安装补齐 SkinOnly gameinfo：{}。",
+            target.display()
+        ),
+    );
+    Ok(())
+}
+
 fn verify_custom_zip(path: &Path) -> Result<(), AppError> {
     let digest = sha256_file(path)?;
     if digest != CUSTOM_ZIP_SHA256 {
@@ -671,6 +844,7 @@ fn verify_custom_zip(path: &Path) -> Result<(), AppError> {
         "gameinfo.gi",
         "backup/Online/gameinfo.gi",
         "backup/WithBots/gameinfo.gi",
+        "backup/SkinOnly/gameinfo.gi",
     ] {
         let expected = manifest["entries"][name]["sha256"]
             .as_str()
@@ -705,7 +879,7 @@ pub fn inspect_bot_plugin_version(root_path: &str) -> Result<PluginVersionStatus
 }
 
 pub fn ensure_bot_plugin_current(app: &AppHandle, root_path: &str) -> Result<String, AppError> {
-    ensure_cs2_not_running()?;
+    ensure_cs2_not_running(root_path)?;
     let root = normalize_root(root_path)?;
     let destination = root.join("game/csgo");
     let zip_path = resolve_zip_path(app)?;
@@ -1230,8 +1404,8 @@ fn add_candidate(
     }
 }
 
-fn ensure_cs2_not_running() -> Result<(), AppError> {
-    if check_cs2_process()? {
+fn ensure_cs2_not_running(root_path: &str) -> Result<(), AppError> {
+    if check_cs2_process_for_write(root_path)? {
         return Err(AppError::runtime(
             "检测到 cs2.exe 正在运行。请先退出 CS2，再执行此操作。",
         ));
@@ -1401,6 +1575,10 @@ mod tests {
                 .join("Online")
                 .join("gameinfo.gi")
                 .is_file(),
+            csgo.join("backup")
+                .join("SkinOnly")
+                .join("gameinfo.gi")
+                .is_file(),
             !csgo.join(PANEL_FILE_NAME).exists(),
             sha256_file(&dll).expect("custom NadeSystem DLL must be readable"),
             matches!(&marker_status, PluginVersionStatus::Valid { version } if version == &Version::parse(env!("CARGO_PKG_VERSION")).unwrap()),
@@ -1409,13 +1587,14 @@ mod tests {
 
         assert!(assertions.0, "gameinfo.gi must be installed");
         assert!(assertions.1, "Online gameinfo backup must be installed");
-        assert!(assertions.2, "Panel must not be installed into game files");
+        assert!(assertions.2, "SkinOnly gameinfo backup must be installed");
+        assert!(assertions.3, "Panel must not be installed into game files");
         assert_eq!(
-            assertions.3,
-            "2668B41B019F2BDBB7C89051136B95EFD0E46A7A044553408FDF33048B4A2654"
+            assertions.4,
+            "F9BBE17D1CA4729144A4F7CC37E1CD47B76729BC476E741987D0AC77F142F907"
         );
         assert!(
-            assertions.4,
+            assertions.5,
             "installed payload marker must verify: {marker_status:?}"
         );
     }

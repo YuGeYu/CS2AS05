@@ -4,15 +4,18 @@ import { defineStore } from 'pinia'
 import {
   checkCs2Process,
   closeCs2,
+  confirmCs2Closed,
   discoverCs2Roots,
   guessCs2Roots,
   inspectCs2Root,
   installBotPackage,
   openUpstreamPanel,
+  getCs2CloseOverride,
+  revokeCs2ClosedConfirmation,
   uninstallBotPackage,
   stopGuessCs2Roots,
 } from '@/services/tauri/cs2'
-import type { Cs2EnvironmentStatus, Cs2RootCandidate, Cs2RootScanEvent, Cs2RootScanSummary, Cs2SuggestedRoot, ToastMessage } from '@/types/cs2'
+import type { Cs2CloseOverride, Cs2EnvironmentStatus, Cs2RootCandidate, Cs2RootScanEvent, Cs2RootScanSummary, Cs2SuggestedRoot, ToastMessage } from '@/types/cs2'
 import type { Cs2ProcessState } from '@/types/cs2'
 import { ensureDefaultDemoRoot } from '@/services/tauri/demo'
 
@@ -30,6 +33,8 @@ export const useCs2Store = defineStore('cs2', () => {
   const environment = ref<Cs2EnvironmentStatus | null>(null)
   const cs2ProcessState = ref<Cs2ProcessState>('checking')
   const cs2Running = computed(() => cs2ProcessState.value === 'running')
+  const closeOverride = ref<Cs2CloseOverride | null>(null)
+  const writeUnlocked = computed(() => !cs2Running.value || Boolean(closeOverride.value?.active && closeOverride.value.expiresAt > Date.now()))
   const message = ref<ToastMessage | null>(null)
   const busy = ref(false)
   const closing = ref(false)
@@ -41,6 +46,7 @@ export const useCs2Store = defineStore('cs2', () => {
     await ensureDefaultDemoRoot(status.rootPath)
     selectedRoot.value = status.rootPath
     environment.value = status
+    closeOverride.value = null
     getStorage()?.setItem(ROOT_STORAGE_KEY, status.rootPath)
     candidates.value = dedupe([{ path: status.rootPath, source: '当前选择' }, ...candidates.value])
   }
@@ -66,7 +72,11 @@ export const useCs2Store = defineStore('cs2', () => {
       ? import('@/services/tauri/cs2').then(api => api.getCs2ProcessSnapshot())
       : Promise.reject(new Error('snapshot api unavailable'))
     processCheckInFlight = snapshotCheck
-      .then((snapshot) => { cs2ProcessState.value = snapshot.processes.length ? 'running' : 'stopped' })
+      .then(async (snapshot) => {
+        cs2ProcessState.value = snapshot.processes.length ? 'running' : 'stopped'
+        if (!selectedRoot.value) { closeOverride.value = null; return }
+        closeOverride.value = snapshot.processes.length ? await getCs2CloseOverride(selectedRoot.value).catch(() => null) : null
+      })
       .catch(async () => { const running = await checkCs2Process(); cs2ProcessState.value = running ? 'running' : 'stopped' })
       .catch(() => { cs2ProcessState.value = 'unknown' })
       .finally(() => { processCheckInFlight = null })
@@ -93,6 +103,17 @@ export const useCs2Store = defineStore('cs2', () => {
     } catch (error) {
       message.value = failure(error)
     }
+  }
+
+  async function confirmClosedByPlayer() {
+    if (!selectedRoot.value) throw new Error('请先选择 CS2 游戏目录。')
+    closeOverride.value = await confirmCs2Closed(selectedRoot.value)
+    message.value = { tone: 'ready', title: '已解锁本次会话', message: '玩家已确认 CS2 关闭；所有由运行状态造成的功能锁定已临时解除。' }
+  }
+
+  async function revokeClosedConfirmation() {
+    if (selectedRoot.value) await revokeCs2ClosedConfirmation(selectedRoot.value)
+    closeOverride.value = null
   }
 
   async function install(keepBackup = false) {
@@ -168,7 +189,7 @@ export const useCs2Store = defineStore('cs2', () => {
     return stopGuessCs2Roots()
   }
 
-  return { candidates, selectedRoot, environment, cs2ProcessState, cs2Running, message, busy, closing, rootScan, selectRoot, scanRoots, refreshProcessStatus, refresh, shutdown, install, openPanel, uninstall, scanSuggestedRoots, stopSuggestedRoots }
+  return { candidates, selectedRoot, environment, cs2ProcessState, cs2Running, closeOverride, writeUnlocked, message, busy, closing, rootScan, selectRoot, scanRoots, refreshProcessStatus, refresh, shutdown, confirmClosedByPlayer, revokeClosedConfirmation, install, openPanel, uninstall, scanSuggestedRoots, stopSuggestedRoots }
 })
 
 function dedupe(candidates: Cs2RootCandidate[]) {

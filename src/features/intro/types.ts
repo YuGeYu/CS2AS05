@@ -2,7 +2,14 @@ export interface SupporterAcknowledgement {
   id: string
   nickname: string | null
   message: string | null
-  amountCents: number
+  amountCents: number | null
+  platform?: 'bilibili' | 'wechat' | 'other'
+  unit?: 'beike' | 'cny' | 'unknown'
+  visibleAmount?: number | null
+  exchangeRateCny?: number | null
+  amountScope?: 'visible_record' | 'reported_total' | 'unknown'
+  sourceLabel?: string | null
+  occurredAt?: string | null
   sortOrder: number
   isVisible: boolean
   createdAt: string
@@ -37,4 +44,5 @@ export interface IntroAcknowledgementCard {
   message: string
   detail: string
   updatedAt: string
+  source?: string
 }

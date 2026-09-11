@@ -1,5 +1,6 @@
 import type { ThreeStageController, StageSize } from '@/components/three/stage'
 import type { IntroAcknowledgementCard } from './types'
+import { buildPlaqueLayout, type PlaqueLayoutSlot } from '@/features/acknowledgement/layout'
 
 export interface IntroSceneState {
   elapsedMs: number
@@ -7,6 +8,8 @@ export interface IntroSceneState {
   supporterLockMs: number
   loading: boolean
   cards: IntroAcknowledgementCard[]
+  mode?: 'cinematic' | 'free-roam'
+  selectedIndex?: number
 }
 
 export function introCardSignature(cards: IntroAcknowledgementCard[]) {
@@ -28,14 +31,14 @@ function easeInOut(value: number) {
 export async function createIntroScene(canvas: HTMLCanvasElement, initialSize: StageSize, getState: () => IntroSceneState): Promise<ThreeStageController> {
   const THREE = await import('three')
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' })
-  renderer.setClearColor(0x12383c, 1)
+  renderer.setClearColor(0xe8e0d0, 1)
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
 
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x12383c)
-  scene.fog = new THREE.FogExp2(0x12383c, 0.024)
+  scene.background = new THREE.Color(0xe8e0d0)
+  scene.fog = new THREE.FogExp2(0x9aafa7, 0.022)
   const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 100)
   const target = new THREE.Vector3()
   const geometries = new Set<InstanceType<typeof THREE.BufferGeometry>>()
@@ -44,20 +47,20 @@ export async function createIntroScene(canvas: HTMLCanvasElement, initialSize: S
   const geometry = <T extends InstanceType<typeof THREE.BufferGeometry>>(value: T) => { geometries.add(value); return value }
   const material = <T extends InstanceType<typeof THREE.Material>>(value: T) => { materials.add(value); return value }
 
-  scene.add(new THREE.HemisphereLight(0xf4fbef, 0x25575a, 2.15))
-  const moon = new THREE.DirectionalLight(0xd8ffff, 4.2)
+  scene.add(new THREE.HemisphereLight(0xfffbf0, 0x3b5653, 2.45))
+  const moon = new THREE.DirectionalLight(0xfff3dc, 4.8)
   moon.position.set(7, 9, 7)
   moon.castShadow = true
   moon.shadow.mapSize.set(1024, 1024)
   scene.add(moon)
-  const warm = new THREE.PointLight(0xffbd68, 58, 32, 1.45)
+  const warm = new THREE.PointLight(0xe9a45f, 46, 32, 1.45)
   warm.position.set(0, 4.2, -9)
   scene.add(warm)
 
-  const stone = material(new THREE.MeshStandardMaterial({ color: 0x31575a, roughness: 0.72, metalness: 0.08 }))
-  const darkStone = material(new THREE.MeshStandardMaterial({ color: 0x1c4144, roughness: 0.82 }))
-  const bronze = material(new THREE.MeshStandardMaterial({ color: 0xc28a3f, emissive: 0x4b2e0d, metalness: 0.58, roughness: 0.3 }))
-  const jade = material(new THREE.MeshStandardMaterial({ color: 0x277177, emissive: 0x104247, metalness: 0.18, roughness: 0.4 }))
+  const stone = material(new THREE.MeshStandardMaterial({ color: 0x9caea4, roughness: 0.84, metalness: 0.02 }))
+  const darkStone = material(new THREE.MeshStandardMaterial({ color: 0x4b6867, roughness: 0.9 }))
+  const bronze = material(new THREE.MeshStandardMaterial({ color: 0xb7834d, emissive: 0x3a2110, metalness: 0.35, roughness: 0.42 }))
+  const jade = material(new THREE.MeshStandardMaterial({ color: 0x456a67, emissive: 0x102b2a, metalness: 0.08, roughness: 0.58 }))
 
   const floor = new THREE.Mesh(geometry(new THREE.CircleGeometry(18, 64)), darkStone)
   floor.rotation.x = -Math.PI / 2
@@ -71,7 +74,7 @@ export async function createIntroScene(canvas: HTMLCanvasElement, initialSize: S
   innerRing.rotation.x = Math.PI / 2
   innerRing.position.y = 0.24
   scene.add(innerRing)
-  const lightPool = new THREE.Mesh(geometry(new THREE.CircleGeometry(3.2, 64)), material(new THREE.MeshBasicMaterial({ color: 0x15494d, transparent: true, opacity: 0.24 })))
+  const lightPool = new THREE.Mesh(geometry(new THREE.CircleGeometry(3.2, 64)), material(new THREE.MeshBasicMaterial({ color: 0x9bb7ad, transparent: true, opacity: 0.22 })))
   lightPool.rotation.x = -Math.PI / 2
   lightPool.position.y = 0.23
   scene.add(lightPool)
@@ -93,7 +96,7 @@ export async function createIntroScene(canvas: HTMLCanvasElement, initialSize: S
   const pedestalTop = geometry(new THREE.CylinderGeometry(1.06, 1.18, 0.18, 10))
   const cardBack = geometry(new THREE.BoxGeometry(3.7, 2.25, 0.16))
   const faceGeometry = geometry(new THREE.PlaneGeometry(3.5, 2.05))
-  const exhibits: Array<{ group: InstanceType<typeof THREE.Group>; texture: InstanceType<typeof THREE.CanvasTexture>; faceMaterial: InstanceType<typeof THREE.MeshBasicMaterial>; light: InstanceType<typeof THREE.PointLight> }> = []
+  const exhibits: Array<{ id: string; slot: PlaqueLayoutSlot; group: InstanceType<typeof THREE.Group>; texture: InstanceType<typeof THREE.CanvasTexture>; faceMaterial: InstanceType<typeof THREE.MeshBasicMaterial>; light: InstanceType<typeof THREE.PointLight> }> = []
   let signature = ''
 
   function cardCanvas(card: IntroAcknowledgementCard) {
@@ -103,14 +106,16 @@ export async function createIntroScene(canvas: HTMLCanvasElement, initialSize: S
     const context = surface.getContext('2d')
     if (!context) throw new Error('无法创建鸣谢展牌纹理')
     const gradient = context.createLinearGradient(0, 0, 640, 400)
-    gradient.addColorStop(0, card.kind === 'upstream' ? '#202e2e' : '#173f43')
-    gradient.addColorStop(1, '#091315')
+    const isUpstream = card.kind === 'upstream'
+    const isAcknowledgement = card.eyebrow.includes('鸣谢')
+    gradient.addColorStop(0, isUpstream ? '#405e5b' : isAcknowledgement ? '#69494b' : '#66583f')
+    gradient.addColorStop(1, isUpstream ? '#1f3938' : isAcknowledgement ? '#35272d' : '#3d3427')
     context.fillStyle = gradient
     context.fillRect(0, 0, 640, 400)
-    context.strokeStyle = '#b48749'
+    context.strokeStyle = isUpstream ? '#b6cfc4' : isAcknowledgement ? '#d38b78' : '#d5b46d'
     context.lineWidth = 8
     context.strokeRect(18, 18, 604, 364)
-    context.fillStyle = '#d5a95e'
+    context.fillStyle = isUpstream ? '#d8eee2' : isAcknowledgement ? '#f0b39b' : '#f0d28e'
     context.font = '700 25px "Microsoft YaHei UI", sans-serif'
     context.fillText(card.eyebrow, 50, 72)
     context.fillStyle = '#f5f2e9'
@@ -119,7 +124,7 @@ export async function createIntroScene(canvas: HTMLCanvasElement, initialSize: S
     context.fillStyle = 'rgba(235,238,232,.78)'
     context.font = '400 23px "Microsoft YaHei UI", sans-serif'
     context.fillText(fittedText(context, card.message, 540), 50, 218)
-    context.fillStyle = '#75d9dc'
+    context.fillStyle = '#e8e0d0'
     context.font = '700 25px "Microsoft YaHei UI", sans-serif'
     context.fillText(fittedText(context, card.detail, 540), 50, 315)
     return surface
@@ -137,11 +142,12 @@ export async function createIntroScene(canvas: HTMLCanvasElement, initialSize: S
   function rebuild(cards: IntroAcknowledgementCard[]) {
     clearExhibits()
     const records = cards.length ? cards : [{ id: 'fallback', kind: 'supporter' as const, eyebrow: '鸣谢同路人', title: '致每一位同路人', message: '长夜执剑，幸与诸君同路。', detail: 'CS2AS', updatedAt: '' }]
+    const slots = buildPlaqueLayout(cards)
     records.forEach((card, index) => {
-      const angle = index / records.length * Math.PI * 2
+      const slot = slots[index] ?? { id: card.id, x: 0, z: 0, rotationY: 0, order: index }
       const group = new THREE.Group()
-      group.position.set(Math.sin(angle) * 6.5, 0.6, Math.cos(angle) * 6.5)
-      group.rotation.y = angle + Math.PI
+      group.position.set(slot.x, 0.6, slot.z)
+      group.rotation.y = slot.rotationY + Math.PI
       const base = new THREE.Mesh(pedestalBase, stone)
       base.castShadow = true
       const top = new THREE.Mesh(pedestalTop, bronze)
@@ -162,7 +168,7 @@ export async function createIntroScene(canvas: HTMLCanvasElement, initialSize: S
       light.position.set(0, 2.4, 1.1)
       group.add(base, top, panel, face, reverseFace, light)
       scene.add(group)
-      exhibits.push({ group, texture, faceMaterial, light })
+      exhibits.push({ id: card.id, slot, group, texture, faceMaterial, light })
     })
   }
 
@@ -174,8 +180,16 @@ export async function createIntroScene(canvas: HTMLCanvasElement, initialSize: S
   }
 
   function cameraAt(state: IntroSceneState) {
-    const cards = state.cards.length || 1
+    const count = state.cards.length || 1
     const elapsed = state.elapsedMs
+    if (state.mode === 'free-roam') {
+      const index = Math.max(0, Math.min(count - 1, state.selectedIndex ?? 0))
+      const exhibit = exhibits[index]
+      const slot = exhibit?.slot ?? { x: 0, z: 0, rotationY: 0 }
+      camera.position.set(slot.x + 10.8, 3.35, slot.z + 10.8)
+      target.set(slot.x, 1.8, slot.z)
+      return
+    }
     if (elapsed < 650) {
       const t = easeInOut(elapsed / 650)
       camera.position.set(0, 2.8 + t * 0.3, 14 - t * 4.2)
@@ -191,9 +205,9 @@ export async function createIntroScene(canvas: HTMLCanvasElement, initialSize: S
     }
     if (elapsed < 7_800) {
       const t = easeInOut((elapsed - state.supporterLockMs) / (7_800 - state.supporterLockMs))
-      const supporterStart = Math.min(5, cards - 1)
-      const index = supporterStart + t * Math.max(1, cards - supporterStart)
-      const angle = index / cards * Math.PI * 2
+      const supporterStart = Math.min(5, count - 1)
+      const index = supporterStart + t * Math.max(1, count - supporterStart)
+      const angle = index / count * Math.PI * 2
       camera.position.set(Math.sin(angle - 0.12) * 12.1, 3.05 + Math.sin(t * Math.PI) * 0.3, Math.cos(angle - 0.12) * 12.1)
       target.set(Math.sin(angle) * 6.0, 2.0, Math.cos(angle) * 6.0)
       return

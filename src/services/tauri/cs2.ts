@@ -6,6 +6,7 @@ import type {
   DiagnosticsPayload,
   OperationResult,
   Cs2ProcessSnapshot,
+  Cs2CloseOverride,
   Cs2RootScanEvent,
   Cs2RootScanSummary,
 } from '@/types/cs2'
@@ -39,6 +40,10 @@ export function checkCs2Process() {
 export function getCs2ProcessSnapshot() {
   return isTauriRuntime() ? invoke<Cs2ProcessSnapshot>('get_cs2_process_snapshot') : unavailable('运行状态检查仅可在桌面程序中使用。')
 }
+
+export function confirmCs2Closed(rootPath: string) { return invoke<Cs2CloseOverride>('confirm_cs2_closed', { rootPath }) }
+export function revokeCs2ClosedConfirmation(rootPath: string) { return invoke<void>('revoke_cs2_closed_confirmation', { rootPath }) }
+export function getCs2CloseOverride(rootPath: string) { return invoke<Cs2CloseOverride | null>('get_cs2_close_override', { rootPath }) }
 
 export function closeCs2(force = false) {
   return isTauriRuntime() ? invoke<OperationResult>('close_cs2', { force }) : unavailable('关闭 CS2 仅可在桌面程序中使用。')

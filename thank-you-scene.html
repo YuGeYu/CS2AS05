@@ -4,24 +4,29 @@
   <body style="margin:0;background:#07111f;overflow:hidden">
     <canvas id="scene" width="1280" height="720"></canvas>
     <script type="module">
-      import { createIntroScene } from '/src/features/intro/scene.ts'
-      import { createContributionGalleryScene } from '/src/features/easter-egg/game-scene.ts'
+      import { createAcknowledgementScene } from '/src/features/acknowledgement/scene.ts'
 
       const params = new URLSearchParams(location.search)
       const kind = params.get('scene') || 'intro'
       const elapsed = Number(params.get('t') || 0)
+      const requestedCount = Math.min(200, Math.max(0, Number(params.get('count') || 4)))
       const canvas = document.querySelector('#scene')
-      const cards = [
+      const seedCards = [
         { id: 'upstream:three', kind: 'upstream', eyebrow: '感谢上游项目', title: 'three.js', message: '让每一束光都能被看见。', detail: 'MIT License', updatedAt: 'three' },
         { id: 'upstream:tauri', kind: 'upstream', eyebrow: '感谢上游项目', title: 'Tauri', message: '让桌面工具保持轻盈。', detail: 'MIT / Apache-2.0', updatedAt: 'tauri' },
         { id: 'supporter:path', kind: 'supporter', eyebrow: '鸣谢同路人', title: '每一位同行者', message: '感谢你把建议带到下一局。', detail: 'CS2AS', updatedAt: 'path' },
         { id: 'supporter:player', kind: 'supporter', eyebrow: '鸣谢同路人', title: '愿下一局仍然并肩', message: '长夜执剑，幸与诸君同路。', detail: '谢谢你', updatedAt: 'player' },
       ]
+      const cards = requestedCount === 0 ? [] : Array.from({ length: requestedCount }, (_, index) => {
+        const seed = seedCards[index % seedCards.length]
+        const group = index % 3
+        return { ...seed, id: `${seed.id}:${index}`, title: `${seed.title} ${index + 1}`, kind: group === 0 ? 'upstream' : 'supporter', eyebrow: group === 0 ? '感谢上游项目' : group === 1 ? '公开赞助' : '鸣谢同路人', updatedAt: `${index}` }
+      })
       const size = { width: 1280, height: 720, dpr: 1 }
       const state = { elapsedMs: elapsed, durationMs: 9600, supporterLockMs: 2800, loading: false, cards }
-      const controller = kind === 'gallery'
-        ? await createContributionGalleryScene(canvas, size, () => cards)
-        : await createIntroScene(canvas, size, () => state)
+      const controller = await createAcknowledgementScene(canvas, size, () => kind === 'gallery'
+        ? { ...state, mode: 'free-roam', selectedIndex: 0 }
+        : state)
       await new Promise(resolve => setTimeout(resolve, kind === 'gallery' ? 700 : 60))
       controller.frame(elapsed / 1000, 1 / 30)
       document.body.dataset.ready = 'true'

@@ -1,27 +1,49 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { appConfig } from '@/config/app'
-import { STATIC_INTRO_DATA, STATIC_REFERENCE_PROJECTS } from '@/features/intro/static-data'
-const DURATION_MS = 6800
+import ThreeStage from '@/components/three/ThreeStage.vue'
+import { createAcknowledgementScene } from '@/features/acknowledgement/scene'
+import { loadIntroData } from '@/services/intro-data'
+import { STATIC_REFERENCE_PROJECTS } from '@/features/intro/static-data'
+import type { IntroAcknowledgementCard } from '@/features/intro/types'
+const DURATION_MS = 9600
 const emit = defineEmits<{ close: [] }>()
 const skipButton = ref<HTMLButtonElement | null>(null)
 const elapsed = ref(0)
 let frame = 0; let started = 0; let closed = false
 const projects = STATIC_REFERENCE_PROJECTS
-const supporters = STATIC_INTRO_DATA.supporters
-const focusRows = [...projects.map(item => item.repository), ...supporters.map(item => item.nickname || '匿名同路人')]
+const cards = ref<IntroAcknowledgementCard[]>(projects.map(item => ({ id: `upstream:${item.id}`, kind: 'upstream', eyebrow: '上游项目', title: item.repository, message: item.description, detail: item.license || item.group, updatedAt: '' })))
+const focusRows = computed(() => cards.value.map(item => item.title))
 const progress = computed(() => Math.min(100, elapsed.value / DURATION_MS * 100))
-const activeProject = computed(() => focusRows[Math.min(focusRows.length - 1, Math.floor(Math.max(0, elapsed.value - 600) / Math.max(1, (DURATION_MS - 600) / focusRows.length)))])
+const activeProject = computed(() => focusRows.value[Math.min(focusRows.value.length - 1, Math.floor(Math.max(0, elapsed.value - 600) / Math.max(1, (DURATION_MS - 600) / Math.max(1, focusRows.value.length))))] || '水墨长廊')
 function close() { if (closed) return; closed = true; cancelAnimationFrame(frame); emit('close') }
 function tick(now: number) { if (!started) started = now; elapsed.value = now - started; if (elapsed.value >= DURATION_MS) close(); else frame = requestAnimationFrame(tick) }
 function onKeydown(event: KeyboardEvent) { if (event.key === 'Escape' || event.key === 'Tab') { event.preventDefault(); close() } }
-onMounted(() => { window.addEventListener('keydown', onKeydown); skipButton.value?.focus(); frame = requestAnimationFrame(tick) })
+onMounted(async () => {
+  window.addEventListener('keydown', onKeydown)
+  skipButton.value?.focus()
+  const data = await loadIntroData()
+  cards.value = [
+    ...projects.map(item => ({ id: `upstream:${item.id}`, kind: 'upstream' as const, eyebrow: '上游项目', title: item.repository, message: item.description, detail: item.license || item.group, updatedAt: '' })),
+    ...data.supporters.map(item => ({
+      id: `supporter:${item.id}`,
+      kind: 'supporter' as const,
+      eyebrow: item.platform === 'bilibili' ? 'B站充电鸣谢' : '公开赞助',
+      title: item.nickname || '匿名同路人',
+      message: item.message || '感谢你的支持与同行。',
+      detail: item.unit === 'beike' ? `后台可见 ${item.visibleAmount ?? 0} 贝壳 · 暂定约 ¥${(item.visibleAmount ?? 0).toFixed(2)}` : `公开支持 · ¥${((item.amountCents ?? 0) / 100).toFixed(2)}`,
+      updatedAt: item.updatedAt,
+    })),
+  ]
+  frame = requestAnimationFrame(tick)
+})
 onBeforeUnmount(() => { cancelAnimationFrame(frame); window.removeEventListener('keydown', onKeydown) })
 </script>
 <template>
-  <section class="cinema-overlay intro-overlay static-ack-overlay" role="dialog" aria-modal="true" aria-label="版本启动鸣谢">
-    <div class="static-scanline" aria-hidden="true" /><header class="cinema-topbar"><div><span>CS2AS</span><strong>{{ appConfig.appVersion }}</strong></div><button ref="skipButton" type="button" class="cinema-text-button" @click="close">跳过</button></header>
-    <div class="static-ack-shell"><div class="static-ack-heading"><p class="cinema-kicker">版本启动鸣谢 · 固化名单</p><h1>幸与诸君同路</h1><p>上游项目与公开鸣谢随本版本一同封存，启动时不访问官网赞助接口。</p></div><div class="static-ack-table-wrap"><table class="static-ack-table"><caption class="sr-only">上游项目与公开鸣谢名单</caption><thead><tr><th>类别</th><th>项目 / 名称</th><th>说明</th><th>许可 / 鸣谢</th></tr></thead><tbody><tr v-for="project in projects" :key="project.id"><td><span class="ack-badge">上游</span></td><td><strong>{{ project.repository }}</strong></td><td>{{ project.description }}</td><td>{{ project.license || project.group }}</td></tr><tr v-for="supporter in supporters" :key="supporter.id"><td><span class="ack-badge ack-badge--supporter">鸣谢</span></td><td><strong>{{ supporter.nickname || '匿名同路人' }}</strong></td><td>{{ supporter.message || '感谢你的支持与同行。' }}</td><td>公开鸣谢</td></tr></tbody></table></div><p class="static-ack-focus" aria-live="polite"><span>当前焦点</span>{{ activeProject }}</p></div>
+  <section class="cinema-overlay intro-overlay ink-ack-scene" role="dialog" aria-modal="true" aria-label="水墨江南鸣谢长廊">
+    <header class="cinema-topbar"><div><span>CS2AS · 水墨江南</span><strong>{{ appConfig.appVersion }}</strong></div><button ref="skipButton" type="button" class="cinema-text-button" @click="close">跳过</button></header>
+    <ThreeStage :factory="(canvas, size) => createAcknowledgementScene(canvas, size, () => ({ elapsedMs: elapsed, durationMs: DURATION_MS, supporterLockMs: 4200, loading: false, cards, mode: 'cinematic' }))" />
+    <div class="ink-ack-copy"><p class="cinema-kicker">幸与诸君同路</p><h1>上游项目、赞助与公开鸣谢</h1><p aria-live="polite">镜头正在经过：{{ activeProject }}</p><small>金额以当前可核实记录为准；B站贝壳暂按 1 贝壳 = ¥1 展示，不代表完整充电总额。</small></div>
     <div class="cinema-progress" aria-hidden="true"><span :style="{ width: `${progress}%` }" /></div>
   </section>
 </template>

@@ -20,7 +20,7 @@ export interface AppearancePreferences {
 
 const STORAGE_KEY = 'cs2-bot-improver.appearance.v1'
 const defaults: AppearancePreferences = {
-  theme: 'light', palette: 'default', radius: 'auto', density: 'default', sidebarMode: 'default', skipIntro: false,
+  theme: 'light', palette: 'default', radius: 'auto', density: 'default', sidebarMode: 'default', skipIntro: true,
   sidebarOrder: [...NAV_ITEM_KEYS], hiddenSidebarItems: [],
 }
 const state = reactive<AppearancePreferences>({ ...defaults, sidebarOrder: [...defaults.sidebarOrder], hiddenSidebarItems: [] })

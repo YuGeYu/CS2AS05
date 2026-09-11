@@ -25,6 +25,8 @@ const speed = ref(1)
 const map = computed(() => props.mapName ? findCs2Map(props.mapName) : undefined)
 const ticks = computed(() => uniqueTicks(points.value))
 const currentTick = computed(() => ticks.value[tickIndex.value] ?? 0)
+const modeLabel = computed(() => props.mode === 'viewer' ? '地图回放' : '位置热力图')
+const dataState = computed(() => loading.value ? '正在读取空间数据' : error.value ? '需要检查数据' : points.value.length ? '空间数据已就绪' : '尚未生成空间数据')
 const radarAssets = import.meta.glob('../../../assets/maps/cs2/radars/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>
 let resizeObserver: ResizeObserver | undefined
 let animationFrame = 0
@@ -138,23 +140,43 @@ watch(radarUrl, (url) => {
 watch(playing, (value) => { viewerPlaying(value); if (!value) { if (animationFrame) cancelAnimationFrame(animationFrame); animationFrame = 0 } else { lastFrame = 0; animationFrame = requestAnimationFrame(animate) } })
 watch(layer, draw)
 function onVisibilityChange() { if (document.hidden) stopPlayback() }
+function onTimelineKeydown(event: KeyboardEvent) {
+  if (!ticks.value.length) return
+  if (event.key === 'ArrowLeft') { event.preventDefault(); tickIndex.value = Math.max(0, tickIndex.value - 1) }
+  if (event.key === 'ArrowRight') { event.preventDefault(); tickIndex.value = Math.min(ticks.value.length - 1, tickIndex.value + 1) }
+  if (event.key === 'Home') { event.preventDefault(); tickIndex.value = 0 }
+  if (event.key === 'End') { event.preventDefault(); tickIndex.value = ticks.value.length - 1 }
+  if (event.key === ' ' && props.mode === 'viewer') { event.preventDefault(); playing.value = !playing.value }
+}
 onMounted(() => { viewerMounted(props.mode); resizeObserver = new ResizeObserver(resize); if (shell.value) resizeObserver.observe(shell.value); window.addEventListener('resize', resize); document.addEventListener('visibilitychange', onVisibilityChange); load() })
 onBeforeUnmount(() => { loadGeneration++; radarGeneration++; stopPlayback(); viewerUnmounted(); resizeObserver?.disconnect(); window.removeEventListener('resize', resize); document.removeEventListener('visibilitychange', onVisibilityChange); radar.onload = null; radar.onerror = null; radar.src = '' })
 </script>
 
 <template>
-  <div class="spatial-workbench">
-    <aside class="spatial-controls">
-      <label>回合<select v-model.number="roundNumber"><option v-for="round in rounds" :key="round.roundNumber" :value="round.roundNumber">第 {{ round.roundNumber }} 回合</option></select></label>
-      <label>采样<select v-model.number="samplingHz"><option :value="4">4 Hz</option><option :value="8">8 Hz</option><option :value="16">16 Hz</option></select></label>
-      <label v-if="map?.thresholdZ">楼层<select v-model="layer"><option value="upper">上层</option><option value="lower">下层</option></select></label>
-      <label v-if="mode === 'viewer'">速度<select v-model.number="speed"><option :value="0.5">0.5x</option><option :value="1">1x</option><option :value="2">2x</option><option :value="4">4x</option></select></label>
-      <div class="spatial-actions"><button class="icon-button" type="button" :disabled="loading" title="刷新空间数据" aria-label="刷新空间数据" @click="load"><RefreshCw :size="17" /></button><button v-if="mode === 'viewer'" class="icon-button" type="button" :disabled="!ticks.length" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'" @click="playing = !playing"><Pause v-if="playing" :size="17" /><Play v-else :size="17" /></button></div>
-      <div v-if="mode === 'viewer'" class="team-legend" aria-label="阵营图例"><span><i data-team="ct" />CT 阵营</span><span><i data-team="t" />T 阵营</span></div>
-      <button v-if="!points.length" class="primary-button" type="button" :disabled="generating" @click="generate"><LoaderCircle v-if="generating" :size="17" class="spinning" />生成空间数据</button>
-      <p v-if="error" role="status">{{ error }}</p>
-      <dl><div><dt>坐标点</dt><dd>{{ points.length || '--' }}</dd></div><div v-if="mode === 'viewer'"><dt>当前 Tick</dt><dd>{{ currentTick || '--' }}</dd></div></dl>
-    </aside>
-    <div ref="shell" class="spatial-canvas-shell"><canvas ref="canvas" :aria-label="mode === 'viewer' ? '二维地图回放' : '位置热力图'" /><input v-if="mode === 'viewer' && ticks.length" v-model.number="tickIndex" type="range" :max="Math.max(0, ticks.length - 1)" min="0" aria-label="回放进度" /></div>
+  <div class="tactical-workbench" :data-mode="mode">
+    <header class="tactical-context">
+      <div class="tactical-context-title"><span class="tactical-kicker">空间复盘 / {{ mode === 'viewer' ? 'REPLAY' : 'HEATMAP' }}</span><h3>{{ modeLabel }}</h3><p>{{ mapName || '未知地图' }} · 第 {{ roundNumber }} 回合</p></div>
+      <div class="tactical-context-meta"><span class="tactical-status" :data-state="points.length ? 'ready' : loading ? 'loading' : 'idle'"><i />{{ dataState }}</span><span v-if="map?.thresholdZ" class="tactical-chip">{{ layer === 'upper' ? '上层' : '下层' }}</span></div>
+    </header>
+    <div class="tactical-main">
+      <section class="tactical-stage" aria-label="战术地图观察区">
+        <div class="tactical-stage-canvas" ref="shell"><canvas ref="canvas" :aria-label="mode === 'viewer' ? '二维地图回放' : '位置热力图'" /><div class="tactical-overlay tactical-overlay--top">第 {{ roundNumber }} 回合 · {{ layer === 'upper' ? '上层' : '下层' }}</div><div class="tactical-overlay tactical-overlay--bottom">{{ points.length ? `${points.length.toLocaleString()} 个坐标点` : '等待空间数据' }}</div></div>
+        <div v-if="mode === 'viewer' && ticks.length" class="tactical-timeline" role="group" aria-label="回放时间轨" tabindex="0" @keydown="onTimelineKeydown">
+          <button class="tactical-play" type="button" :disabled="loading" :title="playing ? '暂停回放' : '播放回放'" :aria-label="playing ? '暂停' : '播放'" @click="playing = !playing"><Pause v-if="playing" :size="18" /><Play v-else :size="18" /></button>
+          <input v-model.number="tickIndex" type="range" :max="Math.max(0, ticks.length - 1)" min="0" aria-label="回放进度" :aria-valuetext="`第 ${tickIndex + 1} 帧，Tick ${currentTick}`" />
+          <output class="tactical-tick">Tick {{ currentTick || '--' }}</output>
+          <select v-model.number="speed" aria-label="回放速度"><option :value="0.5">0.5x</option><option :value="1">1x</option><option :value="2">2x</option><option :value="4">4x</option></select>
+        </div>
+      </section>
+      <aside class="tactical-inspector" aria-label="预览检查器">
+        <div class="tactical-inspector-heading"><div><span class="tactical-kicker">INSPECTOR</span><h4>观察参数</h4></div><button class="icon-button" type="button" :disabled="loading" title="刷新空间数据" aria-label="刷新空间数据" @click="load"><RefreshCw :size="17" /></button></div>
+        <div class="tactical-fields"><label>回合<select v-model.number="roundNumber"><option v-for="round in rounds" :key="round.roundNumber" :value="round.roundNumber">第 {{ round.roundNumber }} 回合</option></select></label><label>采样率<select v-model.number="samplingHz"><option :value="4">4 Hz</option><option :value="8">8 Hz</option><option :value="16">16 Hz</option></select></label><label v-if="map?.thresholdZ">楼层<select v-model="layer"><option value="upper">上层</option><option value="lower">下层</option></select></label></div>
+        <div v-if="mode === 'viewer'" class="tactical-legend" aria-label="阵营图例"><span><i data-team="ct" />CT 阵营</span><span><i data-team="t" />T 阵营</span><span><i data-team="observer" />观战者</span></div>
+        <div class="tactical-metrics"><div><span>坐标点</span><strong>{{ points.length || '--' }}</strong></div><div><span>{{ mode === 'viewer' ? '当前 Tick' : '采样率' }}</span><strong>{{ mode === 'viewer' ? currentTick || '--' : `${samplingHz} Hz` }}</strong></div></div>
+        <div v-if="!points.length" class="tactical-empty"><LoaderCircle v-if="generating" class="spinning" :size="18" /><p>{{ error || '当前回合还没有空间数据。' }}</p><button class="primary-button" type="button" :disabled="generating" @click="generate">生成空间数据</button></div>
+        <p v-if="error && points.length" class="tactical-error" role="status">{{ error }}</p>
+        <p class="tactical-hint">{{ mode === 'viewer' ? '方向键逐帧 · Home/End 跳转 · 空格播放' : '切换回合或楼层查看采样分布' }}</p>
+      </aside>
+    </div>
   </div>
 </template>

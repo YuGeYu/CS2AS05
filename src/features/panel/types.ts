@@ -1,4 +1,4 @@
-export type PanelMode = 'online' | 'bots'
+export type PanelMode = 'online' | 'bots' | 'skin_only'
 export type Difficulty = 'Low' | 'Medium' | 'High'
 export type AimValue = 'head' | 'mixed' | 'body'
 export type NadesValue = 'max' | 'more' | 'normal' | 'less' | 'off'
@@ -10,7 +10,7 @@ export interface PanelSnapshot {
   missingFiles: string[]
   cs2Running: boolean
   mode: { current: PanelMode | null; insecure: boolean; writable: boolean }
-  gameinfo?: { status: 'official' | 'bots' | 'unknown' | 'recoveryRequired'; activeSha256?: string | null; officialSha256?: string | null; resourceVersion?: string | null; writable: boolean }
+  gameinfo?: { status: 'official' | 'bots' | 'skin_only' | 'unknown' | 'recoveryRequired'; activeSha256?: string | null; officialSha256?: string | null; resourceVersion?: string | null; writable: boolean }
   difficulty: { current: Difficulty | null; available: Difficulty[] }
   presets: { aim: AimValue | null; nades: NadesValue | null; writable: boolean }
   botItems: Record<BotItem, boolean> & { writable: boolean }

@@ -266,7 +266,7 @@ fn status(app: &AppHandle, root_path: &str) -> Result<InventorySimulatorStatus, 
 }
 
 fn install(app: &AppHandle, root_path: &str) -> Result<InventorySimulatorInstallResult, AppError> {
-    if cs2::check_cs2_process()? {
+    if cs2::check_cs2_process_for_write(root_path)? {
         return Err(AppError::runtime(
             "[CS2_RUNNING] 请先完全退出 CS2，再启用库存换肤。",
         ));
@@ -389,7 +389,7 @@ fn install(app: &AppHandle, root_path: &str) -> Result<InventorySimulatorInstall
 }
 
 fn remove(app: &AppHandle, root_path: &str) -> Result<InventorySimulatorRemoveResult, AppError> {
-    if cs2::check_cs2_process()? {
+    if cs2::check_cs2_process_for_write(root_path)? {
         return Err(AppError::runtime(
             "[CS2_RUNNING] 请先完全退出 CS2，再移除库存换肤插件。",
         ));

@@ -32,7 +32,7 @@ const keepBackup = ref(false)
 const activeOperation = ref<'scan' | 'install' | 'panel' | 'uninstall' | 'preference' | 'clear' | 'account' | 'fault' | null>(null)
 const operationMessage = ref('')
 
-const installBlocked = computed(() => !store.selectedRoot || store.cs2Running || store.busy)
+const installBlocked = computed(() => !store.selectedRoot || (!store.writeUnlocked && store.cs2Running) || store.busy)
 const installLabel = computed(() => {
   if (store.busy) return '处理中...'
   if (store.environment?.baseEnvironmentReady) return '覆盖更新定制插件包'
@@ -40,7 +40,7 @@ const installLabel = computed(() => {
 })
 const installHint = computed(() => {
   if (!store.selectedRoot) return '选择 Counter-Strike Global Offensive 目录后才能安装。'
-  if (store.cs2Running) return '检测到 CS2 正在运行，请退出游戏后再继续。'
+  if (store.cs2Running && !store.writeUnlocked) return '检测到 CS2 正在运行，可在全局状态条确认已关闭后再继续。'
   if (store.environment?.baseEnvironmentReady) return `已检测到插件，可直接覆盖更新到 ${appConfig.appVersion} 定制包。`
   return '将安装基于 CS2-Bot-Improver v1.4.4 的定制资源包。'
 })
@@ -59,7 +59,7 @@ const processVisualState = computed(() => ({
 }[store.cs2ProcessState]))
 const diagnosis = computed(() => {
   if (!store.selectedRoot) return { tone: 'warning', title: '需要选择 CS2 目录', message: '先选择或扫描 Counter-Strike Global Offensive 目录。', action: '选择目录' }
-  if (store.cs2Running) return { tone: 'danger', title: '请先退出 CS2', message: '安装、覆盖更新和卸载都需要游戏完全退出。', action: '等待退出' }
+  if (store.cs2Running && !store.writeUnlocked) return { tone: 'danger', title: '请先退出 CS2', message: '可在全局状态条确认已关闭后继续本地安装操作。', action: '等待退出' }
   if (store.environment?.baseEnvironmentReady) return { tone: 'ready', title: '环境可以更新', message: `已检测到定制插件包，可覆盖更新到 ${appConfig.appVersion}。`, action: '覆盖更新' }
   return { tone: 'info', title: '环境可以安装', message: '目录有效，可以安装基于 CS2-Bot-Improver v1.4.4 的定制资源包。', action: '开始安装' }
 })

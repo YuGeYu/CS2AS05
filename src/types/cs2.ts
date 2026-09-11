@@ -27,6 +27,7 @@ export interface Cs2RootScanSummary {
 export type Cs2ProcessState = 'checking' | 'running' | 'stopped' | 'unknown'
 export interface Cs2ProcessInfo { pid: number; exeName: string; exePath: string | null; parentPid: number | null; startTime: number | null }
 export interface Cs2ProcessSnapshot { observedAt: number; processes: Cs2ProcessInfo[]; confidence: 'high' | 'low' | 'unknown'; sampleCount: number }
+export interface Cs2CloseOverride { confirmedAt: number; expiresAt: number; rootPath: string; processCount: number; active: boolean }
 
 export interface ToastMessage {
   tone: 'ready' | 'warn' | 'danger' | 'info'

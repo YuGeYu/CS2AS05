@@ -1,6 +1,6 @@
 param(
   [string]$ZipPath = 'src-tauri/resources/CS2BotImprover.zip',
-  [string]$DllPath = 'third_party/CS2-Bot-Improver-v1.4.4/nades-pacing/bin/Release/net10.0/NadeSystem.dll',
+  [string]$DllPath = 'third_party/CS2-Bot-Improver-v1.4.4/addons/counterstrikesharp/plugins/NadeSystem/bin/Release/net10.0/NadeSystem.dll',
   [string]$ReportDirectory = 'workspace/runtime/nadesystem-replacement'
 )
 

@@ -85,6 +85,16 @@ pub struct Cs2ProcessSnapshot {
     pub sample_count: u8,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Cs2CloseOverride {
+    pub confirmed_at: i64,
+    pub expires_at: i64,
+    pub root_path: String,
+    pub process_count: usize,
+    pub active: bool,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiagnosticsPayload {

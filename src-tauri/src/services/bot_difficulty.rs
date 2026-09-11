@@ -532,8 +532,8 @@ fn require_tool(app: &AppHandle) -> Result<PathBuf, AppError> {
         })
 }
 
-fn require_cs2_closed() -> Result<(), AppError> {
-    if crate::services::cs2::check_cs2_process()? {
+fn require_cs2_closed(root_path: &str) -> Result<(), AppError> {
+    if crate::services::cs2::check_cs2_process_for_write(root_path)? {
         return Err(AppError::runtime(
             "[BOT_WORKSHOP_CS2_RUNNING] 请先退出 CS2，再修改或应用强度档案。",
         ));
@@ -551,6 +551,74 @@ fn read_text(path: &Path) -> Result<String, AppError> {
     }
     String::from_utf8(bytes)
         .map_err(|_| AppError::runtime("[BOT_WORKSHOP_DB_ENCODING] botprofile.db 不是 UTF-8 文本"))
+}
+
+/// Performs only structural checks that are safe for the upstream BotProfile grammar.
+/// Unknown keys and values remain editable; semantic limits belong to the field catalog.
+fn validate_botprofile_text(text: &str) -> Result<(), AppError> {
+    if text.as_bytes().contains(&0) {
+        return Err(AppError::runtime(
+            "[BOT_WORKSHOP_DB_INVALID] 内容包含不可写入的 NUL 字符，请检查输入法或粘贴内容。",
+        ));
+    }
+    if text
+        .chars()
+        .any(|c| c.is_control() && c != '\r' && c != '\n' && c != '\t')
+    {
+        return Err(AppError::runtime(
+            "[BOT_WORKSHOP_DB_INVALID] 内容包含不可见控制字符，请重新输入或粘贴纯文本。",
+        ));
+    }
+
+    let mut block_depth = 0usize;
+    for (index, raw_line) in text.lines().enumerate() {
+        let line = raw_line.split("//").next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        let quote_count = line.chars().filter(|c| *c == '"').count();
+        if quote_count % 2 != 0 {
+            return Err(AppError::runtime(format!(
+                "[BOT_WORKSHOP_DB_INVALID] 第 {} 行引号未闭合，请检查字段值。",
+                index + 1
+            )));
+        }
+        if line.eq_ignore_ascii_case("end") {
+            if block_depth == 0 {
+                return Err(AppError::runtime(format!(
+                    "[BOT_WORKSHOP_DB_INVALID] 第 {} 行出现多余 End。",
+                    index + 1
+                )));
+            }
+            block_depth -= 1;
+            continue;
+        }
+        if line.contains('=') {
+            let (key, value) = line.split_once('=').unwrap_or_default();
+            if key.trim().is_empty() || value.trim().is_empty() {
+                return Err(AppError::runtime(format!(
+                    "[BOT_WORKSHOP_DB_INVALID] 第 {} 行的 key/value 不完整。",
+                    index + 1
+                )));
+            }
+        } else if block_depth == 0 {
+            // Top-level declarations are profile/template names. Keep the grammar permissive,
+            // but reject punctuation that is never valid as a declaration token.
+            if line.chars().any(|c| ['{', '}', ';'].contains(&c)) {
+                return Err(AppError::runtime(format!(
+                    "[BOT_WORKSHOP_DB_INVALID] 第 {} 行包含不支持的结构符号。",
+                    index + 1
+                )));
+            }
+            block_depth = 1;
+        }
+    }
+    if block_depth != 0 {
+        return Err(AppError::runtime(
+            "[BOT_WORKSHOP_DB_INVALID] 档案区块未以 End 结束，请检查是否误删了整行。",
+        ));
+    }
+    Ok(())
 }
 
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
@@ -588,7 +656,7 @@ pub fn open(
     root_path: &str,
     profile_id: &str,
 ) -> Result<BotProfileDocument, AppError> {
-    require_cs2_closed()?;
+    require_cs2_closed(root_path)?;
     if !valid_id(profile_id) {
         return Err(AppError::runtime(
             "[BOT_WORKSHOP_PROFILE_NOT_FOUND] 非法档案 ID",
@@ -629,7 +697,7 @@ pub fn create(
     root_path: &str,
     request: CreateBotProfileRequest,
 ) -> Result<BotProfileOperation, AppError> {
-    require_cs2_closed()?;
+    require_cs2_closed(root_path)?;
     require_tool(app)?;
     if !request.base_profile_id.starts_with("builtin-")
         || request.name.trim().is_empty()
@@ -695,13 +763,14 @@ pub fn save(
     root_path: &str,
     request: SaveBotProfileRequest,
 ) -> Result<BotProfileOperation, AppError> {
-    require_cs2_closed()?;
+    require_cs2_closed(root_path)?;
     let tool = require_tool(app)?;
     if request.text.len() > 2 * 1024 * 1024 {
         return Err(AppError::runtime(
             "[BOT_WORKSHOP_DB_TOO_LARGE] 文本超过 2 MiB 限制",
         ));
     }
+    validate_botprofile_text(&request.text)?;
     let dir = profile_dir(app, &request.profile_id)?;
     let json = fs::read_to_string(dir.join("profile.json"))
         .map_err(|_| AppError::runtime("[BOT_WORKSHOP_PROFILE_NOT_FOUND] 自定义档案不存在"))?;
@@ -722,10 +791,18 @@ pub fn save(
     let candidate_db = dir.join("candidate.db");
     atomic_write(&candidate_db, request.text.as_bytes())?;
     let source_vpk = dir.join("botprofile.vpk");
-    let candidate_vpk = dir.join("candidate.vpk");
-    fs::copy(&source_vpk, &candidate_vpk).map_err(|e| AppError::runtime(e.to_string()))?;
+    let candidate_output = dir.join(format!(
+        "candidate-output-{}",
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    ));
+    fs::create_dir_all(&candidate_output).map_err(|e| {
+        AppError::runtime(format!(
+            "[BOT_WORKSHOP_WORKSPACE_UNWRITABLE] 无法创建候选 VPK 目录：{e}"
+        ))
+    })?;
     let db_arg = candidate_db.to_string_lossy().to_string();
-    let vpk_arg = candidate_vpk.to_string_lossy().to_string();
+    let output_arg = candidate_output.to_string_lossy().to_string();
+    let source_arg = source_vpk.to_string_lossy().to_string();
     let (_, stderr, code) = run_cli(
         &tool,
         &[
@@ -734,17 +811,29 @@ pub fn save(
             "--add-file",
             &db_arg,
             "botprofile.db",
+            "--output",
+            &output_arg,
             "--no-progress",
-            &vpk_arg,
+            &source_arg,
         ],
         &dir,
     )?;
     if code != 0 {
         return Err(AppError::runtime(format!(
-            "[BOT_WORKSHOP_SAVE] VPK 写入失败: {}",
+            "[BOT_WORKSHOP_REPACK_FAILED] VPK 重打包失败（退出码 {code}）：{}；请检查最近修改的 key、引号、区块和不可见字符。",
             stderr.trim()
         )));
     }
+    let candidate_vpk = walkdir(&candidate_output)?
+        .into_iter()
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("vpk"))
+        .filter_map(|path| fs::metadata(&path).ok().map(|meta| (meta.len(), path)))
+        .max_by_key(|(size, _)| *size)
+        .map(|(_, path)| path)
+        .ok_or_else(|| {
+            AppError::runtime("[BOT_WORKSHOP_REPACK_FAILED] VPKEdit 未生成候选 VPK，原档案未覆盖。")
+        })?;
+    let vpk_arg = candidate_vpk.to_string_lossy().to_string();
     let verified = extract_db(
         app,
         &vpk_arg,
@@ -753,7 +842,7 @@ pub fn save(
     let verified_bytes = fs::read(verified).map_err(|e| AppError::runtime(e.to_string()))?;
     if verified_bytes != request.text.as_bytes() {
         return Err(AppError::runtime(
-            "[BOT_WORKSHOP_SAVE_ROLLBACK] 回读校验失败，未覆盖原档案。",
+            "[BOT_WORKSHOP_VPK_ROUNDTRIP_MISMATCH] VPK 回读内容与编辑结果不一致，原档案未覆盖。",
         ));
     }
     let backup_path = backup(&source_vpk, &dir.join("backups"))?;
@@ -783,7 +872,6 @@ pub fn rename(
     app: &AppHandle,
     request: RenameBotProfileRequest,
 ) -> Result<BotProfileOperation, AppError> {
-    require_cs2_closed()?;
     if !valid_profile_name(&request.name) {
         return Err(AppError::runtime(
             "[BOT_WORKSHOP_PROFILE_INVALID] 档案名称必须为 1-48 个字符，且不能包含路径或控制字符。",
@@ -810,7 +898,7 @@ pub fn delete(
     root_path: &str,
     profile_id: &str,
 ) -> Result<BotProfileOperation, AppError> {
-    require_cs2_closed()?;
+    require_cs2_closed(root_path)?;
     let (dir, mut profile) = read_custom_profile(app, profile_id)?;
     let root = crate::services::cs2::normalize_root(root_path)?;
     let active_path = root.join("game/csgo/overrides/botprofile.vpk");
@@ -896,7 +984,7 @@ pub fn apply(
     root_path: &str,
     profile_id: &str,
 ) -> Result<BotProfileOperation, AppError> {
-    require_cs2_closed()?;
+    require_cs2_closed(root_path)?;
     let dir = profile_dir(app, profile_id)?;
     let json = fs::read_to_string(dir.join("profile.json"))
         .map_err(|_| AppError::runtime("[BOT_WORKSHOP_PROFILE_NOT_FOUND] 自定义档案不存在"))?;
@@ -926,4 +1014,28 @@ pub fn apply(
         applied: true,
         message: "已应用到 BOT 模式；请重新启动 BOT 对局后生效。".into(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_botprofile_text;
+
+    #[test]
+    fn accepts_normal_profile_text_and_case_changes() {
+        let text = "Default\n    Skill = 100\n    Difficulty = NORMAL\nEnd\n";
+        assert!(validate_botprofile_text(text).is_ok());
+        assert!(validate_botprofile_text(&text.replace("NORMAL", "normal")).is_ok());
+    }
+
+    #[test]
+    fn rejects_unclosed_quote_and_block() {
+        assert!(validate_botprofile_text("Default\n    Name = \"broken\nEnd\n").is_err());
+        assert!(validate_botprofile_text("Default\n    Skill = 100\n").is_err());
+    }
+
+    #[test]
+    fn rejects_invisible_input_and_incomplete_assignment() {
+        assert!(validate_botprofile_text("Default\n    Skill = 100\u{0}\nEnd\n").is_err());
+        assert!(validate_botprofile_text("Default\n    Skill =\nEnd\n").is_err());
+    }
 }

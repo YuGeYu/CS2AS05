@@ -33,7 +33,31 @@ const DEFAULT_KNIVES: [u16; 5] = [507, 508, 515, 519, 525];
 const CFG_FILES: [&str; 2] = ["cfg/my_bot_normal_config.cfg", "cfg/my_bot_ffa_config.cfg"];
 const PANEL_STATE_FILE: &str = "cfg/cs2as05-panel-state.json";
 const GAMEINFO_STATE_FILE: &str = "cfg/cs2as05-gameinfo-state.json";
+const SKIN_ONLY_GAMEINFO_RELATIVE: &str = "backup/SkinOnly/gameinfo.gi";
 const CORE_CONFIG_FILE: &str = "addons/counterstrikesharp/configs/core.json";
+const SKIN_ONLY_STATE_FILE: &str = "cfg/cs2as05-skin-only.state";
+const SKIN_ONLY_DISABLED_DIR: &str = "addons/counterstrikesharp/.cs2as-skin-only-plugins";
+const SKIN_ONLY_DISABLED_BOT_PLUGINS: &[&str] = &[
+    "BotAI",
+    "BotAimImprover",
+    "BotBuy",
+    "BotControllerImpl",
+    "BotHiderImpl",
+    "BotRandomizer",
+    "BotState",
+    "MapRotation",
+    "NadeSystem",
+    "RayTraceImpl",
+];
+const SKIN_ONLY_DISABLED_METAMOD_DIR: &str = "addons/.cs2as-skin-only";
+const SKIN_ONLY_NATIVE_METAMOD_DIRS: &[&str] =
+    &["BotController", "BotHider", "BotVision", "RayTrace"];
+const SKIN_ONLY_NATIVE_METAMOD_VDFS: &[&str] = &[
+    "BotController.vdf",
+    "BotHider.vdf",
+    "BotVision.vdf",
+    "RayTrace.vdf",
+];
 const BOT_ITEM_KEYS: [(&str, &str); 8] = [
     ("profiles", "bot_hider github.com/XBribo all"),
     ("agents", "bot_randomizer github.com/ed0ard agents"),
@@ -126,7 +150,7 @@ impl PanelPreferences {
             return Self::empty();
         }
         self.mode = self.mode.filter(|field| {
-            field.initialized && ["online", "bots"].contains(&field.value.as_str())
+            field.initialized && ["online", "bots", "skin_only"].contains(&field.value.as_str())
         });
         self.difficulty = self.difficulty.filter(|field| {
             field.initialized && ["Low", "Medium", "High"].contains(&field.value.as_str())
@@ -166,7 +190,11 @@ fn initialize_panel_defaults_at(
     root: &Path,
     new_install: bool,
 ) -> Result<PanelInitializationResult, AppError> {
-    initialize_panel_defaults_at_with_running(root, new_install, cs2::check_cs2_process()?)
+    initialize_panel_defaults_at_with_running(
+        root,
+        new_install,
+        cs2::check_cs2_process_for_write(root.to_string_lossy().as_ref())?,
+    )
 }
 
 fn initialize_panel_defaults_at_with_running(
@@ -402,6 +430,11 @@ fn disk_mode(csgo: &Path) -> Option<String> {
     let active = fs::read(csgo.join("gameinfo.gi")).ok()?;
     let online = fs::read(csgo.join("backup/Online/gameinfo.gi")).ok();
     let bots = fs::read(csgo.join("backup/WithBots/gameinfo.gi")).ok();
+    let skin_only = fs::read(csgo.join(SKIN_ONLY_GAMEINFO_RELATIVE)).ok();
+    if csgo.join(SKIN_ONLY_STATE_FILE).is_file() && skin_only.as_deref() == Some(active.as_slice())
+    {
+        return Some("skin_only".into());
+    }
     if online.as_deref() == Some(&active) {
         Some("online".into())
     } else if bots.as_deref() == Some(&active)
@@ -424,6 +457,8 @@ pub(crate) struct GameInfoSidecar {
     pub official_sha256: String,
     pub online_sha256: String,
     pub bots_sha256: String,
+    #[serde(default)]
+    pub skin_only_sha256: Option<String>,
     pub active_sha256: String,
 }
 
@@ -441,6 +476,7 @@ pub(crate) fn write_gameinfo_sidecar(
     let active = fs::read(csgo.join("gameinfo.gi")).map_err(io_error)?;
     let online = fs::read(csgo.join("backup/Online/gameinfo.gi")).map_err(io_error)?;
     let bots = fs::read(csgo.join("backup/WithBots/gameinfo.gi")).map_err(io_error)?;
+    let skin_only = fs::read(csgo.join(SKIN_ONLY_GAMEINFO_RELATIVE)).map_err(io_error)?;
     let sidecar = GameInfoSidecar {
         schema: 1,
         resource_version: resource_version.into(),
@@ -448,11 +484,39 @@ pub(crate) fn write_gameinfo_sidecar(
         official_sha256: sha256_bytes(&online),
         online_sha256: sha256_bytes(&online),
         bots_sha256: sha256_bytes(&bots),
+        skin_only_sha256: Some(sha256_bytes(&skin_only)),
         active_sha256: sha256_bytes(&active),
     };
     let bytes = serde_json::to_vec_pretty(&sidecar)
         .map_err(|e| invalid(format!("[GAMEINFO_STATE_WRITE] {e}")))?;
     atomic_write(&csgo.join(GAMEINFO_STATE_FILE), &bytes)
+}
+
+pub(crate) fn ensure_skin_only_gameinfo_sidecar(csgo: &Path) -> Result<(), AppError> {
+    let path = csgo.join(GAMEINFO_STATE_FILE);
+    let bytes = fs::read(&path).map_err(|error| {
+        invalid(format!(
+            "[SKIN_ONLY_SIDECAR_MIGRATION_FAILED] 无法读取 gameinfo 状态摘要：{error}"
+        ))
+    })?;
+    let mut sidecar: GameInfoSidecar = serde_json::from_slice(&bytes).map_err(|error| {
+        invalid(format!(
+            "[SKIN_ONLY_SIDECAR_MIGRATION_FAILED] gameinfo 状态摘要格式无效：{error}"
+        ))
+    })?;
+    let skin_only = fs::read(csgo.join(SKIN_ONLY_GAMEINFO_RELATIVE)).map_err(|error| {
+        invalid(format!(
+            "[SKIN_ONLY_SIDECAR_MIGRATION_FAILED] 无法读取 SkinOnly gameinfo：{error}"
+        ))
+    })?;
+    let digest = sha256_bytes(&skin_only);
+    if sidecar.skin_only_sha256.as_deref() == Some(digest.as_str()) {
+        return Ok(());
+    }
+    sidecar.skin_only_sha256 = Some(digest);
+    let output = serde_json::to_vec_pretty(&sidecar)
+        .map_err(|error| invalid(format!("[SKIN_ONLY_SIDECAR_MIGRATION_FAILED] {error}")))?;
+    atomic_write(&path, &output)
 }
 
 fn gameinfo_state(csgo: &Path) -> Result<GameInfoState, AppError> {
@@ -476,11 +540,15 @@ fn gameinfo_state(csgo: &Path) -> Result<GameInfoState, AppError> {
     let bots_sha256 = fs::read(csgo.join("backup/WithBots/gameinfo.gi"))
         .ok()
         .map(|bytes| sha256_bytes(&bytes));
+    let skin_only_sha256 = fs::read(csgo.join(SKIN_ONLY_GAMEINFO_RELATIVE))
+        .ok()
+        .map(|bytes| sha256_bytes(&bytes));
     let official_bin_sha256 = fs::read(csgo.join("gameinfo.gi.official.bin"))
         .ok()
         .map(|bytes| sha256_bytes(&bytes));
     let baseline_valid = online_sha256.as_deref() == Some(sidecar.online_sha256.as_str())
         && bots_sha256.as_deref() == Some(sidecar.bots_sha256.as_str())
+        && sidecar.skin_only_sha256.as_deref() == skin_only_sha256.as_deref()
         && official_bin_sha256.as_deref() == Some(sidecar.official_sha256.as_str());
     let status = if !baseline_valid {
         "recoveryRequired"
@@ -488,6 +556,7 @@ fn gameinfo_state(csgo: &Path) -> Result<GameInfoState, AppError> {
         match active_sha256.as_deref() {
             Some(v) if v == sidecar.official_sha256 => "official",
             Some(v) if v == sidecar.bots_sha256 => "bots",
+            Some(v) if sidecar.skin_only_sha256.as_deref() == Some(v) => "skin_only",
             Some(_) => "recoveryRequired",
             None => "unknown",
         }
@@ -497,7 +566,14 @@ fn gameinfo_state(csgo: &Path) -> Result<GameInfoState, AppError> {
         active_sha256,
         official_sha256: Some(sidecar.official_sha256),
         resource_version: Some(sidecar.resource_version),
-        writable: status != "recoveryRequired" && !cs2::check_cs2_process()?,
+        writable: status != "recoveryRequired"
+            && !cs2::check_cs2_process_for_write(
+                csgo.parent()
+                    .and_then(|path| path.parent())
+                    .unwrap_or(csgo)
+                    .to_string_lossy()
+                    .as_ref(),
+            )?,
     })
 }
 
@@ -678,23 +754,136 @@ fn write_mode_at(csgo: &Path, mode: &str) -> Result<(), AppError> {
     let sidecar: GameInfoSidecar = fs::read(csgo.join(GAMEINFO_STATE_FILE))
         .ok().and_then(|b| serde_json::from_slice(&b).ok())
         .ok_or_else(|| invalid("[GAMEINFO_OFFICIAL_BASELINE_MISSING] 缺少静态 gameinfo 资源摘要，请先重新安装并完成 Steam 文件验证。"))?;
-    let source = csgo.join(if mode == "online" {
-        "backup/Online/gameinfo.gi"
-    } else {
-        "backup/WithBots/gameinfo.gi"
+    let source = csgo.join(match mode {
+        "online" => "backup/Online/gameinfo.gi",
+        "bots" => "backup/WithBots/gameinfo.gi",
+        "skin_only" => SKIN_ONLY_GAMEINFO_RELATIVE,
+        _ => return Err(invalid("[PANEL_MODE_INVALID] 未知运行模式。")),
     });
     let bytes = fs::read(&source).map_err(|error| io_context("读取模式源文件", &source, error))?;
-    let expected = if mode == "online" {
-        &sidecar.online_sha256
-    } else {
-        &sidecar.bots_sha256
+    let expected = match mode {
+        "online" => Some(sidecar.online_sha256.as_str()),
+        "bots" => Some(sidecar.bots_sha256.as_str()),
+        "skin_only" => sidecar.skin_only_sha256.as_deref(),
+        _ => None,
     };
-    if sha256_bytes(&bytes) != *expected {
+    if expected.is_none() || sha256_bytes(&bytes) != expected.unwrap() {
         return Err(invalid(
             "[GAMEINFO_ASSET_INVALID] 静态 gameinfo 资源摘要不匹配，已阻止写入。",
         ));
     }
     atomic_write(&csgo.join("gameinfo.gi"), &bytes)
+}
+
+fn set_skin_only_plugins(csgo: &Path, enabled: bool) -> Result<(), AppError> {
+    let plugins = csgo.join("addons/counterstrikesharp/plugins");
+    let disabled = csgo.join(SKIN_ONLY_DISABLED_DIR);
+    let metamod_root = csgo.join("addons");
+    let disabled_metamod_root = csgo.join(SKIN_ONLY_DISABLED_METAMOD_DIR);
+    let metamod_vdf_root = metamod_root.join("metamod");
+    let disabled_vdf_root = disabled_metamod_root.join("metamod");
+    if enabled {
+        fs::create_dir_all(&disabled).map_err(io_error)?;
+        for name in SKIN_ONLY_DISABLED_BOT_PLUGINS {
+            let source = plugins.join(name);
+            let target = disabled.join(name);
+            if source.exists() {
+                if target.exists() {
+                    fs::remove_dir_all(&target).map_err(io_error)?;
+                }
+                fs::rename(&source, &target).map_err(|error| {
+                    AppError::runtime(format!(
+                        "[SKIN_ONLY_DISABLE_FAILED] 无法停用 BOT 插件 {name}：{error}"
+                    ))
+                })?;
+            }
+        }
+        fs::create_dir_all(&disabled_metamod_root).map_err(io_error)?;
+        for name in SKIN_ONLY_NATIVE_METAMOD_DIRS {
+            let source = metamod_root.join(name);
+            let target = disabled_metamod_root.join(name);
+            if source.exists() {
+                if target.exists() {
+                    fs::remove_dir_all(&target).map_err(io_error)?;
+                }
+                fs::rename(&source, &target).map_err(|error| {
+                    AppError::runtime(format!(
+                        "[SKIN_ONLY_DISABLE_FAILED] 无法停用 native BOT 扩展 {name}：{error}"
+                    ))
+                })?;
+            }
+        }
+        fs::create_dir_all(&disabled_vdf_root).map_err(io_error)?;
+        for name in SKIN_ONLY_NATIVE_METAMOD_VDFS {
+            let source = metamod_vdf_root.join(name);
+            let target = disabled_vdf_root.join(name);
+            if source.exists() {
+                if target.exists() {
+                    fs::remove_file(&target).map_err(io_error)?;
+                }
+                fs::rename(&source, &target).map_err(|error| {
+                    AppError::runtime(format!(
+                        "[SKIN_ONLY_DISABLE_FAILED] 无法停用 native BOT 入口 {name}：{error}"
+                    ))
+                })?;
+            }
+        }
+        atomic_write(&csgo.join(SKIN_ONLY_STATE_FILE), b"skin_only\n")?;
+    } else {
+        for name in SKIN_ONLY_DISABLED_BOT_PLUGINS {
+            let source = disabled.join(name);
+            let target = plugins.join(name);
+            if source.exists() {
+                if target.exists() {
+                    fs::remove_dir_all(&target).map_err(io_error)?;
+                }
+                fs::rename(&source, &target).map_err(io_error)?;
+            }
+        }
+        for name in SKIN_ONLY_NATIVE_METAMOD_DIRS {
+            let source = disabled_metamod_root.join(name);
+            let target = metamod_root.join(name);
+            if source.exists() {
+                if target.exists() {
+                    fs::remove_dir_all(&target).map_err(io_error)?;
+                }
+                fs::rename(&source, &target).map_err(io_error)?;
+            }
+        }
+        for name in SKIN_ONLY_NATIVE_METAMOD_VDFS {
+            let source = disabled_vdf_root.join(name);
+            let target = metamod_vdf_root.join(name);
+            if source.exists() {
+                if target.exists() {
+                    fs::remove_file(&target).map_err(io_error)?;
+                }
+                fs::rename(&source, &target).map_err(io_error)?;
+            }
+        }
+        if disabled_vdf_root.exists()
+            && fs::read_dir(&disabled_vdf_root)
+                .map_err(io_error)?
+                .next()
+                .is_none()
+        {
+            fs::remove_dir(&disabled_vdf_root).map_err(io_error)?;
+        }
+        if disabled_metamod_root.exists()
+            && fs::read_dir(&disabled_metamod_root)
+                .map_err(io_error)?
+                .next()
+                .is_none()
+        {
+            fs::remove_dir(&disabled_metamod_root).map_err(io_error)?;
+        }
+        if disabled.exists() && fs::read_dir(&disabled).map_err(io_error)?.next().is_none() {
+            fs::remove_dir(&disabled).map_err(io_error)?;
+        }
+        if csgo.join(SKIN_ONLY_STATE_FILE).exists() {
+            fs::remove_file(csgo.join(SKIN_ONLY_STATE_FILE)).map_err(io_error)?;
+        }
+    }
+    Ok(())
 }
 
 fn write_difficulty_at(csgo: &Path, level: &str) -> Result<(), AppError> {
@@ -789,7 +978,7 @@ fn cfg_demo_recording_applied(path: &Path, enabled: bool) -> bool {
 }
 
 pub fn apply_demo_recording(root_path: &str, enabled: bool) -> Result<(), AppError> {
-    if cs2::check_cs2_process()? {
+    if cs2::check_cs2_process_for_write(root_path)? {
         return Err(invalid(
             "[DEMO_RECORDING_CS2_RUNNING] CS2 运行中不能修改自动录制设置。",
         ));
@@ -817,7 +1006,7 @@ pub fn demo_recording_state(
         normal_cfg_applied: normal,
         ffa_cfg_applied: ffa,
         drifted: !normal || !ffa,
-        writable: !cs2::check_cs2_process()?,
+        writable: !cs2::check_cs2_process_for_write(root_path)?,
         scope: "bots-only",
     })
 }
@@ -917,7 +1106,10 @@ fn snapshot_at(root: &Path) -> Result<PanelSnapshot, AppError> {
     let active_gameinfo = fs::read(csgo.join("gameinfo.gi")).ok();
     let online = fs::read(csgo.join("backup/Online/gameinfo.gi")).ok();
     let bots = fs::read(csgo.join("backup/WithBots/gameinfo.gi")).ok();
-    let mode = if active_gameinfo == online && online.is_some() {
+    let skin_only_active = fs::read(csgo.join(SKIN_ONLY_GAMEINFO_RELATIVE)).ok();
+    let mode = if csgo.join(SKIN_ONLY_STATE_FILE).is_file() && active_gameinfo == skin_only_active {
+        Some("skin_only".to_string())
+    } else if active_gameinfo == online && online.is_some() {
         Some("online".to_string())
     } else if active_gameinfo == bots && bots.is_some() {
         Some("bots".to_string())
@@ -964,7 +1156,7 @@ fn snapshot_at(root: &Path) -> Result<PanelSnapshot, AppError> {
         missing_files,
         cs2_running,
         mode: ModeState {
-            insecure: mode.as_deref() == Some("bots"),
+            insecure: matches!(mode.as_deref(), Some("bots") | Some("skin_only")),
             current: mode,
             writable: ready && !cs2_running,
         },
@@ -991,28 +1183,70 @@ fn snapshot_at(root: &Path) -> Result<PanelSnapshot, AppError> {
 }
 
 fn ensure_online_gameinfo_current(csgo: &Path) -> Result<(), AppError> {
-    let state = gameinfo_state(csgo)?;
-    if state.official_sha256.is_none() {
-        return Err(invalid("[GAMEINFO_OFFICIAL_BASELINE_MISSING] 未找到可信官方 gameinfo 基线。请退出 CS2 并在 Steam 中验证游戏文件。"));
-    }
-    if state.status == "recoveryRequired" || state.status == "unknown" {
-        return Err(invalid("[GAMEINFO_RECOVERY_REQUIRED] 当前 gameinfo 与已验证基线不一致，请先在 Steam 中验证游戏文件。"));
+    let sidecar: GameInfoSidecar = fs::read(csgo.join(GAMEINFO_STATE_FILE))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .ok_or_else(|| invalid("[GAMEINFO_OFFICIAL_BASELINE_MISSING] 未找到可信官方 gameinfo 基线。请退出 CS2 并在 Steam 中验证游戏文件。"))?;
+    let online = fs::read(csgo.join("backup/Online/gameinfo.gi")).map_err(|_| {
+        invalid("[GAMEINFO_OFFICIAL_BASELINE_MISSING] 缺少官方 Online gameinfo 备份，请在 Steam 中验证游戏文件。")
+    })?;
+    let official = fs::read(csgo.join("gameinfo.gi.official.bin")).map_err(|_| {
+        invalid("[GAMEINFO_OFFICIAL_BASELINE_MISSING] 缺少官方 gameinfo 基线摘要，请重新安装或验证游戏文件。")
+    })?;
+    if sha256_bytes(&online) != sidecar.online_sha256
+        || sha256_bytes(&official) != sidecar.official_sha256
+    {
+        return Err(invalid(
+            "[GAMEINFO_RECOVERY_REQUIRED] 官方 Online gameinfo 基线与已验证摘要不一致，请先在 Steam 中验证游戏文件。",
+        ));
     }
     Ok(())
 }
 
 pub fn set_mode(root_path: &str, mode: &str) -> Result<PanelSnapshot, AppError> {
-    if !["online", "bots"].contains(&mode) {
+    set_mode_inner(root_path, mode, None)
+}
+
+pub fn set_mode_with_app(
+    app: &AppHandle,
+    root_path: &str,
+    mode: &str,
+) -> Result<PanelSnapshot, AppError> {
+    set_mode_inner(root_path, mode, Some(app))
+}
+
+fn set_mode_inner(
+    root_path: &str,
+    mode: &str,
+    app: Option<&AppHandle>,
+) -> Result<PanelSnapshot, AppError> {
+    if !["online", "bots", "skin_only"].contains(&mode) {
         return Err(invalid("[PANEL_MODE_INVALID] 未知运行模式。"));
     }
-    if cs2::check_cs2_process()? {
+    if cs2::check_cs2_process_for_write(root_path)? {
         return Err(invalid("[CS2_RUNNING] 请先退出 CS2，再切换模式。"));
     }
     let root = cs2::normalize_root(root_path)?;
     let csgo = root.join("game/csgo");
     let mut preferences = load_preferences(&csgo)?;
     panel_transaction(&csgo, || {
+        if mode == "skin_only" {
+            let app = app.ok_or_else(|| {
+                invalid("[SKIN_ONLY_RESOURCE_CONTEXT_MISSING] 只开换肤需要应用资源上下文，请从桌面应用入口重试。")
+            })?;
+            let inventory = csgo.join(
+                "addons/counterstrikesharp/plugins/InventorySimulator/InventorySimulator.dll",
+            );
+            if !inventory.is_file() {
+                return Err(invalid(
+                    "[SKIN_ONLY_INVENTORY_MISSING] 请先在“库存换肤”页安装 Inventory Simulator。",
+                ));
+            }
+            cs2::ensure_skin_only_gameinfo(app, root_path)?;
+            ensure_skin_only_gameinfo_sidecar(&csgo)?;
+        }
         write_mode_at(&csgo, mode)?;
+        set_skin_only_plugins(&csgo, mode == "skin_only")?;
         preferences.mode = Some(preference(mode.to_string()));
         save_preferences(&csgo, &preferences)
     })?;
@@ -1025,6 +1259,9 @@ pub fn set_difficulty(root_path: &str, level: &str) -> Result<PanelSnapshot, App
     }
     let root = cs2::normalize_root(root_path)?;
     let csgo = root.join("game/csgo");
+    if disk_mode(&csgo).as_deref() == Some("skin_only") {
+        return Err(invalid("[SKIN_ONLY_DIFFICULTY_LOCKED] 只开换肤模式不会加载或修改 BOT 难度；请切回 BOT 模式后再调整。"));
+    }
     let mut preferences = load_preferences(&csgo)?;
     panel_transaction(&csgo, || {
         write_difficulty_at(&csgo, level)?;
@@ -1134,10 +1371,10 @@ fn launch_cs2_inner(
     root_path: &str,
     mode: &str,
 ) -> Result<LaunchResult, AppError> {
-    if !["online", "bots"].contains(&mode) {
+    if !["online", "bots", "skin_only"].contains(&mode) {
         return Err(invalid("[PANEL_MODE_INVALID] 未知运行模式。"));
     }
-    let _guard = if mode == "bots" {
+    let _guard = if matches!(mode, "bots" | "skin_only") {
         Some(
             launch_coordinator()
                 .try_lock()
@@ -1157,6 +1394,16 @@ fn launch_cs2_inner(
     }
     let (plugin_action, plugin_version) = if mode == "bots" {
         ensure_current_bot_plugin(app, root_path)?
+    } else if mode == "skin_only" {
+        let inventory = root.join(
+            "game/csgo/addons/counterstrikesharp/plugins/InventorySimulator/InventorySimulator.dll",
+        );
+        if !inventory.is_file() {
+            return Err(invalid(
+                "[SKIN_ONLY_INVENTORY_MISSING] 请先在“库存换肤”页安装 Inventory Simulator。",
+            ));
+        }
+        ("unchanged".into(), "Inventory Simulator".into())
     } else {
         ("unchanged".into(), String::new())
     };
@@ -1166,8 +1413,8 @@ fn launch_cs2_inner(
     if mode == "online" {
         ensure_online_gameinfo_current(&root.join("game/csgo"))?;
     }
-    set_mode(root_path, mode)?;
-    let insecure = mode == "bots";
+    set_mode_with_app(app, root_path, mode)?;
+    let insecure = mode != "online";
     let mut options = vec!["-applaunch", "730"];
     if insecure {
         options.push("-insecure");
@@ -1619,6 +1866,7 @@ mod tests {
         for relative in [
             "backup/Online",
             "backup/WithBots",
+            "backup/SkinOnly",
             "cfg",
             "overrides/Low",
             "overrides/Medium",
@@ -1634,6 +1882,11 @@ mod tests {
             b"Game csgo/addons/metamod",
         )
         .unwrap();
+        fs::write(
+            csgo.join("backup/SkinOnly/gameinfo.gi"),
+            b"Game csgo/addons/metamod",
+        )
+        .unwrap();
         let online_sha256 = sha256_bytes(b"online");
         let bots_sha256 = sha256_bytes(b"Game csgo/addons/metamod");
         let sidecar = GameInfoSidecar {
@@ -1643,6 +1896,7 @@ mod tests {
             official_sha256: online_sha256.clone(),
             online_sha256,
             bots_sha256,
+            skin_only_sha256: Some(sha256_bytes(b"Game csgo/addons/metamod")),
             active_sha256: sha256_bytes(b"online"),
         };
         fs::write(
@@ -1869,6 +2123,41 @@ mod tests {
             .to_string_lossy()
             .starts_with("gameinfo.gi.backup-")));
 
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn old_gameinfo_sidecar_is_backfilled_with_skin_only_digest() {
+        let root = test_root("skin-only-sidecar-migration");
+        let csgo = root.join("game/csgo");
+        fs::create_dir_all(csgo.join("backup/SkinOnly")).unwrap();
+        fs::create_dir_all(csgo.join("cfg")).unwrap();
+        let skin_only = b"skin-only-gameinfo";
+        fs::write(csgo.join(SKIN_ONLY_GAMEINFO_RELATIVE), skin_only).unwrap();
+        let old = serde_json::json!({
+            "schema": 1,
+            "resourceVersion": "0.5.12",
+            "generatedAt": "old",
+            "officialSha256": "official",
+            "onlineSha256": "online",
+            "botsSha256": "bots",
+            "activeSha256": "active"
+        });
+        fs::write(
+            csgo.join(GAMEINFO_STATE_FILE),
+            serde_json::to_vec_pretty(&old).unwrap(),
+        )
+        .unwrap();
+
+        ensure_skin_only_gameinfo_sidecar(&csgo).unwrap();
+        let updated: serde_json::Value =
+            serde_json::from_slice(&fs::read(csgo.join(GAMEINFO_STATE_FILE)).unwrap()).unwrap();
+        assert_eq!(
+            updated["skinOnlySha256"],
+            serde_json::Value::String(sha256_bytes(skin_only))
+        );
+        assert_eq!(updated["resourceVersion"], "0.5.12");
+        assert_eq!(updated["activeSha256"], "active");
         fs::remove_dir_all(root).unwrap();
     }
 

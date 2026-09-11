@@ -23,7 +23,7 @@ let alive = true
 const localState = computed(() => {
   if (!cs2.selectedRoot) return { tone: 'muted', label: '还没选择 CS2' }
   if (busy.value === 'install') return { tone: 'warning', label: '正在安稳地准备新插件' }
-  if (status.value?.cs2Running && !status.value.ready) return { tone: 'warning', label: '请先退出 CS2' }
+  if (status.value?.cs2Running && !cs2.writeUnlocked && !status.value.ready) return { tone: 'warning', label: '请先退出 CS2' }
   if (status.value?.ready) return { tone: 'ready', label: '已经准备好啦' }
   if (status.value?.legacyPlayerSkinModPresent || status.value?.legacyAppDataPresent) return { tone: 'warning', label: '旧换肤待移除' }
   if (status.value?.blockedCode === 'COUNTERSTRIKESHARP_MISSING' || status.value?.blockedCode === 'CORE_GUIDELINE_ENABLED') return { tone: 'danger', label: '先补齐基础环境' }
@@ -162,7 +162,7 @@ function runPrimaryAction() {
 }
 
 function launch() {
-  if (canLaunch.value) void launchExperience.start('bots')
+  if (canLaunch.value) void launchExperience.start('skin_only')
 }
 
 watch(() => cs2.selectedRoot, () => { status.value = null; void refresh() })
@@ -195,16 +195,16 @@ onBeforeUnmount(() => { alive = false; requestGeneration += 1 })
         <li data-state="waiting"><span class="inventory-step-index"><Gamepad2 :size="18" /></span><div><strong>启动并输入 !ws</strong><p>进入本地 BOT，发送一次 <code>!ws</code>，重生后就能看到。</p></div></li>
       </ol>
       <div class="inventory-primary-actions">
-        <button class="primary-button" type="button" :disabled="Boolean(busy) || Boolean(status?.cs2Running && primaryAction.kind === 'install')" @click="runPrimaryAction"><LoaderCircle v-if="busy === 'install' || busy === 'open'" :size="18" class="spin" /><ExternalLink v-else-if="primaryAction.kind === 'workshop'" :size="18" /><Wrench v-else :size="18" />{{ busy === 'install' ? '正在准备，请稍等' : primaryAction.label }}</button>
+        <button class="primary-button" type="button" :disabled="Boolean(busy) || Boolean(status?.cs2Running && !cs2.writeUnlocked && primaryAction.kind === 'install')" @click="runPrimaryAction"><LoaderCircle v-if="busy === 'install' || busy === 'open'" :size="18" class="spin" /><ExternalLink v-else-if="primaryAction.kind === 'workshop'" :size="18" /><Wrench v-else :size="18" />{{ busy === 'install' ? '正在准备，请稍等' : primaryAction.label }}</button>
         <button class="secondary-button" type="button" :disabled="!status?.ready || Boolean(busy)" @click="openWorkshop"><ExternalLink :size="17" />打开饰品工坊</button>
         <button class="secondary-button" type="button" :disabled="busy === 'copy'" @click="copyWs"><Copy :size="17" />复制 !ws</button>
-        <button class="inventory-launch-button" type="button" :disabled="!canLaunch" @click="launch"><Play :size="18" fill="currentColor" />启动本地 BOT</button>
+        <button class="inventory-launch-button" type="button" :disabled="!canLaunch" @click="launch"><Play :size="18" fill="currentColor" />启动只开换肤</button>
       </div>
       <div v-if="canRemove" class="inventory-removal-action">
-        <button class="danger-button" type="button" :disabled="Boolean(busy) || Boolean(status?.cs2Running)" @click="removeDialogOpen = true"><Trash2 :size="17" />移除库存换肤插件</button>
+        <button class="danger-button" type="button" :disabled="Boolean(busy) || Boolean(status?.cs2Running && !cs2.writeUnlocked)" @click="removeDialogOpen = true"><Trash2 :size="17" />移除库存换肤插件</button>
         <span>仅移除 Inventory Simulator 自身文件，不影响其他插件。</span>
       </div>
-      <p v-if="status?.cs2Running && !status.ready" class="inventory-inline-note"><AlertTriangle :size="16" />CS2 正在运行。请正常退出游戏，再点击一键启用。</p>
+      <p v-if="status?.cs2Running && !status.ready" class="inventory-inline-note"><AlertTriangle :size="16" />{{ cs2.writeUnlocked ? '已确认 CS2 关闭，本次会话已解锁本地插件操作。' : 'CS2 正在运行。请正常退出游戏，或在全局状态条确认已关闭。' }}</p>
     </section>
 
     <Transition name="inventory-tutorial">

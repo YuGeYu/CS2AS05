@@ -29,6 +29,25 @@ pub fn get_cs2_process_snapshot() -> Result<crate::models::cs2::Cs2ProcessSnapsh
 }
 
 #[tauri::command]
+pub fn confirm_cs2_closed(
+    root_path: String,
+) -> Result<crate::models::cs2::Cs2CloseOverride, String> {
+    cs2::confirm_cs2_closed(&root_path).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn revoke_cs2_closed_confirmation(root_path: String) -> Result<(), String> {
+    cs2::revoke_cs2_closed_confirmation(&root_path).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn get_cs2_close_override(
+    root_path: String,
+) -> Result<Option<crate::models::cs2::Cs2CloseOverride>, String> {
+    cs2::manual_close_override(&root_path).map_err(AppError::into_string)
+}
+
+#[tauri::command]
 pub fn close_cs2(force: bool) -> Result<OperationResult, String> {
     cs2::close_cs2(force).map_err(AppError::into_string)
 }

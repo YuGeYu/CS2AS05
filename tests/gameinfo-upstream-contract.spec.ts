@@ -36,17 +36,21 @@ describe('gameinfo official and BOT variants', () => {
 
   it('ships the v1.4.4 NadeSystem audio-enabled binary', () => {
     const bundled = zipEntry('addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll')
-    expect(sha(bundled)).toBe('8244EE9576AB5C5FD9FE3309C282C43D777DFFDE4D3E908B2571C68CBE492BB0')
+    expect(sha(bundled)).toBe('F9BBE17D1CA4729144A4F7CC37E1CD47B76729BC476E741987D0AC77F142F907')
   })
 
   it('ships a manifest matching every upstream gameinfo entry', () => {
     const manifest = JSON.parse(execFileSync('tar', ['-xOf', zipPath, 'gameinfo.manifest.json'], { encoding: 'utf8' })) as {
       entries: Record<string, { sha256: string; size: number }>
     }
-    for (const name of ['gameinfo.gi', 'backup/Online/gameinfo.gi', 'backup/WithBots/gameinfo.gi']) {
+    for (const name of ['gameinfo.gi', 'backup/Online/gameinfo.gi', 'backup/WithBots/gameinfo.gi', 'backup/SkinOnly/gameinfo.gi']) {
       const bytes = zipEntry(name)
       expect(manifest.entries[name]).toEqual({ sha256: sha(bytes), size: bytes.length })
     }
+    const skinOnly = zipEntry('backup/SkinOnly/gameinfo.gi').toString('utf8')
+    expect(skinOnly).not.toContain('csgo/overrides')
+    expect(skinOnly).not.toContain('botprofile.vpk')
+    expect(skinOnly).toContain('csgo/addons/metamod')
     expect(sha(zipEntry('gameinfo.gi'))).toBe('3CA9C2342366EC08428916F1F60D2935AD9354EB2916C7F0253EB1404F5132CC')
     expect(sha(zipEntry('backup/Online/gameinfo.gi'))).toBe('B1391E73DBEC2E078BDBAF7279C2B955084CF2B38A47E3D8181662E7948679B8')
   })

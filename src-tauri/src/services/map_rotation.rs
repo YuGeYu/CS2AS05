@@ -100,7 +100,7 @@ pub fn get(root_path: &str) -> Result<MapRotationDefault, AppError> {
 }
 
 fn write(root_path: &str, enabled: bool, reset: bool) -> Result<MapRotationDefault, AppError> {
-    if cs2::check_cs2_process()? {
+    if cs2::check_cs2_process_for_write(root_path)? {
         return Err(AppError::runtime(
             "[MAP_ROTATION_CS2_RUNNING] 请先退出 CS2，再修改下一次载入默认值。",
         ));

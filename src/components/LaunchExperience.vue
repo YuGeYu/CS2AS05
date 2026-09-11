@@ -20,7 +20,7 @@ const progress = computed(() => Math.min(100, (props.elapsedMs / LAUNCH_EXPERIEN
         <span class="launch-experience__mark"><Play :size="34" fill="currentColor" /></span>
       </div>
       <div class="launch-experience__copy">
-        <p class="overline">{{ mode === 'bots' ? 'BOT 模式' : '在线模式' }}</p>
+        <p class="overline">{{ mode === 'bots' ? 'BOT 模式' : mode === 'skin_only' ? '只开换肤' : '在线模式' }}</p>
         <h2>正在启动 Counter-Strike 2</h2>
       </div>
       <div class="launch-experience__progress" aria-hidden="true"><span :style="{ width: `${progress}%` }" /></div>

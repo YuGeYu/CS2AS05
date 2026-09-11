@@ -23,6 +23,17 @@ const canWrite = computed(() => toolState.value?.status === 'ready' && !!props.r
 const isCustom = computed(() => selected.value?.source === 'custom')
 const changed = computed(() => document.value?.text !== undefined && editor.value !== document.value.text)
 
+function friendlyError(cause: unknown) {
+  const raw = String(cause)
+  if (raw.includes('BOT_WORKSHOP_DB_INVALID')) return '档案内容格式不完整。请检查最近修改的 key、引号、End 区块和不可见字符，再保存。'
+  if (raw.includes('BOT_WORKSHOP_REPACK_FAILED')) return 'VPK 重打包失败，原档案没有被覆盖。请撤销最近修改后重试；若仍失败，请检查安全软件或文件占用。'
+  if (raw.includes('BOT_WORKSHOP_VPK_ROUNDTRIP_MISMATCH')) return '回读校验未通过，原档案没有被覆盖。请重新打开档案后再编辑。'
+  if (raw.includes('BOT_WORKSHOP_WORKSPACE_UNWRITABLE')) return '临时工作目录无法写入。请关闭 CS2/Steam 相关工具后重试，并检查安全软件拦截与磁盘空间。'
+  if (raw.includes('BOT_WORKSHOP_EXTRACT_FAILED')) return 'VPK 内的 botprofile.db 提取失败。请关闭 CS2/Steam 相关工具后重试；连续失败时提交诊断信息。'
+  if (raw.includes('BOT_WORKSHOP_SOURCE_CHANGED')) return '档案已在其他操作中发生变化，请重新打开后再保存。'
+  return raw
+}
+
 async function load(preferred?: string) {
   const sequence = ++requestSequence.value
   busy.value = true; error.value = ''; notice.value = ''
@@ -32,7 +43,7 @@ async function load(preferred?: string) {
     profiles.value = result.profiles; toolState.value = state
     const next = result.profiles.find(p => p.id === preferred) ?? result.profiles.find(p => p.active) ?? result.profiles[1] ?? result.profiles[0] ?? null
     if (next) await selectProfile(next, sequence)
-  } catch (cause) { if (sequence === requestSequence.value) error.value = String(cause) }
+  } catch (cause) { if (sequence === requestSequence.value) error.value = friendlyError(cause) }
   finally { if (sequence === requestSequence.value) busy.value = false }
 }
 
@@ -42,7 +53,7 @@ async function selectProfile(profile: BotProfileSummary, sequence = ++requestSeq
     const opened = await openBotProfile(props.rootPath, profile.id)
     if (sequence !== requestSequence.value) return
     document.value = opened; editor.value = opened.text ?? ''
-  } catch (cause) { if (sequence === requestSequence.value) error.value = String(cause) }
+  } catch (cause) { if (sequence === requestSequence.value) error.value = friendlyError(cause) }
   finally { if (sequence === requestSequence.value) busy.value = false }
 }
 
@@ -50,28 +61,28 @@ async function createFromBuiltin() {
   if (!selected.value || selected.value.source !== 'builtin') return
   action.value = '正在创建自定义档案…'; error.value = ''
   try { const result = await createBotProfile(props.rootPath, { baseProfileId: selected.value.id, name: customName.value.trim() || `${selected.value.name} 自定义` }); customName.value = ''; notice.value = result.message; await load(result.profile.id) }
-  catch (cause) { error.value = String(cause) } finally { action.value = '' }
+  catch (cause) { error.value = friendlyError(cause) } finally { action.value = '' }
 }
 
 async function save() {
   if (!document.value || !isCustom.value || !changed.value || !selected.value) return
   action.value = '正在回写 VPK 并进行回读校验…'; error.value = ''
   try { const result = await saveBotProfile(props.rootPath, { profileId: selected.value.id, text: editor.value, expectedDbSha256: document.value.profile.dbSha256 ?? '' }); notice.value = result.message + (result.backupPath ? ` 已备份：${result.backupPath}` : ''); await load(result.profile.id) }
-  catch (cause) { error.value = String(cause) } finally { action.value = '' }
+  catch (cause) { error.value = friendlyError(cause) } finally { action.value = '' }
 }
 
 async function apply() {
   if (!selected.value || !isCustom.value || changed.value) return
   action.value = '正在应用到当前 BOT 模式…'; error.value = ''
   try { const result = await applyBotProfile(props.rootPath, selected.value.id); notice.value = result.message + (result.backupPath ? ` 已备份当前档案：${result.backupPath}` : ''); await load(result.profile.id) }
-  catch (cause) { error.value = String(cause) } finally { action.value = '' }
+  catch (cause) { error.value = friendlyError(cause) } finally { action.value = '' }
 }
 
 async function renameProfile() {
   if (!selected.value || !isCustom.value || changed.value || !renameName.value.trim()) return
   action.value = '正在更新档案名称…'; error.value = ''
   try { const result = await renameBotProfile({ profileId: selected.value.id, name: renameName.value }); notice.value = result.message; await load(result.profile.id) }
-  catch (cause) { error.value = String(cause) } finally { action.value = '' }
+  catch (cause) { error.value = friendlyError(cause) } finally { action.value = '' }
 }
 
 function requestDelete(profile: BotProfileSummary) {
@@ -84,7 +95,7 @@ async function confirmDelete() {
   if (!target) return
   deleteTarget.value = null; action.value = '正在备份并归档自定义档案…'; error.value = ''
   try { const result = await deleteBotProfile(props.rootPath, target.id); notice.value = result.message + (result.backupPath ? ` 已备份活动档案：${result.backupPath}` : ''); await load() }
-  catch (cause) { error.value = String(cause) } finally { action.value = '' }
+  catch (cause) { error.value = friendlyError(cause) } finally { action.value = '' }
 }
 
 function onKeydown(event: KeyboardEvent) {

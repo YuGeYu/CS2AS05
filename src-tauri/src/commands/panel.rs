@@ -14,8 +14,12 @@ pub fn initialize_panel_defaults(root_path: String) -> Result<PanelInitializatio
 }
 
 #[tauri::command]
-pub fn set_panel_mode(root_path: String, mode: String) -> Result<PanelSnapshot, String> {
-    panel::set_mode(&root_path, &mode).map_err(AppError::into_string)
+pub fn set_panel_mode(
+    app: AppHandle,
+    root_path: String,
+    mode: String,
+) -> Result<PanelSnapshot, String> {
+    panel::set_mode_with_app(&app, &root_path, &mode).map_err(AppError::into_string)
 }
 
 #[tauri::command]

@@ -3,26 +3,36 @@ use std::time::{Duration, Instant};
 use reqwest::{header, redirect::Policy, Client};
 use serde::Serialize;
 use serde_json::Value;
+use std::sync::{Mutex, OnceLock};
 
 const SUPPORTERS_URL: &str = "https://cs2as.600318.xyz/api/supporters";
 const UPSTREAM_URL: &str = "https://api.github.com/repos/ed0ard/CS2-Bot-Improver";
 const MAX_BODY_BYTES: usize = 128 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_millis(2_200);
+const CACHE_TTL: Duration = Duration::from_secs(900);
+static CACHE: OnceLock<Mutex<Option<(Instant, IntroPublicPayload)>>> = OnceLock::new();
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupporterAcknowledgement {
     id: String,
     nickname: Option<String>,
     message: Option<String>,
-    amount_cents: u64,
+    amount_cents: Option<u64>,
+    platform: Option<String>,
+    unit: Option<String>,
+    visible_amount: Option<f64>,
+    exchange_rate_cny: Option<f64>,
+    amount_scope: Option<String>,
+    source_label: Option<String>,
+    occurred_at: Option<String>,
     sort_order: u64,
     is_visible: bool,
     created_at: String,
     updated_at: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpstreamProjectSummary {
     full_name: String,
@@ -34,19 +44,19 @@ pub struct UpstreamProjectSummary {
     pushed_at: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct IntroSources {
     supporters: &'static str,
     upstream: &'static str,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct IntroDiagnostics {
     supporters: &'static str,
     upstream: &'static str,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IntroPublicPayload {
     supporters: Vec<SupporterAcknowledgement>,
@@ -75,6 +85,9 @@ impl FetchFailure {
 }
 
 pub async fn get_intro_public_data() -> IntroPublicPayload {
+    if let Some(cache) = CACHE.get_or_init(|| Mutex::new(None)).lock().ok().and_then(|guard| guard.as_ref().and_then(|(at, value)| (at.elapsed() < CACHE_TTL).then(|| value.clone()))) {
+        return cache.clone();
+    }
     let client = match Client::builder()
         .connect_timeout(REQUEST_TIMEOUT)
         .timeout(REQUEST_TIMEOUT)
@@ -109,7 +122,7 @@ pub async fn get_intro_public_data() -> IntroPublicPayload {
     let supporters_diagnostic = supporters_result.as_ref().err().copied();
     let upstream_diagnostic = upstream_result.as_ref().err().copied();
 
-    IntroPublicPayload {
+    let payload = IntroPublicPayload {
         supporters: supporters_result.unwrap_or_default(),
         upstream: upstream_result.unwrap_or_else(|_| fallback_upstream()),
         sources: IntroSources {
@@ -130,7 +143,9 @@ pub async fn get_intro_public_data() -> IntroPublicPayload {
                 .unwrap_or("ok"),
             upstream: upstream_diagnostic.map(FetchFailure::code).unwrap_or("ok"),
         },
-    }
+    };
+    if let Ok(mut guard) = CACHE.get_or_init(|| Mutex::new(None)).lock() { *guard = Some((Instant::now(), payload.clone())); }
+    payload
 }
 
 fn fallback_payload(supporters: FetchFailure, upstream: FetchFailure) -> IntroPublicPayload {
@@ -227,12 +242,21 @@ fn parse_supporters(value: Value) -> Result<Vec<SupporterAcknowledgement>, Fetch
         .take(50)
         .filter_map(|row| {
             let id = clean_required(row.get("id")?.as_str()?, 80)?;
-            let amount_cents = row.get("amountCents")?.as_u64()?;
+            let amount_cents = row.get("amountCents").and_then(Value::as_u64);
+            let visible_amount = row.get("visibleAmount").and_then(Value::as_f64);
+            if amount_cents.is_none() && visible_amount.is_none() { return None; }
             Some(SupporterAcknowledgement {
                 id,
                 nickname: clean_optional(row.get("nickname").and_then(Value::as_str), 80),
                 message: clean_optional(row.get("message").and_then(Value::as_str), 180),
                 amount_cents,
+                platform: row.get("platform").and_then(Value::as_str).map(str::to_owned),
+                unit: row.get("unit").and_then(Value::as_str).map(str::to_owned),
+                visible_amount,
+                exchange_rate_cny: row.get("exchangeRateCny").and_then(Value::as_f64),
+                amount_scope: row.get("amountScope").and_then(Value::as_str).map(str::to_owned),
+                source_label: clean_optional(row.get("sourceLabel").and_then(Value::as_str), 100),
+                occurred_at: clean_optional(row.get("occurredAt").and_then(Value::as_str), 40),
                 sort_order: row.get("sortOrder").and_then(Value::as_u64).unwrap_or(0),
                 is_visible: row
                     .get("isVisible")
@@ -318,7 +342,7 @@ mod tests {
         ]})).unwrap();
         assert_eq!(supporters.len(), 1);
         assert_eq!(supporters[0].id, "one");
-        assert_eq!(supporters[0].amount_cents, 2000);
+        assert_eq!(supporters[0].amount_cents, Some(2000));
     }
 
     #[test]
