@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import type { PanelSnapshot } from '@/features/panel/types'
 
 export function openOfficialSite() {
   return invoke<void>('open_official_site')
@@ -82,6 +83,21 @@ export function openUpdateDownload(url: string) {
   return invoke<void>('open_update_download', { url })
 }
 
+export function openResourceLink(url: string) {
+  return invoke<void>('open_resource_link', { url })
+}
+
+export function openCommunityDownload(url: string) {
+  return invoke<void>('open_community_download', { url })
+}
+export function openAccountRegister() { return invoke<void>('open_account_register') }
+
+export function launchCommunityConnect(rootPath: string, connection: string) {
+  return invoke<PanelSnapshot>('launch_community_connect', { rootPath, connection })
+}
+export function isBotProfileGuideSeen() { return invoke<boolean>('is_bot_profile_guide_seen') }
+export function dismissBotProfileGuide() { return invoke<void>('dismiss_bot_profile_guide') }
+
 export interface AssistantPreferences {
   autostartEnabled: boolean
 }
@@ -126,4 +142,18 @@ export function loginAssistant(username: string, password: string) {
 
 export function logoutAssistant() {
   return invoke<AssistantAccount>('logout_assistant')
+}
+
+export interface CommunityAuth {
+  token: string
+  serviceUrl: string
+  expiresAt: number
+}
+
+export function getCommunityAuth() {
+  return invoke<CommunityAuth>('get_community_auth')
+}
+
+export function downloadCommunityFile(url: string, filename: string, token: string) {
+  return invoke<string>('download_community_file', { url, filename, token })
 }

@@ -9,14 +9,9 @@ $zip = (Resolve-Path (Join-Path $workspace $ZipPath)).Path
 $version = (Get-Content (Join-Path $workspace 'package.json') -Raw | ConvertFrom-Json).version
 $markerName = 'addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json'
 $panelName = 'Panel v1.4.4.exe'
-$botVisionEntries = @(
-  'addons/BotVision/bin/win64/BotVision.dll',
-  'addons/BotVision/gamedata.json',
-  'addons/metamod/BotVision.vdf'
-)
-$botVisionSourceSha256 = '40B596D34BF336D9E59E663DAC2F94BD7C61D951C56E421EF66B5190B8787290'
 $mapRotationEntry = 'addons/counterstrikesharp/plugins/MapRotation/MapRotation.dll'
 $mapRotationConfigEntry = 'addons/counterstrikesharp/configs/plugins/MapRotation/MapRotation.json'
+$rustServicePath = Join-Path $workspace 'src-tauri/src/services/cs2.rs'
 $temporary = "$zip.tmp-$([guid]::NewGuid().ToString('N'))"
 $backup = "$zip.before-plugin-manifest-$((Get-Date).ToString('yyyyMMdd-HHmmss')).bak"
 
@@ -34,7 +29,7 @@ function Get-Payload([System.IO.Compression.ZipArchive]$Archive) {
     $entries = @($Archive.Entries | Where-Object {
       -not $_.FullName.EndsWith('/') -and
       $_.FullName -ne $markerName -and
-      ($_.FullName.StartsWith('addons/counterstrikesharp/plugins/NadeSystem/') -or $botVisionEntries -contains $_.FullName -or $_.FullName -eq $mapRotationEntry)
+      ($_.FullName.StartsWith('addons/counterstrikesharp/plugins/NadeSystem/') -or $_.FullName.StartsWith('addons/counterstrikesharp/plugins/CS2BotLlmChat/') -or $_.FullName -eq $mapRotationEntry)
     } | Sort-Object FullName)
     foreach ($entry in $entries) {
       Add-Text $hash "$($entry.FullName)`0$($entry.Length)`0"
@@ -70,12 +65,6 @@ try {
         [ordered]@{
           id = 'cs2as05-custom-package'
           source = 'CS2-Bot-Improver-v1.4.4'
-        },
-        [ordered]@{
-          id = 'botvision'
-          version = '0.2.2'
-          source = 'XBribo/CS2-Bot-Vision'
-          sourceSha256 = $botVisionSourceSha256
         }
       )
       payloadSha256 = $payload.sha256
@@ -95,6 +84,18 @@ try {
     if ($checkManifest.payloadEntries -contains $mapRotationConfigEntry -or $checkManifest.mutableConfigEntries -notcontains $mapRotationConfigEntry) { throw 'MapRotation.json must be declared only in mutableConfigEntries.' }
   } finally { $check.Dispose() }
   [IO.File]::Replace($temporary, $zip, $backup)
+  $zipSha256 = Get-FileSha256 $zip
+  $rustService = Get-Content -LiteralPath $rustServicePath -Raw
+  $zipConstantPattern = 'const CUSTOM_ZIP_SHA256: &str = "[0-9A-F]{64}";'
+  if ([regex]::Matches($rustService, $zipConstantPattern).Count -ne 1) {
+    throw 'Expected exactly one CUSTOM_ZIP_SHA256 constant in src-tauri/src/services/cs2.rs.'
+  }
+  $rustService = [regex]::Replace(
+    $rustService,
+    $zipConstantPattern,
+    "const CUSTOM_ZIP_SHA256: &str = `"$zipSha256`";"
+  )
+  Set-Content -LiteralPath $rustServicePath -Value $rustService -Encoding utf8NoBOM -NoNewline
   $reportRoot = Join-Path $workspace $ReportDirectory; New-Item -ItemType Directory -Force -Path $reportRoot | Out-Null
-  [pscustomobject]@{ completedAt=(Get-Date).ToString('o'); version=$version; marker=$markerName; manifest=($manifest | ConvertFrom-Json); zipSha256=(Get-FileSha256 $zip); backupPath=$backup } | ConvertTo-Json -Depth 8 | Tee-Object -FilePath (Join-Path $reportRoot 'result.json')
+  [pscustomobject]@{ completedAt=(Get-Date).ToString('o'); version=$version; marker=$markerName; manifest=($manifest | ConvertFrom-Json); zipSha256=$zipSha256; rustHashSynchronized=$true; backupPath=$backup } | ConvertTo-Json -Depth 8 | Tee-Object -FilePath (Join-Path $reportRoot 'result.json')
 } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force } }

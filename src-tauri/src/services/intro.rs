@@ -85,7 +85,16 @@ impl FetchFailure {
 }
 
 pub async fn get_intro_public_data() -> IntroPublicPayload {
-    if let Some(cache) = CACHE.get_or_init(|| Mutex::new(None)).lock().ok().and_then(|guard| guard.as_ref().and_then(|(at, value)| (at.elapsed() < CACHE_TTL).then(|| value.clone()))) {
+    if let Some(cache) = CACHE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|guard| {
+            guard
+                .as_ref()
+                .and_then(|(at, value)| (at.elapsed() < CACHE_TTL).then(|| value.clone()))
+        })
+    {
         return cache.clone();
     }
     let client = match Client::builder()
@@ -144,7 +153,9 @@ pub async fn get_intro_public_data() -> IntroPublicPayload {
             upstream: upstream_diagnostic.map(FetchFailure::code).unwrap_or("ok"),
         },
     };
-    if let Ok(mut guard) = CACHE.get_or_init(|| Mutex::new(None)).lock() { *guard = Some((Instant::now(), payload.clone())); }
+    if let Ok(mut guard) = CACHE.get_or_init(|| Mutex::new(None)).lock() {
+        *guard = Some((Instant::now(), payload.clone()));
+    }
     payload
 }
 
@@ -244,17 +255,25 @@ fn parse_supporters(value: Value) -> Result<Vec<SupporterAcknowledgement>, Fetch
             let id = clean_required(row.get("id")?.as_str()?, 80)?;
             let amount_cents = row.get("amountCents").and_then(Value::as_u64);
             let visible_amount = row.get("visibleAmount").and_then(Value::as_f64);
-            if amount_cents.is_none() && visible_amount.is_none() { return None; }
+            if amount_cents.is_none() && visible_amount.is_none() {
+                return None;
+            }
             Some(SupporterAcknowledgement {
                 id,
                 nickname: clean_optional(row.get("nickname").and_then(Value::as_str), 80),
                 message: clean_optional(row.get("message").and_then(Value::as_str), 180),
                 amount_cents,
-                platform: row.get("platform").and_then(Value::as_str).map(str::to_owned),
+                platform: row
+                    .get("platform")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
                 unit: row.get("unit").and_then(Value::as_str).map(str::to_owned),
                 visible_amount,
                 exchange_rate_cny: row.get("exchangeRateCny").and_then(Value::as_f64),
-                amount_scope: row.get("amountScope").and_then(Value::as_str).map(str::to_owned),
+                amount_scope: row
+                    .get("amountScope")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
                 source_label: clean_optional(row.get("sourceLabel").and_then(Value::as_str), 100),
                 occurred_at: clean_optional(row.get("occurredAt").and_then(Value::as_str), 40),
                 sort_order: row.get("sortOrder").and_then(Value::as_u64).unwrap_or(0),

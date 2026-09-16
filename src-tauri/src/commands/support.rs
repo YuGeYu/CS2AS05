@@ -110,6 +110,49 @@ pub fn open_update_download(url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_resource_link(url: String) -> Result<(), String> {
+    support::open_resource_link(&url).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn open_community_download(url: String) -> Result<(), String> {
+    support::open_community_download(&url).map_err(AppError::into_string)
+}
+#[tauri::command]
+pub fn open_account_register() -> Result<(), String> {
+    support::open_account_register().map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn launch_community_connect(
+    app: AppHandle,
+    root_path: String,
+    connection: String,
+) -> Result<crate::models::panel::PanelSnapshot, String> {
+    support::launch_community_connect(&app, &root_path, &connection).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn should_show_volume_smoke_guide(app: AppHandle) -> Result<bool, String> {
+    support::should_show_volume_smoke_guide(&app).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn dismiss_volume_smoke_guide(app: AppHandle) -> Result<(), String> {
+    support::dismiss_volume_smoke_guide(&app).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn is_bot_profile_guide_seen(app: AppHandle) -> Result<bool, String> {
+    support::is_bot_profile_guide_seen(&app).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn dismiss_bot_profile_guide(app: AppHandle) -> Result<(), String> {
+    support::dismiss_bot_profile_guide(&app).map_err(AppError::into_string)
+}
+
+#[tauri::command]
 pub fn get_assistant_preferences() -> Result<AssistantPreferences, String> {
     support::get_assistant_preferences().map_err(AppError::into_string)
 }
@@ -147,6 +190,25 @@ pub async fn login_assistant(
     password: String,
 ) -> Result<AssistantAccount, String> {
     support::login_assistant(&app, &username, &password)
+        .await
+        .map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn get_community_auth(app: AppHandle) -> Result<support::CommunityAuth, String> {
+    support::get_community_auth(&app)
+        .await
+        .map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn download_community_file(
+    app: AppHandle,
+    url: String,
+    filename: String,
+    token: String,
+) -> Result<String, String> {
+    support::download_community_file(&app, &url, &filename, &token)
         .await
         .map_err(AppError::into_string)
 }

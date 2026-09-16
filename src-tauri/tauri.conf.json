@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "CS2人机增强助手",
   "mainBinaryName": "CS2BotImproverAssistant",
-  "version": "0.5.13",
+  "version": "0.5.14",
   "identifier": "com.aipc.cs2botimprover",
   "build": {
     "frontendDist": "../dist",

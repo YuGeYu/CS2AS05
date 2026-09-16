@@ -1,11 +1,11 @@
 # Upstream provenance
 
 - Repository: <https://github.com/ianlucas/cs2-css-inventory-simulator>
-- Tag: `3.1.0`
-- Commit: `5e3c96283b3d3f5aeba44822a38031df2e213376`
+- Release: `v3.1.1`
+- Tag commit: `6d2cb8a99e021b88523b77079b4a4ce765b44807`
 - License: MIT (`LICENSE` and `upstream/License.txt`)
-- Imported: 2026-08-17
-- Target framework: `.NET 10.0`
+- Imported: 2026-09-16
+- Target framework: `.NET 8.0`
 - CounterStrikeSharp API: `1.0.371`
 
 The `upstream/` directory is a source snapshot from the fixed commit above. The

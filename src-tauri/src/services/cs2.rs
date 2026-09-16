@@ -41,21 +41,15 @@ use crate::services::panel;
 const CS2_FOLDER_NAME: &str = "Counter-Strike Global Offensive";
 const BUNDLED_ZIP_NAME: &str = "CS2BotImprover.zip";
 const SKIN_ONLY_GAMEINFO_ENTRY: &str = "backup/SkinOnly/gameinfo.gi";
-const CUSTOM_ZIP_SHA256: &str = "D9C277DAA37DEC4DE232E4A49CBF117F3B83C8B83FF075560AA7B32C1AE87117";
+const CUSTOM_ZIP_SHA256: &str = "BEE883619EAB4B04AE333DB16007CC56BDF90558F33CC8A8B95F3097079DED59";
 const PANEL_FILE_NAME: &str = "Panel v1.4.4.exe";
 const PANEL_SHA256: &str = "2797A3FE85E65959CAE9501525B67B3876CEF65152E88DC716F64D5485AC2182";
 const PANEL_SIZE: u64 = 5_890_560;
 const PLUGIN_MARKER: &str = "addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json";
+const BOT_VISION_STATE_FILE: &str = "cfg/cs2as05-volume-smoke.state";
 const MAP_ROTATION_DEFAULT_CONFIG: &str =
     "addons/counterstrikesharp/configs/plugins/MapRotation/MapRotation.json";
-const BOTVISION_SOURCE_SHA256: &str =
-    "40B596D34BF336D9E59E663DAC2F94BD7C61D951C56E421EF66B5190B8787290";
-const BOTVISION_ENTRIES: &[&str] = &[
-    "addons/BotVision/gamedata.json",
-    "addons/BotVision/bin/win64/BotVision.dll",
-    "addons/metamod/BotVision.vdf",
-    "addons/counterstrikesharp/plugins/MapRotation/MapRotation.dll",
-];
+const BOT_VISION_VDF: &str = "addons/metamod/BotVision.vdf";
 const PLUGIN_PRODUCT: &str = "cs2-bot-improver";
 const PLUGIN_ID: &str = "cs2as05-custom-package";
 const LOG_DIR_NAME: &str = "CS2人机增强助手";
@@ -72,6 +66,9 @@ const REQUIRED_ZIP_ENTRIES: &[&str] = &[
     "addons/BotVision/gamedata.json",
     "addons/BotVision/bin/win64/BotVision.dll",
     "addons/metamod/BotVision.vdf",
+    "addons/counterstrikesharp/plugins/CS2BotLlmChat/CS2BotLlmChat.dll",
+    "addons/counterstrikesharp/plugins/CS2BotLlmChat/CS2BotLlmChat.deps.json",
+    "addons/counterstrikesharp/configs/plugins/CS2BotLlmChat/CS2BotLlmChat.json",
     "addons/counterstrikesharp/plugins/MapRotation/MapRotation.dll",
     MAP_ROTATION_DEFAULT_CONFIG,
 ];
@@ -83,20 +80,10 @@ struct PluginMarker {
     product: String,
     plugin_id: String,
     version: String,
-    payload_sha256: String,
+    #[serde(default)]
     payload_entries: Vec<String>,
     #[serde(default)]
     mutable_config_entries: Vec<String>,
-    #[serde(default)]
-    components: Vec<PluginComponent>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PluginComponent {
-    id: String,
-    version: Option<String>,
-    source_sha256: Option<String>,
 }
 
 #[derive(Debug)]
@@ -175,6 +162,7 @@ pub fn inspect_cs2_root(root_path: &str) -> Result<Cs2EnvironmentStatus, AppErro
                 .join("WithBots")
                 .join("gameinfo.gi")
                 .is_file(),
+        bot_vision_enabled: bot_vision_enabled_at(&csgo),
     };
     write_log("INFO", &format!("已检查 CS2 目录：{}。", status.root_path));
     Ok(status)
@@ -215,11 +203,6 @@ fn manual_close_active(root_path: &str) -> Result<bool, AppError> {
 pub fn confirm_cs2_closed(root_path: &str) -> Result<Cs2CloseOverride, AppError> {
     let root = normalized_override_root(root_path)?;
     let snapshot = get_cs2_process_snapshot()?;
-    if snapshot.processes.is_empty() {
-        return Err(AppError::runtime(
-            "[CS2_MANUAL_CONFIRM_NOT_NEEDED] 当前未发现 CS2 残留进程。",
-        ));
-    }
     let confirmed_at = chrono::Utc::now().timestamp_millis();
     let expires_at = confirmed_at + 5 * 60 * 1000;
     let state = MANUAL_CLOSE_OVERRIDE.get_or_init(|| Mutex::new(None));
@@ -447,48 +430,52 @@ pub fn close_cs2(force: bool) -> Result<OperationResult, AppError> {
             message: "CS2 已关闭。".into(),
         });
     }
-    for process in &snapshot.processes {
-        #[cfg(windows)]
-        {
-            if force {
-                write_runtime_log(
-                    "INFO",
-                    &format!("[CS2_CLOSE_SIGNAL] stage=terminate pid={}。", process.pid),
-                );
-                unsafe {
-                    terminate_process_by_pid(process.pid)?;
-                }
-            } else {
-                write_runtime_log(
-                    "INFO",
-                    &format!("[CS2_CLOSE_SIGNAL] stage=wm_close pid={}。", process.pid),
-                );
-                let sent = unsafe { post_close_by_pid(process.pid) };
-                if !sent {
-                    write_log(
-                        "WARN",
-                        &format!(
-                            "[CS2_CLOSE_NO_WINDOW] PID {} 没有可发送 WM_CLOSE 的窗口。",
-                            process.pid
-                        ),
+    let signal_processes = |processes: &[Cs2ProcessInfo]| -> Result<(), AppError> {
+        for process in processes {
+            #[cfg(windows)]
+            {
+                if force {
+                    write_runtime_log(
+                        "INFO",
+                        &format!("[CS2_CLOSE_SIGNAL] stage=terminate pid={}。", process.pid),
                     );
+                    unsafe {
+                        terminate_process_by_pid(process.pid)?;
+                    }
+                } else {
+                    write_runtime_log(
+                        "INFO",
+                        &format!("[CS2_CLOSE_SIGNAL] stage=wm_close pid={}。", process.pid),
+                    );
+                    let sent = unsafe { post_close_by_pid(process.pid) };
+                    if !sent {
+                        write_log(
+                            "WARN",
+                            &format!(
+                                "[CS2_CLOSE_NO_WINDOW] PID {} 没有可发送 WM_CLOSE 的窗口。",
+                                process.pid
+                            ),
+                        );
+                    }
                 }
             }
+            #[cfg(not(windows))]
+            {
+                let mut command = Command::new("kill");
+                command.args(["-TERM", &process.pid.to_string()]);
+                command.output().map_err(|error| {
+                    AppError::runtime(format!(
+                        "[CS2_CLOSE_SIGNAL] PID {} 操作失败：{error}",
+                        process.pid
+                    ))
+                })?;
+            }
         }
-        #[cfg(not(windows))]
-        {
-            let mut command = Command::new("kill");
-            command.args(["-TERM", &process.pid.to_string()]);
-            command.output().map_err(|error| {
-                AppError::runtime(format!(
-                    "[CS2_CLOSE_SIGNAL] PID {} 操作失败：{error}",
-                    process.pid
-                ))
-            })?;
-        }
-    }
+        Ok(())
+    };
+    signal_processes(&snapshot.processes)?;
     let deadline =
-        std::time::Instant::now() + std::time::Duration::from_secs(if force { 5 } else { 8 });
+        std::time::Instant::now() + std::time::Duration::from_secs(if force { 5 } else { 2 });
     loop {
         let current = list_cs2_processes()?;
         if current.is_empty() {
@@ -501,6 +488,11 @@ pub fn close_cs2(force: bool) -> Result<OperationResult, AppError> {
                     "CS2 已关闭。".into()
                 },
             });
+        }
+        if force {
+            // A launcher or crash reporter can recreate cs2.exe while the first
+            // termination pass is in flight. Sweep every current PID again.
+            signal_processes(&current)?;
         }
         if std::time::Instant::now() >= deadline {
             write_runtime_log(
@@ -516,7 +508,12 @@ pub fn close_cs2(force: bool) -> Result<OperationResult, AppError> {
             );
             return Ok(OperationResult {
                 success: false,
-                message: "CS2 仍在运行，可能未响应；确认后可强制关闭。".into(),
+                message: if force {
+                    "CS2 强制关闭后仍在运行。"
+                } else {
+                    "CS2 未能在 2 秒内退出，将自动执行强制关闭。"
+                }
+                .into(),
             });
         }
         std::thread::sleep(std::time::Duration::from_millis(250));
@@ -603,19 +600,22 @@ pub fn install_bot_package(
     let zip_path = resolve_zip_path(app)?;
     verify_custom_zip(&zip_path)?;
     let retained_backup = install_game_files_transactionally(&zip_path, &destination, keep_backup)?;
+    let vision_enabled = bot_vision_enabled_at(&destination);
+    apply_bot_vision_state(&destination, vision_enabled)?;
 
     write_log(
         "INFO",
         &format!(
-            "基于上游 v1.4.3 的最小定制插件包已安装到 {}。",
+            "基于上游 v1.4.4 的定制插件包已安装到 {}。",
             destination.display()
         ),
     );
     Ok(OperationResult {
         success: true,
         message: format!(
-            "基于上游 CS2-Bot-Improver v1.4.3 的最小定制包已安装。\n目标目录：{}\n已保留可识别的模式、难度、Aim、Nades、Bot 物品和刀具选择。",
-            destination.display()
+            "基于上游 CS2-Bot-Improver v1.4.4 的定制包已安装。\n目标目录：{}\n体积烟：{}。如一场游戏出现卡顿，可在安装页取消勾选体积烟功能。",
+            destination.display(),
+            if vision_enabled { "已启用" } else { "已关闭" }
         ) + &retained_backup.map_or_else(String::new, |path| format!("\n本次写前备份已保留：{}", path.display())),
     })
 }
@@ -671,6 +671,43 @@ pub fn uninstall_bot_package(root_path: &str) -> Result<OperationResult, AppErro
             "已移除官方插件文件：{} 项。\n保留了 CS2 核心文件和 gameinfo.gi。",
             removed
         ),
+    })
+}
+
+pub fn set_bot_vision_enabled(
+    app: &AppHandle,
+    root_path: &str,
+    enabled: bool,
+) -> Result<OperationResult, AppError> {
+    ensure_cs2_not_running(root_path)?;
+    let root = normalize_root(root_path)?;
+    let csgo = root.join("game").join("csgo");
+    if !csgo.is_dir() {
+        return Err(AppError::runtime(
+            "未找到 CS2 游戏目录，无法切换体积烟功能。",
+        ));
+    }
+    if enabled {
+        let zip_path = resolve_zip_path(app)?;
+        verify_custom_zip(&zip_path)?;
+        restore_bot_vision_vdf(&zip_path, &csgo)?;
+    }
+    apply_bot_vision_state(&csgo, enabled)?;
+    write_log(
+        "INFO",
+        &format!(
+            "体积烟功能已{}：{}。",
+            if enabled { "启用" } else { "关闭" },
+            csgo.display()
+        ),
+    );
+    Ok(OperationResult {
+        success: true,
+        message: if enabled {
+            "体积烟功能已启用；下次启动 BOT 对局会加载 BotVision。".into()
+        } else {
+            "体积烟功能已关闭；已删除 BotVision.vdf，下次启动 BOT 对局将减少一项视觉扩展。".into()
+        },
     })
 }
 
@@ -886,6 +923,7 @@ pub fn ensure_bot_plugin_current(app: &AppHandle, root_path: &str) -> Result<Str
     verify_custom_zip(&zip_path)?;
     let zip_hash = sha256_file(&zip_path)?;
     let _ = install_game_files_transactionally(&zip_path, &destination, false)?;
+    apply_bot_vision_state(&destination, bot_vision_enabled_at(&destination))?;
     let expected = current_plugin_version()?;
     match inspect_bot_plugin_version_at(&destination)? {
         PluginVersionStatus::Valid { version }
@@ -904,6 +942,57 @@ pub fn ensure_bot_plugin_current(app: &AppHandle, root_path: &str) -> Result<Str
             "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后的插件版本 {version} 与当前程序版本 {expected} 不一致。\nexpectedVersion={expected}\ninstalledVersion={version}\nzipSha256={zip_hash}\nmarkerPath={}", destination.join(PLUGIN_MARKER).display()
         ))),
     }
+}
+
+fn bot_vision_enabled_at(csgo: &Path) -> bool {
+    let vdf = csgo.join("addons/metamod/BotVision.vdf");
+    if let Ok(state) = fs::read_to_string(csgo.join(BOT_VISION_STATE_FILE)) {
+        return state.trim() != "disabled";
+    }
+    vdf.is_file()
+}
+
+fn apply_bot_vision_state(csgo: &Path, enabled: bool) -> Result<(), AppError> {
+    let vdf = csgo.join(BOT_VISION_VDF);
+    if enabled {
+        if !vdf.is_file() {
+            return Err(AppError::runtime(
+                "资源包中未找到 BotVision.vdf，无法启用体积烟功能。",
+            ));
+        }
+        fs::write(csgo.join(BOT_VISION_STATE_FILE), b"enabled\n").map_err(io_error)?;
+    } else {
+        if vdf.is_file() {
+            fs::remove_file(&vdf).map_err(io_error)?;
+        }
+        if let Some(parent) = csgo.join(BOT_VISION_STATE_FILE).parent() {
+            fs::create_dir_all(parent).map_err(io_error)?;
+        }
+        fs::write(csgo.join(BOT_VISION_STATE_FILE), b"disabled\n").map_err(io_error)?;
+    }
+    Ok(())
+}
+
+fn restore_bot_vision_vdf(zip_path: &Path, csgo: &Path) -> Result<(), AppError> {
+    let file = File::open(zip_path).map_err(io_error)?;
+    let mut archive = ZipArchive::new(file)
+        .map_err(|error| AppError::runtime(format!("无法读取资源包：{error}")))?;
+    let mut entry = archive
+        .by_name(BOT_VISION_VDF)
+        .map_err(|_| AppError::runtime("上游 v1.4.4 资源包缺少 BotVision.vdf。"))?;
+    let target = csgo.join(BOT_VISION_VDF);
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(io_error)?;
+    }
+    let temporary = target.with_extension("vdf.cs2as05.tmp");
+    let mut output = File::create(&temporary).map_err(io_error)?;
+    io::copy(&mut entry, &mut output).map_err(io_error)?;
+    output.flush().map_err(io_error)?;
+    drop(output);
+    if target.is_file() {
+        fs::remove_file(&target).map_err(io_error)?;
+    }
+    fs::rename(temporary, target).map_err(io_error)
 }
 
 fn current_plugin_version() -> Result<Version, AppError> {
@@ -942,61 +1031,20 @@ fn inspect_bot_plugin_version_at(csgo: &Path) -> Result<PluginVersionStatus, App
             version: None,
         });
     };
-    if marker.payload_entries.is_empty()
-        || !marker
-            .payload_entries
-            .iter()
-            .any(|entry| entry == "addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll")
-        || BOTVISION_ENTRIES
-            .iter()
-            .any(|required| !marker.payload_entries.iter().any(|entry| entry == required))
-        || marker
-            .payload_entries
-            .iter()
-            .any(|entry| safe_zip_path(entry).is_err())
-        || marker
-            .payload_entries
-            .iter()
-            .any(|entry| entry == MAP_ROTATION_DEFAULT_CONFIG)
-        || (csgo.join(MAP_ROTATION_DEFAULT_CONFIG).exists()
-            && !marker
-                .mutable_config_entries
-                .iter()
-                .any(|entry| entry == MAP_ROTATION_DEFAULT_CONFIG))
-    {
-        return Ok(PluginVersionStatus::Invalid {
-            reason: "[BOT_PLUGIN_PAYLOAD_INVALID] payload 条目无效。".into(),
-            version: Some(version),
-        });
-    }
-    let botvision = marker
-        .components
-        .iter()
-        .find(|component| component.id == "botvision");
-    if botvision.and_then(|component| component.version.as_deref()) != Some("0.2.2")
-        || botvision.and_then(|component| component.source_sha256.as_deref())
-            != Some(BOTVISION_SOURCE_SHA256)
-    {
-        return Ok(PluginVersionStatus::Invalid {
-            reason: "[BOTVISION_MARKER_INVALID] BotVision 组件 provenance 不匹配。".into(),
-            version: Some(version),
-        });
-    }
-    let digest = match payload_digest_from_files(csgo, &marker.payload_entries) {
-        Ok(digest) => digest,
-        Err(error) => {
+    for required in [
+        "addons/counterstrikesharp/plugins/BotState/BotState.dll",
+        "addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll",
+    ] {
+        if !csgo.join(required).is_file() {
             return Ok(PluginVersionStatus::Invalid {
-                reason: format!("[BOT_PLUGIN_PAYLOAD_INVALID] {}", error.into_string()),
+                reason: format!("[BOT_PLUGIN_CORE_MISSING] 缺少关键插件：{required}"),
                 version: Some(version),
-            })
+            });
         }
-    };
-    if digest != marker.payload_sha256 {
+    }
+    if !csgo.join("addons/counterstrikesharp/plugins").is_dir() {
         return Ok(PluginVersionStatus::Invalid {
-            reason: format!(
-                "[BOT_PLUGIN_PAYLOAD_INVALID] payload 摘要不匹配，期望 {}，实际 {digest}。",
-                marker.payload_sha256
-            ),
+            reason: "[BOT_PLUGIN_CORE_MISSING] CounterStrikeSharp 插件目录缺失。".into(),
             version: Some(version),
         });
     }
@@ -1404,7 +1452,7 @@ fn add_candidate(
     }
 }
 
-fn ensure_cs2_not_running(root_path: &str) -> Result<(), AppError> {
+pub(crate) fn ensure_cs2_not_running(root_path: &str) -> Result<(), AppError> {
     if check_cs2_process_for_write(root_path)? {
         return Err(AppError::runtime(
             "检测到 cs2.exe 正在运行。请先退出 CS2，再执行此操作。",
@@ -1470,10 +1518,8 @@ mod tests {
 
     fn write_test_marker(csgo: &Path, version: &str) {
         let entries = vec![
+            "addons/counterstrikesharp/plugins/BotState/BotState.dll",
             "addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll",
-            "addons/BotVision/gamedata.json",
-            "addons/BotVision/bin/win64/BotVision.dll",
-            "addons/metamod/BotVision.vdf",
             "addons/counterstrikesharp/plugins/MapRotation/MapRotation.dll",
         ]
         .into_iter()
@@ -1490,7 +1536,7 @@ mod tests {
             "product": PLUGIN_PRODUCT,
             "pluginId": PLUGIN_ID,
             "version": version,
-            "components": [{"id": "botvision", "version": "0.2.2", "sourceSha256": BOTVISION_SOURCE_SHA256}],
+            "components": [{"id": "cs2as05-custom-package"}],
             "payloadSha256": digest,
             "payloadEntries": entries,
             "generatedFrom": "test"
@@ -1516,7 +1562,7 @@ mod tests {
     }
 
     #[test]
-    fn plugin_marker_reports_missing_invalid_and_tampered_payload() {
+    fn plugin_marker_allows_payload_customization_but_repairs_missing_core() {
         let root =
             std::env::temp_dir().join(format!("plugin-marker-invalid-{}", std::process::id()));
         let csgo = root.join("game/csgo");
@@ -1538,8 +1584,56 @@ mod tests {
         )
         .unwrap();
         assert!(
+            matches!(inspect_bot_plugin_version_at(&csgo).unwrap(), PluginVersionStatus::Valid { version } if version == Version::parse("0.6.0-test").unwrap())
+        );
+        fs::write(
+            csgo.join("custom-plugin-settings.json"),
+            b"player customization",
+        )
+        .unwrap();
+        assert!(matches!(
+            inspect_bot_plugin_version_at(&csgo).unwrap(),
+            PluginVersionStatus::Valid { .. }
+        ));
+        fs::remove_file(csgo.join("addons/counterstrikesharp/plugins/BotState/BotState.dll"))
+            .unwrap();
+        assert!(
             matches!(inspect_bot_plugin_version_at(&csgo).unwrap(), PluginVersionStatus::Invalid { version: Some(version), .. } if version == Version::parse("0.6.0-test").unwrap())
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn bot_vision_state_removes_only_loader_vdf_and_persists_choice() {
+        let root = std::env::temp_dir().join(format!(
+            "bot-vision-state-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let csgo = root.join("game/csgo");
+        let vdf = csgo.join(BOT_VISION_VDF);
+        let dll = csgo.join("addons/BotVision/bin/win64/BotVision.dll");
+        fs::create_dir_all(vdf.parent().unwrap()).unwrap();
+        fs::create_dir_all(dll.parent().unwrap()).unwrap();
+        fs::write(&vdf, b"loader").unwrap();
+        fs::write(&dll, b"plugin").unwrap();
+
+        apply_bot_vision_state(&csgo, false).unwrap();
+        assert!(!vdf.exists());
+        assert!(dll.is_file());
+        assert!(!bot_vision_enabled_at(&csgo));
+        assert_eq!(
+            fs::read_to_string(csgo.join(BOT_VISION_STATE_FILE)).unwrap(),
+            "disabled\n"
+        );
+
+        fs::write(&vdf, b"loader").unwrap();
+        apply_bot_vision_state(&csgo, true).unwrap();
+        assert!(vdf.is_file());
+        assert!(bot_vision_enabled_at(&csgo));
         fs::remove_dir_all(root).unwrap();
     }
 

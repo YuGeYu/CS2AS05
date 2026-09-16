@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="732" height="257" viewBox="0 0 732 257" role="img" aria-label="CS2 bot chat demo">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#29323a"/>
+      <stop offset="0.45" stop-color="#59646d"/>
+      <stop offset="1" stop-color="#2f3740"/>
+    </linearGradient>
+    <filter id="soft">
+      <feGaussianBlur stdDeviation="0.45"/>
+    </filter>
+  </defs>
+  <rect width="732" height="257" fill="url(#bg)"/>
+  <path d="M0 187 C135 151 241 171 379 134 C501 102 598 61 732 75 L732 257 L0 257 Z" fill="#1f262d" opacity="0.18" filter="url(#soft)"/>
+  <g font-family="Segoe UI, Microsoft YaHei, Noto Sans CJK SC, Arial, sans-serif" font-size="33" font-weight="700" fill="#f3f5f6">
+    <text x="15" y="57">[ALL]</text>
+    <circle cx="137" cy="47" r="8" fill="#18b89f"/>
+    <text x="157" y="57">un1 : Attention Is All You Need</text>
+
+    <text x="15" y="108">[ALL]</text>
+    <circle cx="137" cy="98" r="8" fill="#f27a32"/>
+    <text x="157" y="108">ropz : 这论文确实改变了整个AI领域。</text>
+
+    <text x="15" y="159">[ALL]</text>
+    <circle cx="137" cy="149" r="8" fill="#18b89f"/>
+    <text x="157" y="159">un1 : 为什么？</text>
+
+    <text x="15" y="210">[ALL]</text>
+    <circle cx="137" cy="200" r="8" fill="#ffe27a"/>
+    <text x="157" y="210">ms : 这论文确实挺有影响力的。</text>
+  </g>
+</svg>

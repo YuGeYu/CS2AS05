@@ -81,3 +81,9 @@ third_party/**/obj/
 third_party/**/target/
 third_party/**/workspace/
 third_party/**/*.dem
+
+# Release lifecycle outputs (publish through channels, not Git source)
+release-artifacts/*
+!release-artifacts/**/README.md
+
+

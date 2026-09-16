@@ -23,7 +23,22 @@ export const useDemoStore = defineStore('demo', () => {
   async function play(id: number, rootPath: string) { if (rowBusy.value[id]) return; rowBusy.value = { ...rowBusy.value, [id]: 'play' }; try { await api.playDemo(id, rootPath); dispatchToast({ tone: 'ready', title: 'Demo 播放已启动', message: 'CS2 将以离线模式载入所选 Demo。' }) } catch (e) { dispatchToast({ tone: 'danger', title: '无法播放 Demo', message: normalize(e) }) } finally { const next = { ...rowBusy.value }; delete next[id]; rowBusy.value = next } }
   async function reveal(id: number) { if (rowBusy.value[id]) return; rowBusy.value = { ...rowBusy.value, [id]: 'reveal' }; try { await api.revealDemoFile(id) } catch (e) { dispatchToast({ tone: 'danger', title: '无法定位 Demo', message: normalize(e) }) } finally { const next = { ...rowBusy.value }; delete next[id]; rowBusy.value = next } }
   async function deleteFile(id: number) { if (rowBusy.value[id]) return; rowBusy.value = { ...rowBusy.value, [id]: 'delete' }; try { await api.deleteDemoFile(id); if (report.value?.summary.demoFileId === id) report.value = null; await refresh(); dispatchToast({ tone: 'ready', title: 'Demo 已删除', message: '录像文件及其本地分析记录已移除。' }) } catch (e) { dispatchToast({ tone: 'danger', title: '无法删除 Demo', message: normalize(e) }); throw e } finally { const next = { ...rowBusy.value }; delete next[id]; rowBusy.value = next } }
+  async function deleteFiles(ids: number[]) {
+    const unique = [...new Set(ids)].filter(id => !rowBusy.value[id])
+    if (!unique.length) return
+    busy.value = 'bulk-delete'; error.value = ''
+    try {
+      for (const id of unique) await api.deleteDemoFile(id)
+      if (report.value && unique.includes(report.value.summary.demoFileId)) report.value = null
+      await refresh()
+      dispatchToast({ tone: 'ready', title: 'Demo 批量删除完成', message: `已移除 ${unique.length} 个录像及其本地分析记录。` })
+    } catch (e) {
+      error.value = normalize(e)
+      dispatchToast({ tone: 'danger', title: '批量删除未完成', message: normalize(e) })
+      throw e
+    } finally { busy.value = '' }
+  }
   async function loadSettings(rootPath: string) { if (!rootPath) return; try { settings.value = await api.getDemoSettings(rootPath) } catch { settings.value = null } }
   async function setRecording(rootPath: string, enabled: boolean) { busy.value = 'recording'; try { settings.value = await api.setDemoRecordingEnabled(rootPath, enabled) } catch (e) { error.value = normalize(e); throw e } finally { busy.value = '' } }
-  return { roots, items, total, report, jobs, query, status, page, pageSize, busy, rowBusy, error, settings, scanResult, refresh, addRoot, updateRoot, removeRoot, scan, importFile, openReport, retry, play, reveal, deleteFile, loadSettings, setRecording }
+  return { roots, items, total, report, jobs, query, status, page, pageSize, busy, rowBusy, error, settings, scanResult, refresh, addRoot, updateRoot, removeRoot, scan, importFile, openReport, retry, play, reveal, deleteFile, deleteFiles, loadSettings, setRecording }
 })

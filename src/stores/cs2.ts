@@ -9,6 +9,7 @@ import {
   guessCs2Roots,
   inspectCs2Root,
   installBotPackage,
+  setBotVisionEnabled,
   openUpstreamPanel,
   getCs2CloseOverride,
   revokeCs2ClosedConfirmation,
@@ -131,6 +132,19 @@ export const useCs2Store = defineStore('cs2', () => {
     }
   }
 
+  async function setBotVision(enabled: boolean) {
+    if (!selectedRoot.value) throw new Error('请先选择 CS2 游戏目录。')
+    busy.value = true
+    try {
+      const result = await setBotVisionEnabled(selectedRoot.value, enabled)
+      message.value = { tone: 'ready', title: enabled ? '体积烟已启用' : '体积烟已关闭', message: result.message }
+      await refresh()
+    } catch (error) {
+      message.value = failure(error)
+      throw error
+    } finally { busy.value = false }
+  }
+
   async function openPanel() {
     busy.value = true
     try {
@@ -189,7 +203,7 @@ export const useCs2Store = defineStore('cs2', () => {
     return stopGuessCs2Roots()
   }
 
-  return { candidates, selectedRoot, environment, cs2ProcessState, cs2Running, closeOverride, writeUnlocked, message, busy, closing, rootScan, selectRoot, scanRoots, refreshProcessStatus, refresh, shutdown, confirmClosedByPlayer, revokeClosedConfirmation, install, openPanel, uninstall, scanSuggestedRoots, stopSuggestedRoots }
+  return { candidates, selectedRoot, environment, cs2ProcessState, cs2Running, closeOverride, writeUnlocked, message, busy, closing, rootScan, selectRoot, scanRoots, refreshProcessStatus, refresh, shutdown, confirmClosedByPlayer, revokeClosedConfirmation, install, setBotVision, openPanel, uninstall, scanSuggestedRoots, stopSuggestedRoots }
 })
 
 function dedupe(candidates: Cs2RootCandidate[]) {

@@ -57,6 +57,7 @@ pub struct Cs2EnvironmentStatus {
     pub backup_online_gameinfo_exists: bool,
     pub backup_withbots_gameinfo_exists: bool,
     pub base_environment_ready: bool,
+    pub bot_vision_enabled: bool,
 }
 
 #[derive(Debug, Serialize)]

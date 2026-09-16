@@ -1,0 +1,21 @@
+bin/
+obj/
+.dotnet/
+dotnet-install.ps1
+.vs/
+.vscode/
+*.user
+*.suo
+*.nupkg
+*.snupkg
+
+# Local secrets and server-specific config.
+.env
+*.local.json
+secrets.json
+
+# Build and test output.
+TestResults/
+coverage/
+*.trx
+tmp/

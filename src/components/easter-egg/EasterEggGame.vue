@@ -25,6 +25,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     <ThreeStage :factory="(canvas, size) => createAcknowledgementScene(canvas, size, () => ({ elapsedMs: 0, durationMs: 1, supporterLockMs: 0, loading: false, cards, mode: 'free-roam', selectedIndex }))" />
     <aside class="ink-ack-copy easter-copy"><p class="cinema-kicker">同一条水墨长廊 · 自由游览</p><h1>上游项目、赞助与公开鸣谢</h1><p aria-live="polite">当前牌子：{{ selected?.title || '正在载入鸣谢' }}</p><small>方向键切换牌子；金额以当前可核实记录为准。B站贝壳暂按 1 贝壳 = ¥1 展示，不代表完整充电总额。</small></aside>
     <nav class="easter-plaque-nav" aria-label="选择牌子"><button v-for="(card, index) in cards" :key="card.id" type="button" :class="{ active: index === selectedIndex }" @click="select(index)"><span>{{ card.eyebrow }}</span><strong>{{ card.title }}</strong><ExternalLink v-if="card.kind === 'upstream'" :size="14" @click.stop="openProject(card.id.replace('upstream:', '') as ReferenceProjectId)" /></button></nav>
-    <p v-if="errorMessage" class="inline-error" role="alert">{{ errorMessage }}</p><button class="cinema-icon-button easter-close" type="button" title="关闭" aria-label="关闭鸣谢长廊" @click="close"><X :size="20" /></button>
+    <p v-if="errorMessage" class="inline-error" role="alert">{{ errorMessage }}</p><span class="sr-only">贡献陈列馆</span><button class="cinema-icon-button easter-close" type="button" title="关闭" aria-label="关闭贡献陈列馆" @click="close"><X :size="20" /></button>
   </section>
 </template>

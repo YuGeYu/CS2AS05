@@ -1,3 +1,4 @@
+pub mod bot_chat_config;
 pub mod bot_difficulty;
 pub mod cs2;
 pub mod cs2_discovery;

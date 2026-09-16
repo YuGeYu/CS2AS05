@@ -1,0 +1,137 @@
+{
+  "version": 2,
+  "global": {
+    "enabled": true,
+    "provider": {
+      "BaseUrl": "https://api.deepseek.com",
+      "Model": "deepseek-chat",
+      "ApiKey": "ENV:CS2_BOT_LLM_API_KEY",
+      "ApiKeyEnvVar": "CS2_BOT_LLM_API_KEY",
+      "TimeoutMs": 3500,
+      "MaxOutputTokens": 80,
+      "Temperature": 0.8,
+      "TopP": 0.9
+    },
+    "trigger": {
+      "requireMention": false,
+      "mentionPrefixes": ["@", "bot ", "机器人 "],
+      "ignoreCommandsStartingWith": ["!", "/", "."],
+      "ignoreEmptyOrTooShort": true,
+      "minMessageLength": 2,
+      "maxInputChars": 220
+    },
+    "rateLimit": {
+      "globalCooldownMs": 0,
+      "perBotCooldownMs": 0,
+      "perPlayerCooldownMs": 0,
+      "maxRepliesPerMinute": 10,
+      "maxRepliesPerRound": 12,
+      "suppressAfterConsecutiveBotReplies": 0,
+      "allowMentionBypassCooldown": true,
+      "mentionBypassMinCooldownMs": 0,
+      "allowConcurrentRequests": false
+    },
+    "selection": {
+      "mode": "rules",
+      "noMentionBaseReplyChance": 1.0,
+      "mentionReplyChance": 0.95,
+      "questionBoost": 0.2,
+      "nameMentionBoost": 0.35,
+      "recentlySpokenPenalty": 0.0,
+      "sameBotRepeatPenalty": 0.45,
+      "teamOnlyBias": 0.15,
+      "randomJitter": 0.1
+    },
+    "memory": {
+      "enabled": true,
+      "recentContextMessages": 5,
+      "recentContextMaxChars": 520,
+      "perBotShortMemoryEnabled": false,
+      "perBotShortMemoryMaxItems": 0,
+      "perBotShortMemoryMaxChars": 0,
+      "globalRollingSummaryEnabled": false,
+      "globalRollingSummaryMaxChars": 0,
+      "storeBotMessagesInRecentContext": true,
+      "storeFullPlayerMessages": false
+    },
+    "antiLoop": {
+      "ignoreBotMessages": true,
+      "markOwnBotMessages": true,
+      "ownBotMessageTtlMs": 15000,
+      "ignoreMessagesFromKnownBotSlots": true,
+      "ignoreMessagesMatchingRecentBotOutputs": true
+    },
+    "output": {
+      "preferBotSay": true,
+      "maxReplyChars": 90,
+      "stripNewlines": true,
+      "stripQuotes": true,
+      "forbiddenPrefixes": ["作为一个AI", "我是一个AI", "As an AI"],
+      "fallbackOnEmpty": false
+    },
+    "botInteraction": {
+      "enabled": false,
+      "allowFollowUpAfterPlayerMessage": false,
+      "maxBotFollowUps": 0,
+      "followUpChance": 0,
+      "followUpCooldownMs": 30000,
+      "followUpRequiresDifferentBot": true
+    },
+    "tokenBudget": {
+      "maxPromptTokensApprox": 700,
+      "maxSystemChars": 1000,
+      "maxPersonaChars": 520,
+      "maxRecentContextChars": 520,
+      "maxMemoryChars": 0,
+      "truncateFromOldest": true
+    },
+    "debug": {
+      "logSelection": true,
+      "logPromptStats": true,
+      "logBotIdentityResolution": false,
+      "logLlmLatency": true,
+      "dryRunNoSay": false
+    }
+  },
+  "botHider": {
+    "enabled": true,
+    "bindingStrategy": "pool",
+    "managedSlots": [],
+    "unboundManagedSlotPolicy": "speakerPool",
+    "refreshOnMapStart": true,
+    "refreshOnPlayerConnect": true
+  },
+  "personas": [
+    {
+      "id": "shared-bot",
+      "enabled": true,
+      "displayName": "bot",
+      "aliases": ["@bot", "bot", "机器人"],
+      "binding": {
+        "type": "pool",
+        "allowBotHiderManagedSlot": true
+      },
+      "style": {
+        "language": "zh-CN",
+        "tone": "普通游戏内 bot，短句、自然、可以接闲聊，不要装成真人选手",
+        "catchphrases": [],
+        "avoid": ["复杂人设", "长期记忆口吻", "AI 助手口吻", "总是提醒专心打游戏"],
+        "maxSentences": 2
+      },
+      "character": {
+        "role": "随机被选中接一句话的普通 CS2 bot",
+        "traits": ["自然", "短句"],
+        "interests": ["最近几句聊天", "普通闲聊", "轻度 CS2 语境"],
+        "boundaries": ["不刷屏", "不攻击现实身份", "不假装有复杂身份"]
+      },
+      "selection": {
+        "baseReplyChance": 0.16,
+        "mentionReplyChance": 0.95,
+        "questionReplyChance": 0.34,
+        "cooldownMs": 0,
+        "maxRepliesPerMinute": 10,
+        "activityWeight": 1.0
+      }
+    }
+  ]
+}

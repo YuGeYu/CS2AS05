@@ -1162,7 +1162,7 @@ public class BotState : BasePlugin
             object api, int slot, ulong buttonMask)
         {
             return ((BotControllerApi.IBotControllerApi)api)
-                .StartUsercmdSuppression(slot, buttonMask);
+                .InjectUsercmd(slot, buttonMask, 1_000);
         }
 
         // Cancels one persistent usercmd suppression by its token
@@ -1171,7 +1171,7 @@ public class BotState : BasePlugin
             object api, int slot, long suppressionId)
         {
             return ((BotControllerApi.IBotControllerApi)api)
-                .CancelUsercmdSuppression(slot, suppressionId);
+                .CancelUsercmdInjection(slot, suppressionId);
         }
 
         // Applies the knife-slot weapon lock to one Bot
@@ -2060,10 +2060,10 @@ public class BotState : BasePlugin
 
                 float msLeft = (detonateAt - now) * 1000f;
                 double prob = msLeft <= 150f ? 0.05
-                            : msLeft <= 250f ? 0.20
-                            : msLeft <= 400f ? 0.50
-                            : msLeft <= 600f ? 0.90
-                            : 0.95;
+                            : msLeft <= 250f ? 0.15
+                            : msLeft <= 400f ? 0.35
+                            : msLeft <= 600f ? 0.55
+                            : 0.70;
 
                 bool avoided = _random.NextDouble() <= prob;
 

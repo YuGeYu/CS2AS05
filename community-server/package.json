@@ -1,0 +1,7 @@
+{
+  "name": "cs2as-community-server",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node --experimental-sqlite src/server.mjs", "dev": "node --watch --experimental-sqlite src/server.mjs" },
+  "dependencies": { "ws": "^8.18.3" }
+}

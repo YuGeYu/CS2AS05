@@ -38,7 +38,7 @@ const primaryAction = computed(() => {
   return { kind: 'workshop' as const, label: '打开饰品工坊' }
 })
 
-const canLaunch = computed(() => Boolean(status.value?.ready && !status.value.cs2Running && !busy.value))
+const canLaunch = computed(() => Boolean(status.value?.ready && (!status.value.cs2Running || cs2.writeUnlocked) && !busy.value))
 const canRemove = computed(() => Boolean(cs2.selectedRoot && status.value && (status.value.inventorySimulatorPresent || status.value.gamedataPresent)))
 const pluginDetail = computed(() => {
   if (!status.value) return '等待检测'
@@ -222,7 +222,7 @@ onBeforeUnmount(() => { alive = false; requestGeneration += 1 })
       </section>
     </Transition>
 
-    <footer class="inventory-provenance"><span><ShieldCheck :size="15" />上游 <strong>ianlucas/cs2-css-inventory-simulator</strong> · MIT</span><span>固定 tag {{ status?.upstreamTag || '3.1.0' }} · 不再使用自制换肤引擎</span></footer>
+    <footer class="inventory-provenance"><span><ShieldCheck :size="15" />上游 <strong>ianlucas/cs2-css-inventory-simulator</strong> · MIT</span><span>正式 Release {{ status?.upstreamTag || '3.1.1' }} · 不再使用自制换肤引擎</span></footer>
   </section>
   <Teleport to="body">
     <div v-if="removeDialogOpen" class="inventory-remove-backdrop" role="presentation" @click.self="removeDialogOpen = false">

@@ -1,5 +1,4 @@
 // Compatibility behavior follows the released ed0ard/CS2-Bot-Improver v1.4.3 Panel.
-use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -45,6 +44,7 @@ const SKIN_ONLY_DISABLED_BOT_PLUGINS: &[&str] = &[
     "BotHiderImpl",
     "BotRandomizer",
     "BotState",
+    "CS2BotLlmChat",
     "MapRotation",
     "NadeSystem",
     "RayTraceImpl",
@@ -1171,13 +1171,13 @@ fn snapshot_at(root: &Path) -> Result<PanelSnapshot, AppError> {
             writable: ready,
         },
         bot_items: BotItemsState {
-            writable: ready,
+            writable: ready && !cs2_running,
             ..bot_items
         },
         drop_knives: DropKnivesState {
             bind_key,
             selected,
-            writable: ready,
+            writable: ready && !cs2_running,
         },
     })
 }
@@ -1299,6 +1299,7 @@ pub fn set_bot_item(root_path: &str, item: &str, enabled: bool) -> Result<PanelS
     if bot_item_core_key(item).is_none() {
         return Err(invalid("[PANEL_BOT_ITEM_INVALID] 未知 Bot 物品开关。"));
     }
+    cs2::ensure_cs2_not_running(root_path)?;
     let root = cs2::normalize_root(root_path)?;
     let csgo = root.join("game/csgo");
     let path = csgo.join(CORE_CONFIG_FILE);
@@ -1332,6 +1333,7 @@ pub fn set_drop_knives(
     bind_key: &str,
     selected: &[u16],
 ) -> Result<PanelSnapshot, AppError> {
+    cs2::ensure_cs2_not_running(root_path)?;
     validate_bind_key(bind_key)?;
     let selected_set = selected.iter().copied().collect::<BTreeSet<_>>();
     if selected_set.iter().any(|id| !KNIVES.contains(id)) {
@@ -1493,21 +1495,11 @@ fn plugin_gate_decision(
     current: &Version,
 ) -> Result<PluginGateDecision, AppError> {
     match status {
-        cs2::PluginVersionStatus::Valid { version }
-            if version == *current =>
-        {
+        cs2::PluginVersionStatus::Valid { version } if version == *current => {
             Ok(PluginGateDecision::Unchanged(version.to_string()))
         }
-        cs2::PluginVersionStatus::Invalid { version: Some(version), .. }
-            if compare_version_core(&version, current) == Ordering::Greater => Err(invalid(
-            "[BOT_PLUGIN_HIGHER_VERSION_UNTRUSTED] 检测到更高版本插件但无法验证完整性，请在安装与诊断页明确覆盖安装。",
-        )),
         _ => Ok(PluginGateDecision::Install),
     }
-}
-
-fn compare_version_core(left: &Version, right: &Version) -> Ordering {
-    (left.major, left.minor, left.patch).cmp(&(right.major, right.minor, right.patch))
 }
 
 fn replace_cfg_line(path: &Path, command: &str, replacement: &str) -> Result<(), AppError> {
@@ -1957,7 +1949,7 @@ mod tests {
     }
 
     #[test]
-    fn bot_plugin_gate_installs_old_keeps_valid_new_and_blocks_untrusted_new() {
+    fn bot_plugin_gate_self_repairs_invalid_versions_without_blocking() {
         let current = Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
         assert_eq!(
             plugin_gate_decision(
@@ -1993,16 +1985,17 @@ mod tests {
             .unwrap(),
             PluginGateDecision::Install
         );
-        let error = plugin_gate_decision(
-            cs2::PluginVersionStatus::Invalid {
-                reason: "tampered".into(),
-                version: Some(Version::parse("0.6.0-test").unwrap()),
-            },
-            &current,
-        )
-        .unwrap_err()
-        .into_string();
-        assert!(error.contains("BOT_PLUGIN_HIGHER_VERSION_UNTRUSTED"));
+        assert_eq!(
+            plugin_gate_decision(
+                cs2::PluginVersionStatus::Invalid {
+                    reason: "tampered".into(),
+                    version: Some(Version::parse("0.6.0-test").unwrap()),
+                },
+                &current,
+            )
+            .unwrap(),
+            PluginGateDecision::Install
+        );
     }
 
     #[test]

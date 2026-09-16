@@ -6,7 +6,11 @@ mod models;
 mod preflight;
 mod services;
 
-use tauri::Manager;
+use tauri::{
+    menu::{MenuBuilder, MenuItemBuilder},
+    tray::TrayIconBuilder,
+    Manager, WindowEvent,
+};
 
 macro_rules! app_invoke_handler {
     ($($extra:path),* $(,)?) => {
@@ -49,6 +53,7 @@ macro_rules! app_invoke_handler {
             commands::cs2::discover_cs2_roots,
             commands::cs2::inspect_cs2_root,
             commands::cs2::install_bot_package,
+            commands::cs2::set_bot_vision_enabled,
             commands::cs2::open_upstream_panel,
             commands::cs2::uninstall_bot_package,
             commands::cs2::check_cs2_process,
@@ -78,6 +83,8 @@ macro_rules! app_invoke_handler {
             commands::bot_difficulty::rename_bot_profile,
             commands::bot_difficulty::delete_bot_profile,
             commands::bot_difficulty::apply_bot_profile,
+            commands::bot_chat_config::get_bot_chat_config,
+            commands::bot_chat_config::set_bot_chat_config,
             commands::map_rotation::get_map_rotation_default,
             commands::map_rotation::set_map_rotation_default,
             commands::map_rotation::reset_map_rotation_default,
@@ -96,6 +103,14 @@ macro_rules! app_invoke_handler {
             commands::support::open_upstream_project,
             commands::support::open_reference_project,
             commands::support::open_update_download,
+            commands::support::open_resource_link,
+            commands::support::open_community_download,
+            commands::support::open_account_register,
+            commands::support::launch_community_connect,
+            commands::support::should_show_volume_smoke_guide,
+            commands::support::dismiss_volume_smoke_guide,
+            commands::support::is_bot_profile_guide_seen,
+            commands::support::dismiss_bot_profile_guide,
             commands::support::get_assistant_preferences,
             commands::support::set_assistant_autostart,
             commands::support::clear_assistant_data,
@@ -103,6 +118,8 @@ macro_rules! app_invoke_handler {
             commands::support::get_assistant_account,
             commands::support::login_assistant,
             commands::support::logout_assistant,
+            commands::support::get_community_auth,
+            commands::support::download_community_file,
             commands::inventory_simulator::inventory_simulator_get_status,
             commands::inventory_simulator::inventory_simulator_install,
             commands::inventory_simulator::inventory_simulator_remove,
@@ -138,6 +155,25 @@ pub fn run() {
         }));
     let builder = builder
         .setup(|app| {
+            let show = MenuItemBuilder::with_id("show", "打开助手").build(app)?;
+            let quit = MenuItemBuilder::with_id("quit", "退出程序").build(app)?;
+            let menu = MenuBuilder::new(app).items(&[&show, &quit]).build()?;
+            TrayIconBuilder::new()
+                .icon(tauri::include_image!("icons/icon.png"))
+                .menu(&menu)
+                .tooltip("CS2人机增强助手")
+                .on_menu_event(|app, event| {
+                    if event.id.as_ref() == "quit" {
+                        app.exit(0);
+                    }
+                    if event.id.as_ref() == "show" {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -149,6 +185,17 @@ pub fn run() {
             services::demo::refresh_watcher(app.handle()).map_err(|error| error.into_string())?;
             demo::coordinator::start(app.handle());
             demo::post_match::start(app.handle());
+            if let Some(window) = app.get_webview_window("main") {
+                let handle = app.handle().clone();
+                window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        if let Some(window) = handle.get_webview_window("main") {
+                            let _ = window.hide();
+                        }
+                    }
+                });
+            }
             Ok(())
         })
         .manage(services::cs2_discovery::ScanCoordinator::default())

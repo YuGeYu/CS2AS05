@@ -46,6 +46,7 @@ export interface Cs2EnvironmentStatus {
   backupOnlineGameinfoExists: boolean
   backupWithbotsGameinfoExists: boolean
   baseEnvironmentReady: boolean
+  botVisionEnabled: boolean
 }
 
 export interface OperationResult {

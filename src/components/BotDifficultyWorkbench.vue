@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { AlertTriangle, CheckCircle2, CopyPlus, FileCode2, LoaderCircle, Pencil, Save, Send, Trash2, X } from 'lucide-vue-next'
+import { AlertTriangle, BookOpen, CheckCircle2, CopyPlus, FileCode2, LoaderCircle, Pencil, Save, Send, Trash2, X } from 'lucide-vue-next'
 import { applyBotProfile, createBotProfile, deleteBotProfile, getBotWorkshopState, listBotProfiles, openBotProfile, renameBotProfile, saveBotProfile, type BotProfileDocument, type BotProfileSummary, type BotToolState } from '@/services/tauri/bot-difficulty'
+import { dismissBotProfileGuide, isBotProfileGuideSeen } from '@/services/tauri/support'
 
 const props = defineProps<{ open: boolean; rootPath: string }>()
 const emit = defineEmits<{ close: [] }>()
@@ -19,6 +20,10 @@ const error = ref('')
 const notice = ref('')
 const titleRef = ref<HTMLElement | null>(null)
 const requestSequence = ref(0)
+const guideVisible = ref(false)
+const guideReady = ref(false)
+const guideRemaining = ref(2)
+let guideTimer: ReturnType<typeof setInterval> | undefined
 const canWrite = computed(() => toolState.value?.status === 'ready' && !!props.rootPath)
 const isCustom = computed(() => selected.value?.source === 'custom')
 const changed = computed(() => document.value?.text !== undefined && editor.value !== document.value.text)
@@ -100,20 +105,41 @@ async function confirmDelete() {
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && !action.value) {
+    if (guideVisible.value) return
     if (deleteTarget.value) deleteTarget.value = null
     else emit('close')
   }
 }
 
-watch(() => props.open, async open => { if (!open) return; await nextTick(); titleRef.value?.focus(); void load() })
+async function openGuide(force = false) {
+  guideVisible.value = true; guideReady.value = false; guideRemaining.value = 2
+  if (guideTimer) clearInterval(guideTimer)
+  try {
+    if (!force && await isBotProfileGuideSeen()) { guideVisible.value = false; return }
+    const startedAt = Date.now()
+    guideTimer = setInterval(() => {
+      const remaining = Math.max(0, 2 - Math.ceil((Date.now() - startedAt) / 1000))
+      guideRemaining.value = remaining
+      if (remaining === 0) { guideReady.value = true; if (guideTimer) clearInterval(guideTimer) }
+    }, 100)
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : '无法读取说明页状态' }
+}
+
+async function finishGuide() {
+  if (!guideReady.value) return
+  try { await dismissBotProfileGuide(); guideVisible.value = false }
+  catch (cause) { error.value = cause instanceof Error ? cause.message : '无法保存说明页阅读状态' }
+}
+
+watch(() => props.open, async open => { if (!open) { if (guideTimer) clearInterval(guideTimer); return }; await nextTick(); titleRef.value?.focus(); void openGuide(); void load() })
 </script>
 
 <!-- 只影响 BOT 模式，在线模式不会使用这些文件。 -->
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal-backdrop bot-workbench-backdrop" @click.self="emit('close')" @keydown="onKeydown">
+    <div v-if="open" class="modal-backdrop bot-workbench-backdrop" @click.self="!guideVisible && emit('close')" @keydown="onKeydown">
       <section class="bot-workbench" role="dialog" aria-modal="true" aria-labelledby="bot-workbench-title">
-        <header class="bot-workbench-header"><div><p class="overline">BOT / LOCAL ONLY</p><h2 id="bot-workbench-title" ref="titleRef" tabindex="-1">人机强度工坊</h2><p>从 VPK 提取并编辑 botprofile.db。在线模式和 gameinfo.gi 不受影响。</p></div><button class="icon-button" type="button" aria-label="关闭人机强度工坊" title="关闭" :disabled="!!action" @click="emit('close')"><X :size="18" /></button></header>
+        <header class="bot-workbench-header"><div><p class="overline">BOT / LOCAL ONLY</p><h2 id="bot-workbench-title" ref="titleRef" tabindex="-1">人机强度工坊</h2><p>从 VPK 提取并编辑 botprofile.db。在线模式和 gameinfo.gi 不受影响。</p></div><div class="bot-workbench-header-actions"><button class="secondary-button" type="button" :disabled="!!action || guideVisible" @click="openGuide(true)"><BookOpen :size="16" />查看强度教程</button><button class="icon-button" type="button" aria-label="关闭人机强度工坊" title="关闭" :disabled="!!action || guideVisible" @click="emit('close')"><X :size="18" /></button></div></header>
         <div class="bot-workbench-body">
           <aside class="bot-profile-list" aria-label="BOT 强度档案">
             <div class="bot-tool-note"><FileCode2 :size="16" /><span>{{ toolState?.status === 'ready' ? `VPKEdit 已就绪 · ${toolState.version}` : toolState?.detail ?? '正在检查 VPKEdit' }}</span></div>
@@ -134,7 +160,16 @@ watch(() => props.open, async open => { if (!open) return; await nextTick(); tit
             <div v-else class="bot-state bot-empty">请选择一个强度档案。</div>
           </main>
         </div>
-        <footer class="bot-workbench-footer"><span aria-live="polite">{{ action || notice || '保存会创建自定义 VPK 备份；应用前请退出 CS2。' }}</span><button class="secondary-button" type="button" :disabled="!!action" @click="emit('close')">关闭</button></footer>
+        <footer class="bot-workbench-footer"><span aria-live="polite">{{ action || notice || '保存会创建自定义 VPK 备份；应用前请退出 CS2。' }}</span><button class="secondary-button" type="button" :disabled="!!action || guideVisible" @click="emit('close')">关闭</button></footer>
+      </section>
+      <section v-if="guideVisible" class="bot-profile-guide" role="dialog" aria-modal="true" aria-labelledby="bot-profile-guide-title">
+        <div class="bot-profile-guide-kicker"><FileCode2 :size="16" />首次进入 · 阅读说明</div>
+        <h3 id="bot-profile-guide-title">让 CS2 BOT 更强：botprofile.db 实战教程</h3>
+        <p class="bot-profile-guide-lead">botprofile.db 可以理解成 BOT 的“基础人格与能力表”。它影响瞄准、反应、攻击倾向和团队协作，但不是唯一开关；CS2 的行为文件、武器偏好、地图导航和控制台设置会一起决定最终表现。</p>
+        <div class="bot-profile-guide-grid"><article><strong>01 · 先做安全备份</strong><p>只在助手启动的本地 BOT / <code>-insecure</code> 对局中使用。关闭 CS2 后再保存；工坊会在回写 VPK 前保留备份，出现异常时可恢复。</p></article><article><strong>02 · 从关键参数开始</strong><p><code>Skill</code> 控制基础水平；<code>ReactionTime</code>、<code>AttackDelay</code> 越小通常反应越快；<code>Aggression</code> 影响主动找人和压制；<code>Teamwork</code> 影响跟随、补枪与协同。一次只改少量参数，方便比较。</p></article><article><strong>03 · 别把数值拉满</strong><p>极端值可能造成“锁头感”、不自然的瞬间反应或行为异常。建议从小幅调整开始，打一两回合观察，再逐步迭代。</p></article><article><strong>04 · 还要检查行为文件</strong><p>武器购买偏好、地图 <code>.nav</code>、<code>bt_config.kv3</code> / <code>bt_default.kv3</code> 和服务器 cvar 都可能覆盖或削弱 botprofile.db 的效果。</p></article><article><strong>05 · 正确的测试方法</strong><p>应用档案后重启本地 BOT 对局；固定地图、人数和难度，分别观察枪法、转身、进攻路线、补枪和残局决策，避免只凭一局下结论。</p></article><article><strong>06 · 当前版本说明</strong><p>不同 CS2 更新可能改变参数含义。教程经验来自小黑盒玩家整理，具体效果以当前版本实测为准；在线模式不会使用这些本地修改。</p></article></div>
+        <div class="bot-profile-guide-bug"><strong>已知问题，请先知悉</strong><p>BOT 强度功能目前仍有 BUG，部分异常暂时无法稳定定位，无法承诺一次修复完整。我们会根据日志和实测持续缩小范围、逐步修复，给你带来不便敬请见谅。</p></div>
+        <p class="bot-profile-guide-source">说明参考：小黑盒《如何让CSGO的BOT更加强力（保姆级教程）》；其中关于 botprofile.db、Skill、Teamwork、武器偏好与行为文件的经验，作为玩家向阅读材料整理，具体效果以当前 CS2 版本实测为准。</p>
+        <button class="primary-button bot-profile-guide-confirm" type="button" :disabled="!guideReady" @click="finishGuide">{{ guideReady ? '我已阅读，进入工坊' : `请阅读说明（${guideRemaining} 秒）` }}</button>
       </section>
       <div v-if="deleteTarget" class="bot-delete-confirm" role="alertdialog" aria-modal="true" aria-labelledby="bot-delete-title"><h3 id="bot-delete-title">删除自定义档案？</h3><p>“{{ deleteTarget.name }}”{{ deleteTarget.active ? ` 正在使用，删除后将恢复 ${deleteTarget.baseDifficulty} 内置 BOT 难度。` : ' 将移入可恢复归档。' }}</p><p>此操作需要 CS2 已退出，且不会删除其它档案。</p><div><button class="secondary-button" type="button" @click="deleteTarget = null">取消</button><button class="danger-button" type="button" @click="confirmDelete"><Trash2 :size="16" />确认删除</button></div></div>
     </div>

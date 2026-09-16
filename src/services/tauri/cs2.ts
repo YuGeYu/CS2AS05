@@ -53,6 +53,10 @@ export function installBotPackage(rootPath: string, keepBackup = false) {
   return invoke<OperationResult>('install_bot_package', { rootPath, keepBackup })
 }
 
+export function setBotVisionEnabled(rootPath: string, enabled: boolean) {
+  return invoke<OperationResult>('set_bot_vision_enabled', { rootPath, enabled })
+}
+
 export function openUpstreamPanel() {
   return invoke<OperationResult>('open_upstream_panel')
 }

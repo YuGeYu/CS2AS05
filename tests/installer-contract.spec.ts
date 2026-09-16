@@ -14,11 +14,11 @@ describe('0.5.5 integrated Panel contract', () => {
     expect(read('src-tauri/src/lib.rs')).toContain('commands::cs2::open_upstream_panel')
   })
 
-  it('verifies the unchanged minimal customization package before installation', () => {
+  it('verifies the current v1.4.4 customization package before installation', () => {
     const service = read('src-tauri/src/services/cs2.rs')
     expect(service).toContain('const CUSTOM_ZIP_SHA256')
     expect(service).toContain('verify_custom_zip(&zip_path)?')
-    expect(service).toContain('最小定制')
+    expect(service).toContain('基于上游 CS2-Bot-Improver v1.4.4 的定制包')
     expect(read('src/views/InstallView.vue')).toContain('appConfig.appVersion')
     expect(read('src/views/InstallView.vue')).toContain('CS2-Bot-Improver v1.4.4')
     expect(read('src-tauri/src/services/cs2.rs')).not.toContain('bot_randomizer_options.json')
@@ -26,11 +26,14 @@ describe('0.5.5 integrated Panel contract', () => {
 
   it('pins CUSTOM_ZIP_SHA256 to the actual bundled resource zip', () => {
     const service = read('src-tauri/src/services/cs2.rs')
+    const generator = read('scripts/generate-plugin-manifest.ps1')
     const pinned = service.match(/const CUSTOM_ZIP_SHA256: &str = "([0-9A-F]+)"/)?.[1]
     expect(pinned).toBeTruthy()
     const zip = readFileSync('src-tauri/resources/CS2BotImprover.zip')
     const actual = createHash('sha256').update(zip).digest('hex').toUpperCase()
     expect(pinned).toBe(actual)
+    expect(generator).toContain('CUSTOM_ZIP_SHA256')
+    expect(generator).toContain('rustHashSynchronized=$true')
   })
 
   it('keeps support and sources in the installation diagnostics view', () => {

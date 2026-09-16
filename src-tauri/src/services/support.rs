@@ -13,7 +13,8 @@ use crate::errors::AppError;
 use crate::models::cs2::{
     AssistantAccount, AssistantPreferences, FaultSubmissionResult, OperationResult,
 };
-use crate::services::cs2;
+use crate::models::panel::PanelSnapshot;
+use crate::services::{cs2, panel};
 
 pub const OFFICIAL_SITE_URL: &str = "https://cs2as.600318.xyz/";
 pub const IDEA_PAGE_URL: &str = "https://cs2as.600318.xyz/idea";
@@ -47,6 +48,7 @@ const AUTOSTART_ENTRY: &str = "CS2BotImproverAssistant";
 const FAULT_REPORT_URL: &str = "https://cs2as.600318.xyz/api/client-faults";
 const QUICK_REGISTER_URL: &str = "https://cs2as.600318.xyz/api/auth/quick-register";
 const LOGIN_URL: &str = "https://cs2as.600318.xyz/api/auth/login";
+const REGISTER_URL: &str = "https://cs2as.600318.xyz/register";
 const API_PURCHASE_URL: &str = "https://api.600318.xyz";
 const DEFAULT_AI_URL: &str = "https://api.600318.xyz";
 const DEFAULT_AI_MODEL: &str = "gpt-5.6-sol";
@@ -111,6 +113,14 @@ pub struct AiChatSession {
     pub title: String,
     pub messages: Vec<AiChatMessage>,
     pub updated_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommunityAuth {
+    pub token: String,
+    pub service_url: String,
+    pub expires_at: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -663,6 +673,139 @@ pub fn open_update_download(url: &str) -> Result<(), AppError> {
     open_external(url)
 }
 
+pub fn open_resource_link(url: &str) -> Result<(), AppError> {
+    let parsed = Url::parse(url).map_err(|_| AppError::runtime("资源链接格式无效。"))?;
+    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(AppError::runtime("资源链接暂不可打开。"));
+    }
+    if !((parsed.scheme() == "http" && parsed.host_str() == Some("8.133.185.37"))
+        || matches!(
+            parsed.host_str(),
+            Some("vault.600318.xyz" | "pan.quark.cn" | "quark.cn")
+        ))
+    {
+        return Err(AppError::runtime("资源链接域名不在允许范围内。"));
+    }
+    open_external(url)
+}
+
+pub fn open_community_download(url: &str) -> Result<(), AppError> {
+    let parsed = Url::parse(url).map_err(|_| AppError::runtime("资源链接格式无效。"))?;
+    if parsed.scheme() != "http"
+        || parsed.host_str() != Some("8.133.185.37")
+        || !parsed.path().starts_with("/community/file/")
+    {
+        return Err(AppError::runtime("圈子资源链接不受信任。"));
+    }
+    open_external(url)
+}
+pub fn open_account_register() -> Result<(), AppError> {
+    open_external(REGISTER_URL)
+}
+
+pub fn launch_community_connect(
+    app: &AppHandle,
+    root_path: &str,
+    connection: &str,
+) -> Result<PanelSnapshot, AppError> {
+    let value = connection
+        .trim()
+        .strip_prefix("connect ")
+        .unwrap_or(connection.trim());
+    let valid = value.starts_with("[A:")
+        && value.contains("] (")
+        && value.ends_with(')')
+        && value.chars().all(|ch| {
+            ch.is_ascii_alphanumeric() || matches!(ch, '[' | ']' | ':' | ' ' | '(' | ')')
+        });
+    if !valid || value.len() > 96 {
+        return Err(AppError::runtime("连接信息格式无效。"));
+    }
+    // Source2 的 Steam server ID 含有空格、方括号和括号。通过
+    // `steam.exe -applaunch` 传递时，Steam 在部分版本会丢失该参数，
+    // 最终触发 Source2ServerConfig001。使用官方 rungame URI 让 Steam
+    // 原样转交启动参数，并对 URI 保留字符进行百分号编码。
+    let encoded = steam_uri_encode(value);
+    let uri = format!("steam://rungame/730/76561202255233023/+connect%20{encoded}");
+    let steam = crate::services::cs2_discovery::find_steam_executable(None)
+        .ok_or_else(|| AppError::runtime("未找到 Steam 客户端，请先安装或启动 Steam。"))?;
+
+    // 圈子连接属于在线会话。必须先通过与概览页相同的事务切回
+    // 官方 Online gameinfo，再把连接参数交给 Steam。
+    let snapshot = panel::set_mode_with_app(app, root_path, "online")?;
+    cs2::write_runtime_log(
+        "INFO",
+        &format!(
+            "玩家圈子连接已切换在线模式，使用 Steam 客户端：{}",
+            steam.display()
+        ),
+    );
+    Command::new(&steam)
+        .arg(&uri)
+        .spawn()
+        .map_err(|error| AppError::runtime(format!("无法通过 Steam 启动 CS2：{error}")))?;
+    Ok(snapshot)
+}
+
+fn steam_uri_encode(value: &str) -> String {
+    value.bytes().fold(String::new(), |mut out, byte| {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b':') {
+            out.push(byte as char);
+        } else {
+            out.push('%');
+            out.push_str(&format!("{byte:02X}"));
+        }
+        out
+    })
+}
+
+pub fn should_show_volume_smoke_guide(app: &AppHandle) -> Result<bool, AppError> {
+    let marker = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| AppError::runtime(format!("无法定位助手数据目录：{error}")))?
+        .join("onboarding-volume-smoke-v0.5.14.done");
+    Ok(!marker.is_file())
+}
+
+pub fn dismiss_volume_smoke_guide(app: &AppHandle) -> Result<(), AppError> {
+    let marker = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| AppError::runtime(format!("无法定位助手数据目录：{error}")))?
+        .join("onboarding-volume-smoke-v0.5.14.done");
+    if let Some(parent) = marker.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| AppError::runtime(format!("无法保存新版本引导状态：{error}")))?;
+    }
+    fs::write(marker, b"seen\n")
+        .map_err(|error| AppError::runtime(format!("无法保存新版本引导状态：{error}")))
+}
+
+pub fn is_bot_profile_guide_seen(app: &AppHandle) -> Result<bool, AppError> {
+    let marker = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| AppError::runtime(format!("无法定位助手数据目录：{error}")))?
+        .join("onboarding-botprofile-db-v0.5.14.done");
+    Ok(marker.exists())
+}
+
+pub fn dismiss_bot_profile_guide(app: &AppHandle) -> Result<(), AppError> {
+    let marker = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| AppError::runtime(format!("无法定位助手数据目录：{error}")))?
+        .join("onboarding-botprofile-db-v0.5.14.done");
+    if let Some(parent) = marker.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            AppError::runtime(format!("无法保存 botprofile.db 阅读状态：{error}"))
+        })?;
+    }
+    fs::write(marker, b"seen\n")
+        .map_err(|error| AppError::runtime(format!("无法保存 botprofile.db 阅读状态：{error}")))
+}
+
 pub fn get_assistant_preferences() -> Result<AssistantPreferences, AppError> {
     Ok(AssistantPreferences {
         autostart_enabled: autostart_enabled()?,
@@ -798,6 +941,78 @@ pub async fn login_assistant(
     get_assistant_account(app)
 }
 
+pub async fn get_community_auth(app: &AppHandle) -> Result<CommunityAuth, AppError> {
+    let account = load_account(app)?.ok_or_else(|| AppError::runtime("请先登录官网账号"))?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| AppError::runtime(format!("无法初始化圈子请求：{e}")))?;
+    let cookie = authenticate(&client, &account).await?;
+    let response = client
+        .post("https://cs2as.600318.xyz/api/community/token")
+        .header("Cookie", cookie)
+        .json(&json!({}))
+        .send()
+        .await
+        .map_err(|e| AppError::runtime(format!("圈子令牌请求失败：{e}")))?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(AppError::runtime(format!(
+            "圈子令牌请求失败（HTTP {}）",
+            status.as_u16()
+        )));
+    }
+    response
+        .json::<CommunityAuth>()
+        .await
+        .map_err(|e| AppError::runtime(format!("圈子服务返回无效令牌：{e}")))
+}
+
+pub async fn download_community_file(
+    app: &AppHandle,
+    url: &str,
+    filename: &str,
+    token: &str,
+) -> Result<String, AppError> {
+    if !(url.starts_with("http://8.133.185.37/") || url.starts_with("https://8.133.185.37/")) {
+        return Err(AppError::runtime("资源地址不受信任"));
+    }
+    let safe_name: String = filename
+        .chars()
+        .map(|c| if "\\/:*?\"<>|".contains(c) { '_' } else { c })
+        .collect();
+    let path = app
+        .path()
+        .download_dir()
+        .map_err(|e| AppError::runtime(format!("无法定位下载目录：{e}")))?
+        .join(safe_name);
+    let response = reqwest::Client::new()
+        .get(url)
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|e| AppError::runtime(format!("资源下载失败：{e}")))?;
+    if !response.status().is_success() {
+        return Err(AppError::runtime(format!(
+            "资源下载失败（HTTP {}）",
+            response.status().as_u16()
+        )));
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| AppError::runtime(format!("资源读取失败：{e}")))?;
+    fs::write(&path, &bytes).map_err(|e| AppError::runtime(format!("无法保存资源：{e}")))?;
+    #[cfg(windows)]
+    {
+        let _ = Command::new("explorer.exe")
+            .arg("/select,")
+            .arg(&path)
+            .spawn();
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
+
 pub fn logout_assistant(app: &AppHandle) -> Result<AssistantAccount, AppError> {
     let path = account_path(app)?;
     if path.exists() {
@@ -841,6 +1056,10 @@ async fn authenticate(
 ) -> Result<String, AppError> {
     let response = client
         .post(LOGIN_URL)
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36")
+        .header("Accept", "application/json")
+        .header("Origin", OFFICIAL_SITE_URL.trim_end_matches('/'))
+        .header("Referer", OFFICIAL_SITE_URL)
         .json(&LoginPayload {
             username: &account.username,
             password: &account.password,
@@ -1051,8 +1270,8 @@ fn open_external(url: &str) -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_allowed_update_url, reference_project_url, run_ai_powershell, validate_ai_powershell,
-        REFERENCE_PROJECTS,
+        is_allowed_update_url, reference_project_url, run_ai_powershell, steam_uri_encode,
+        validate_ai_powershell, REFERENCE_PROJECTS,
     };
 
     #[test]
@@ -1123,5 +1342,13 @@ mod tests {
         );
         assert_eq!(reference_project_url("https://example.com"), None);
         assert_eq!(reference_project_url("unknown"), None);
+    }
+
+    #[test]
+    fn encodes_source2_server_id_for_steam_uri() {
+        assert_eq!(
+            steam_uri_encode("[A:1:2004590609:51382] (90292678561603601)"),
+            "%5BA:1:2004590609:51382%5D%20%2890292678561603601%29"
+        );
     }
 }

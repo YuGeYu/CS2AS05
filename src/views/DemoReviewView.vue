@@ -63,6 +63,9 @@ const radarFocusKey = ref<string | null>(null);
 const reportBusy = ref(false);
 const deleteCandidate = ref<DemoListItem | null>(null);
 const deleteError = ref("");
+const selectedIds = ref<number[]>([]);
+const bulkDeleteOpen = ref(false);
+const bulkDeleteBusy = ref(false);
 const deleteJobCandidate = ref<DemoAnalysisJob | null>(null);
 const deleteJobError = ref("");
 const jobBusy = ref<Record<number, "cancel" | "retry" | "delete" | undefined>>({});
@@ -205,13 +208,13 @@ async function popoutReport(id: number) {
 const playTitle = (id: number) =>
   demo.rowBusy[id] === "play"
     ? "正在启动 CS2"
-    : cs2.cs2Running
+      : (cs2.cs2Running && !cs2.writeUnlocked)
       ? "请先退出 CS2"
       : !cs2.selectedRoot
         ? "请先选择 CS2 目录"
         : "用 CS2 播放 Demo";
 async function playDemo(id: number) {
-  if (!cs2.selectedRoot || cs2.cs2Running) return;
+  if (!cs2.selectedRoot || (cs2.cs2Running && !cs2.writeUnlocked)) return;
   await demo.play(id, cs2.selectedRoot);
 }
 function requestDelete(item: DemoListItem) {
@@ -234,6 +237,11 @@ async function confirmDelete() {
     deleteError.value = error instanceof Error ? error.message : String(error);
   }
 }
+const allVisibleSelected = computed(() => demo.items.length > 0 && demo.items.every(item => selectedIds.value.includes(item.id)));
+function toggleSelected(id: number, checked: boolean) { selectedIds.value = checked ? [...new Set([...selectedIds.value, id])] : selectedIds.value.filter(item => item !== id); }
+function toggleAllVisible(checked: boolean) { selectedIds.value = checked ? [...new Set([...selectedIds.value, ...demo.items.map(item => item.id)])] : selectedIds.value.filter(id => !demo.items.some(item => item.id === id)); }
+function clearSelection() { selectedIds.value = []; bulkDeleteOpen.value = false; }
+async function confirmBulkDelete() { if (!selectedIds.value.length || bulkDeleteBusy.value) return; bulkDeleteBusy.value = true; try { await demo.deleteFiles(selectedIds.value); clearSelection(); } finally { bulkDeleteBusy.value = false; } }
 async function openPlayer(stableKey: string) {
   if (!demo.report) return;
   playerDetail.value = await demoApi.getPlayerMatchDetail(
@@ -503,11 +511,16 @@ onBeforeUnmount(() => clearInterval(jobPoll));
           <option :value="50">50 / 页</option>
           <option :value="100">100 / 页</option>
         </select>
+        <div class="demo-selection-tools" aria-live="polite">
+          <span v-if="selectedIds.length">已选择 {{ selectedIds.length }} 个 Demo</span>
+          <button v-if="selectedIds.length" class="danger-button demo-bulk-delete" type="button" @click="bulkDeleteOpen = true"><Trash2 :size="15" />批量删除</button>
+        </div>
       </div>
       <div class="demo-table-wrap">
         <table class="demo-table">
           <thead>
             <tr>
+              <th class="demo-select-heading"><input type="checkbox" :checked="allVisibleSelected" aria-label="选择当前页全部 Demo" @change="toggleAllVisible(($event.target as HTMLInputElement).checked)" /></th>
               <th>文件名</th>
               <th>地图</th>
               <th>回合</th>
@@ -524,7 +537,7 @@ onBeforeUnmount(() => clearInterval(jobPoll));
               :key="item.id"
               @dblclick="item.status === 'done' && openReport(item.id)"
             >
-              <td>
+              <td class="demo-select-cell"><input type="checkbox" :checked="selectedIds.includes(item.id)" :aria-label="`选择 ${item.fileName}`" @click.stop @change="toggleSelected(item.id, ($event.target as HTMLInputElement).checked)" /></td><td>
                 <strong :title="item.path">{{ item.fileName }}</strong>
               </td>
               <td>{{ item.mapName || "--" }}</td>
@@ -545,7 +558,7 @@ onBeforeUnmount(() => clearInterval(jobPoll));
                     :title="playTitle(item.id)"
                     aria-label="用 CS2 播放 Demo"
                     :disabled="
-                      Boolean(demo.rowBusy[item.id]) || cs2.cs2Running || !cs2.selectedRoot
+                      Boolean(demo.rowBusy[item.id]) || (cs2.cs2Running && !cs2.writeUnlocked) || !cs2.selectedRoot
                     "
                     @click.stop="playDemo(item.id)"
                   >
@@ -610,7 +623,7 @@ onBeforeUnmount(() => clearInterval(jobPoll));
               </td>
             </tr>
             <tr v-if="!demo.items.length">
-              <td colspan="8">
+              <td colspan="9">
                 <div class="demo-empty">
                   <strong>{{
                     demo.busy === "list" ? "正在读取录像库" : "没有符合条件的 Demo"
@@ -1073,6 +1086,8 @@ onBeforeUnmount(() => clearInterval(jobPoll));
       </div>
     </aside>
     <Teleport to="body"
+      ><div v-if="bulkDeleteOpen" class="modal-backdrop demo-delete-backdrop" @click.self="bulkDeleteOpen = false"><section class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="bulk-delete-title"><h2 id="bulk-delete-title">删除已选择的 Demo？</h2><p>将永久删除 <strong>{{ selectedIds.length }}</strong> 个录像文件及其本地分析记录。此操作无法撤销。</p><div class="dialog-actions"><button class="secondary-button" type="button" :disabled="bulkDeleteBusy" @click="bulkDeleteOpen = false">取消</button><button class="danger-button" type="button" :disabled="bulkDeleteBusy" @click="confirmBulkDelete"><LoaderCircle v-if="bulkDeleteBusy" class="spinning" :size="17" /><Trash2 v-else :size="17" />{{ bulkDeleteBusy ? '正在删除' : '确认删除' }}</button></div></section></div></Teleport
+    ><Teleport to="body"
       ><div
         v-if="deleteCandidate"
         class="modal-backdrop demo-delete-backdrop"
@@ -1148,3 +1163,4 @@ onBeforeUnmount(() => clearInterval(jobPoll));
     >
   </section>
 </template>
+

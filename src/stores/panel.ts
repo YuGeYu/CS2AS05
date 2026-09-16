@@ -66,6 +66,11 @@ export const usePanelStore = defineStore('panel', () => {
   const setNades = (root: string, value: NadesValue) => mutate('nades', () => setPanelNades(root, value))
   const setBotItem = (root: string, item: BotItem, enabled: boolean) => mutate(item, () => setPanelBotItem(root, item, enabled))
   const setDropKnives = (root: string, bindKey: string, selected: number[]) => mutate('knives', () => setPanelDropKnives(root, bindKey, selected))
+  function applySnapshot(root: string, value: PanelSnapshot) {
+    resetRoot(root)
+    snapshot.value = value
+    lastError.value = ''
+  }
   async function launch(root: string, mode: PanelMode) {
     mutationKey.value = 'launch'
     lastError.value = ''
@@ -79,5 +84,5 @@ export const usePanelStore = defineStore('panel', () => {
     }
   }
 
-  return { snapshot, loading, mutationKey, lastError, pendingRestart, refresh, resetRoot, setMode, setDifficulty, setAim, setNades, setBotItem, setDropKnives, launch }
+  return { snapshot, loading, mutationKey, lastError, pendingRestart, refresh, resetRoot, applySnapshot, setMode, setDifficulty, setAim, setNades, setBotItem, setDropKnives, launch }
 })

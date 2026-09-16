@@ -101,13 +101,17 @@ onMounted(async () => {
   canvas.value.addEventListener('webglcontextlost', onContextLost)
   document.addEventListener('visibilitychange', onVisibilityChange)
   window.addEventListener('focus', ensureLoop)
-  observer = new ResizeObserver(() => {
+  if (typeof ResizeObserver === 'undefined') {
+    // jsdom and restricted WebViews may not expose ResizeObserver; the first
+    // factory size is still valid and the render loop remains usable.
+    observer = null
+  } else observer = new ResizeObserver(() => {
     const current = currentSize()
     if (!current.renderable) { stopLoop(); return }
     controller?.resize(current.size)
     ensureLoop()
   })
-  observer.observe(host.value)
+  observer?.observe(host.value)
   try {
     controller = await props.factory(canvas.value, currentSize().size)
     if (disposed) {

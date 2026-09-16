@@ -10,9 +10,9 @@ use tauri::{AppHandle, Manager};
 use crate::errors::AppError;
 use crate::services::{cs2, support};
 
-const RESOURCE_VERSION: &str = "3.1.0-cs2as.1";
-const UPSTREAM_TAG: &str = "3.1.0";
-const UPSTREAM_COMMIT: &str = "5e3c96283b3d3f5aeba44822a38031df2e213376";
+const RESOURCE_VERSION: &str = "3.1.1-cs2as.1";
+const UPSTREAM_TAG: &str = "3.1.1";
+const UPSTREAM_COMMIT: &str = "6d2cb8a99e021b88523b77079b4a4ce765b44807";
 const PLUGIN_PARENT_RELATIVE: &str = "addons/counterstrikesharp/plugins";
 const PLUGIN_NAME: &str = "InventorySimulator";
 const LEGACY_PLUGIN_NAME: &str = "PlayerSkinMod";
@@ -26,7 +26,7 @@ const PLUGIN_RESOURCES: &[(&str, &str, &str)] = &[
     (
         "InventorySimulator.dll",
         "InventorySimulator.dll",
-        "AD50FB11433EF4E157FA6E24DACF623E953111EF4E10BECB33308746868BC31C",
+        "8138F3357E0893866C1A4DB55B4165A5BD060670A22080C721C283C90EAFF8A6",
     ),
     (
         "InventorySimulator.deps.json",
@@ -36,30 +36,30 @@ const PLUGIN_RESOURCES: &[(&str, &str, &str)] = &[
     (
         "InventorySimulator.pdb",
         "InventorySimulator.pdb",
-        "9385FF274A2DB5F6E8652D97566AB5E203F84183ACAB1B93C720CA0F7195B2B9",
+        "800F4B5D037A66D7B0FD6E0F16F7B2F06D626ECE58ADAA2F203DB41A757ABF84",
     ),
     (
         "lang/en.json",
         "lang/en.json",
-        "E93FD3ACE2AF6B6CCC338F44A56790416E5FEDDF99809E34FF58F963E1116B68",
+        "2A97299D5E627339A4E88CC7214E1AE0011DCEBA9296944A89768A1F84CD433B",
     ),
     (
         "lang/pt-BR.json",
         "lang/pt-BR.json",
-        "578F9E9AE5EFCA18782874456929BA146D3DE5FD11421C6DAD73EF74FC6D4ED3",
+        "F04273F5C7E94C31C778590332949700633A51DAF8C07F81DF4931014DBB293D",
     ),
     (
         "lang/zh-Hans.json",
         "lang/zh-Hans.json",
-        "F36A4C048A88570F5F3EF17448ED5B24EF32AB6AC74C1EEBF4B7DE0FF4A2C1B9",
+        "C177F2C235504C6F6CA2A4C1322DFC7278A3707EB7D1EE3BAAE46A05999C20A3",
     ),
     (
         "manifest.json",
         "CS2AS05.inventory-simulator.json",
-        "83727C9CC71E2E33392D974C76CC357D96FDF93CAFA6FDDCAB1301B248BAA443",
+        "6A966144EEFDA8BF702A9C3688A3FC3EBEA78F04409357B31233600571A47038",
     ),
 ];
-const GAMEDATA_HASH: &str = "671F211066642D45D5DF46CEA8EC1E2AE1D7BE92DFCD0CDC7C9A7F16B7167338";
+const GAMEDATA_HASH: &str = "5C12600DAC1BA131F0EE98723F2A842EDD048BA0EE836AC2B9D8644AC80578CB";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

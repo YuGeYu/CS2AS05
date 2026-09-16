@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "resourceVersion": "3.1.0-cs2as.1",
-  "upstreamTag": "3.1.0",
-  "upstreamCommit": "5e3c96283b3d3f5aeba44822a38031df2e213376",
+  "resourceVersion": "3.1.1-cs2as.1",
+  "upstreamTag": "3.1.1",
+  "upstreamCommit": "6d2cb8a99e021b88523b77079b4a4ce765b44807",
   "counterStrikeSharpApi": "1.0.371",
   "downstreamPatches": [
     "invsim_ws_enabled defaults to true"

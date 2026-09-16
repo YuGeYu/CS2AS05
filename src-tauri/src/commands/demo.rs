@@ -220,7 +220,12 @@ pub fn get_demo_settings(
     root_path: String,
 ) -> Result<DemoRecordingSettings, String> {
     let desired = demo::recording_desired(&app).map_err(|e| e.into_string())?;
-    panel::demo_recording_state(&root_path, desired).map_err(|e| e.into_string())
+    let state = panel::demo_recording_state(&root_path, desired).map_err(|e| e.into_string())?;
+    if state.drifted && !crate::services::cs2::check_cs2_process().unwrap_or(true) {
+        panel::apply_demo_recording(&root_path, desired).map_err(|e| e.into_string())?;
+        return panel::demo_recording_state(&root_path, desired).map_err(|e| e.into_string());
+    }
+    Ok(state)
 }
 #[tauri::command]
 pub fn set_demo_recording_enabled(

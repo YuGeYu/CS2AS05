@@ -63,6 +63,15 @@ pub fn install_bot_package(
 }
 
 #[tauri::command]
+pub fn set_bot_vision_enabled(
+    app: AppHandle,
+    root_path: String,
+    enabled: bool,
+) -> Result<OperationResult, String> {
+    cs2::set_bot_vision_enabled(&app, &root_path, enabled).map_err(AppError::into_string)
+}
+
+#[tauri::command]
 pub fn open_upstream_panel(app: AppHandle) -> Result<OperationResult, String> {
     cs2::open_upstream_panel(&app).map_err(AppError::into_string)
 }

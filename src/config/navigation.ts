@@ -1,6 +1,6 @@
-import { Bot, Boxes, ChartNoAxesCombined, Gauge, Headphones, ScrollText, Settings, Sword, WalletCards } from 'lucide-vue-next'
+import { Bot, Boxes, ChartNoAxesCombined, Gauge, Headphones, ScrollText, Settings, Sword, WalletCards, LibraryBig, MessagesSquare } from 'lucide-vue-next'
 
-export type ViewKey = 'overview' | 'presets' | 'items' | 'knives' | 'inventory' | 'commands' | 'demoReview' | 'quickSupport' | 'install'
+export type ViewKey = 'overview' | 'presets' | 'items' | 'knives' | 'inventory' | 'commands' | 'demoReview' | 'quickSupport' | 'resourceVault' | 'community' | 'install'
 export type NavigationGroup = 'core' | 'tools' | 'review' | 'support'
 
 export const NAV_ITEMS = [
@@ -12,6 +12,8 @@ export const NAV_ITEMS = [
   { key: 'inventory', label: '库存换肤', icon: WalletCards, required: false, group: 'review' },
   { key: 'demoReview', label: '对局复盘', icon: ChartNoAxesCombined, required: false, group: 'review' },
   { key: 'quickSupport', label: '快快客服', icon: Headphones, required: false, group: 'support' },
+  { key: 'resourceVault', label: '资源阁', icon: LibraryBig, required: false, group: 'support' },
+  { key: 'community', label: '玩家圈子', icon: MessagesSquare, required: false, group: 'support' },
   { key: 'install', label: '安装与诊断', icon: Settings, required: true, group: 'support' },
 ] as const
 
