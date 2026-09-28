@@ -44,7 +44,7 @@ function selectSession(session: SavedSession) { if (busy.value) return; activeSe
 function deleteSession(sessionId: string) { if (busy.value) return; sessions.value = sessions.value.filter(item => item.id !== sessionId); if (activeSessionId.value === sessionId) { const next = sessions.value[0]; if (next) { activeSessionId.value = next.id; messages.value = next.messages } else newSession() } persist(); status.value = '旧会话已删除' }
 async function waitForAgentSurface() { let previous = ''; let stable = 0; for (let attempt = 0; attempt < 24; attempt += 1) { await new Promise(resolve => setTimeout(resolve, 100)); const view = document.querySelector<HTMLElement>('.view-container'); const signature = `${view?.dataset.currentView}|${view?.querySelectorAll('button').length}|${view?.textContent?.length}`; if (signature === previous) stable += 1; else stable = 0; previous = signature; if (stable >= 3) return } }
 async function executeSafeAction(reply: string) {
-  const match = reply.match(/\[助手操作：导航=(overview|presets|items|knives|inventory|commands|demoReview|quickSupport|install)\]/)
+  const match = reply.match(/\[助手操作：导航=(overview|presets|items|knives|inventory|commands|demoReview|quickSupport|resourceVault|community|suggestions|install)\]/)
   if (match) { window.dispatchEvent(new CustomEvent('cs2as:navigate', { detail: match[1] })); return `已执行页面导航：${match[1]}。` }
   const click = reply.match(/\[助手操作：点击=(btn-\d+)\]/)
   if (!click) {

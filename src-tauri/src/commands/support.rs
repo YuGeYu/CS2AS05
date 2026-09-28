@@ -195,6 +195,51 @@ pub async fn login_assistant(
 }
 
 #[tauri::command]
+pub async fn quick_register_assistant(app: AppHandle) -> Result<AssistantAccount, String> {
+    support::quick_register_assistant(&app).await.map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn load_ideas(app: AppHandle) -> Result<serde_json::Value, String> {
+    support::load_ideas(&app).await.map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn create_idea(app: AppHandle, section_id: String, content: String) -> Result<serde_json::Value, String> {
+    support::create_idea(&app, &section_id, &content).await.map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn update_idea(app: AppHandle, idea_id: String, content: String) -> Result<serde_json::Value, String> {
+    support::update_idea(&app, &idea_id, &content).await.map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn delete_idea(app: AppHandle, idea_id: String) -> Result<serde_json::Value, String> {
+    support::delete_idea(&app, &idea_id).await.map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn create_idea_section(app: AppHandle, title: String) -> Result<serde_json::Value, String> {
+    support::create_idea_section(&app, &title).await.map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn update_idea_section(app: AppHandle, section_id: String, title: String) -> Result<serde_json::Value, String> {
+    support::update_idea_section(&app, &section_id, &title).await.map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn delete_idea_section(app: AppHandle, section_id: String) -> Result<serde_json::Value, String> {
+    support::delete_idea_section(&app, &section_id).await.map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub async fn reply_idea(app: AppHandle, idea_id: String, content: String) -> Result<serde_json::Value, String> {
+    support::reply_idea(&app, &idea_id, &content).await.map_err(AppError::into_string)
+}
+
+#[tauri::command]
 pub async fn get_community_auth(app: AppHandle) -> Result<support::CommunityAuth, String> {
     support::get_community_auth(&app)
         .await

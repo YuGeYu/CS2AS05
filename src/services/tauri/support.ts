@@ -139,6 +139,73 @@ export function getAssistantAccount() {
 export function loginAssistant(username: string, password: string) {
   return invoke<AssistantAccount>('login_assistant', { username, password })
 }
+export function quickRegisterAssistant() { return invoke<AssistantAccount>('quick_register_assistant') }
+
+export interface IdeaUser {
+  id: string
+  username: string
+  displayName: string
+  role: 'user' | 'admin' | 'owner'
+  isDisabled?: number
+  createdAt?: string
+}
+
+export interface IdeaReply {
+  id: string
+  content: string
+  createdAt: string
+  updatedAt: string
+  admin: IdeaUser
+}
+
+export interface IdeaEntry {
+  id: string
+  content: string
+  createdAt: string
+  updatedAt: string
+  user: IdeaUser
+  reply?: IdeaReply | null
+}
+
+export interface IdeaSection {
+  id: string
+  title: string
+  sortOrder: number
+  kind?: 'idea' | 'fault'
+  locked?: boolean
+  faultId?: string | null
+  faultTicketId?: string | null
+  faultStatus?: 'pending' | 'investigating' | 'resolved' | 'closed' | null
+  ideas: IdeaEntry[]
+}
+
+export interface IdeaNotice {
+  id: string
+  scope: 'idea'
+  title: string
+  content: string
+  severity: 'success' | 'warning' | 'error'
+  isActive: boolean
+  publishedAt: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface IdeasPayload {
+  notice: IdeaNotice | null
+  notices: IdeaNotice[]
+  sections: IdeaSection[]
+  user: IdeaUser | null
+}
+
+export function loadIdeas() { return invoke<IdeasPayload>('load_ideas') }
+export function createIdea(sectionId: string, content: string) { return invoke<{ idea: IdeaEntry }>('create_idea', { sectionId, content }) }
+export function updateIdea(ideaId: string, content: string) { return invoke<{ idea: IdeaEntry }>('update_idea', { ideaId, content }) }
+export function deleteIdea(ideaId: string) { return invoke<{ ok: true }>('delete_idea', { ideaId }) }
+export function createIdeaSection(title: string) { return invoke<{ section: IdeaSection }>('create_idea_section', { title }) }
+export function updateIdeaSection(sectionId: string, title: string) { return invoke<{ section: IdeaSection }>('update_idea_section', { sectionId, title }) }
+export function deleteIdeaSection(sectionId: string) { return invoke<{ ok: true; deletedIdeas: number }>('delete_idea_section', { sectionId }) }
+export function replyIdea(ideaId: string, content: string) { return invoke<{ reply: IdeaReply }>('reply_idea', { ideaId, content }) }
 
 export function logoutAssistant() {
   return invoke<AssistantAccount>('logout_assistant')

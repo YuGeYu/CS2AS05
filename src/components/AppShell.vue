@@ -24,6 +24,7 @@ import InventorySimulatorView from '@/views/InventorySimulatorView.vue'
 import QuickSupportView from '@/views/QuickSupportView.vue'
 import ResourceVaultView from '@/views/ResourceVaultView.vue'
 import CommunityView from '@/views/CommunityView.vue'
+import PlayerSuggestionsView from '@/views/PlayerSuggestionsView.vue'
 import type { PostMatchReportFailed, PostMatchReportReady } from '@/types/demo'
 import { NAVIGATION_GROUPS, NAV_ITEMS, type ViewKey } from '@/config/navigation'
 import { useAppearancePreferences } from '@/composables/useAppearancePreferences'
@@ -59,6 +60,7 @@ const view = computed(
       quickSupport: QuickSupportView,
       resourceVault: ResourceVaultView,
       community: CommunityView,
+      suggestions: PlayerSuggestionsView,
       install: InstallView,
     })[current.value],
 )

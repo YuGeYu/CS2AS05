@@ -9,7 +9,6 @@ import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import { useCs2LaunchExperience } from '@/composables/useCs2LaunchExperience'
 import type { Difficulty, PanelMode } from '@/features/panel/types'
-import { getInventorySimulatorStatus } from '@/services/tauri/inventorySimulator'
 import { dispatchToast } from '@/services/toast'
 import { useCs2Store } from '@/stores/cs2'
 import { usePanelStore } from '@/stores/panel'
@@ -20,9 +19,12 @@ const panel = usePanelStore()
 const demo = useDemoStore()
 const suggestionsOpen = ref(false)
 const botWorkbenchOpen = ref(false)
-const skinOnlyPreflightBusy = ref(false)
 const launchExperience = useCs2LaunchExperience(toRef(cs2, 'selectedRoot'))
-const modeOptions = [{ value: 'online', label: '在线模式' }, { value: 'bots', label: 'BOT 模式' }, { value: 'skin_only', label: '只开换肤' }] as const
+const modeOptions = [
+  { value: 'online', label: '在线模式' },
+  { value: 'bots', label: 'BOT 模式' },
+  { value: 'skin_only', label: '只开换肤', disabled: true, disabledReason: '由于技术限制，暂未开放此功能。' },
+] as const
 const difficultyOptions = [{ value: 'Low', label: '低' }, { value: 'Medium', label: '中' }, { value: 'High', label: '高' }] as const
 const blocked = computed(() => !cs2.selectedRoot || !panel.snapshot?.ready)
 const environmentState = computed(() => {
@@ -44,6 +46,7 @@ const launchDisabledReason = computed(() => {
   if (!cs2.selectedRoot) return '请先选择 CS2 游戏目录'
   if (cs2.cs2Running && !cs2.writeUnlocked) return '请先退出 CS2，或确认已关闭后解锁全部功能'
   if (!panel.snapshot?.ready) return '运行环境尚未准备完成'
+  if (panel.snapshot?.mode.current === 'skin_only') return '由于技术限制，暂未开放只开换肤功能，请切换到在线模式或 BOT 模式。'
   return ''
 })
 const recordingEnabled = computed(() => panel.snapshot?.mode.current === 'bots')
@@ -57,25 +60,11 @@ async function browse() {
   }
 }
 
-async function launch() {
+function launch() {
   const nextMode = panel.snapshot?.mode.current ?? 'bots'
   if (nextMode === 'skin_only') {
-    if (!cs2.selectedRoot || skinOnlyPreflightBusy.value) return
-    skinOnlyPreflightBusy.value = true
-    try {
-      const status = await getInventorySimulatorStatus(cs2.selectedRoot)
-      if (!status.ready) {
-        dispatchToast({ tone: 'warn', title: '请先完成库存换肤准备', message: '已跳转到“库存换肤”页面。完成安装、校验或修复后，请返回概览页面再次点击“启动 CS2”。' })
-        window.dispatchEvent(new CustomEvent('cs2as:navigate', { detail: 'inventory' }))
-        return
-      }
-    } catch (error) {
-      dispatchToast({ tone: 'danger', title: '库存换肤状态检查失败', message: `已跳转到“库存换肤”页面，请完成检查后返回概览再次启动。${String(error)}` })
-      window.dispatchEvent(new CustomEvent('cs2as:navigate', { detail: 'inventory' }))
-      return
-    } finally {
-      skinOnlyPreflightBusy.value = false
-    }
+    dispatchToast({ tone: 'warn', title: '只开换肤暂未开放', message: '由于技术限制，暂未开放此功能，请切换到在线模式或 BOT 模式。' })
+    return
   }
   void launchExperience.start(nextMode)
 }
@@ -93,9 +82,9 @@ onMounted(() => void demo.loadSettings(cs2.selectedRoot))
     <section class="overview-environment" :data-tone="environmentState.tone" role="status" aria-live="polite"><div class="overview-environment-icon"><CheckCircle2 v-if="environmentState.tone === 'ready'" :size="20" /><AlertCircle v-else :size="20" /></div><div class="overview-environment-copy"><span class="overview-kicker">环境状态</span><strong>{{ environmentState.label }}</strong><p>{{ environmentState.detail }}</p></div><div class="overview-environment-meta"><span v-if="cs2.selectedRoot" :title="cs2.selectedRoot">{{ cs2.selectedRoot }}</span><span v-else>等待目录</span><span v-if="cs2.closeOverride" class="overview-override-badge">玩家已确认 · 本次会话已解锁</span><button v-if="environmentState.key === 'install'" class="primary-button" type="button" @click="openInstall"><Wrench :size="16" />前往安装与诊断</button></div></section>
     <section class="overview-layout">
       <div class="overview-primary-column">
-        <section class="overview-hero"><div class="overview-hero-copy"><p class="overline">主操作</p><h2>启动 Counter-Strike 2</h2><p>{{ panel.snapshot?.mode.current === 'bots' ? '将启动助手支持的本地 BOT 对局，使用 -insecure。' : panel.snapshot?.mode.current === 'skin_only' ? '只保留库存换肤，BOT 行为交还给地图和 CS2 原生逻辑。' : '将以正常在线模式启动，不修改在线模式文件。' }}</p><div class="overview-launch-summary"><span><b>模式</b>{{ modeSummary.label }} · {{ modeSummary.detail }}</span><span v-if="panel.snapshot?.mode.current === 'bots'"><b>难度</b>{{ panel.snapshot?.difficulty.current || '--' }}</span><span><b>录制</b>{{ recordingEnabled ? '自动录制' : '未开启' }}</span></div></div><button class="launch-button" :disabled="blocked || !cs2.writeUnlocked || panel.mutationKey === 'launch' || skinOnlyPreflightBusy" :aria-describedby="launchDisabledReason ? 'launch-disabled-reason' : undefined" @click="launch"><Play :size="21" fill="currentColor" />{{ skinOnlyPreflightBusy ? '检查库存换肤…' : '启动 CS2' }}</button><p v-if="launchDisabledReason" id="launch-disabled-reason" class="launch-disabled-reason">{{ launchDisabledReason }}</p></section>
+        <section class="overview-hero"><div class="overview-hero-copy"><p class="overline">主操作</p><h2>启动 Counter-Strike 2</h2><p>{{ panel.snapshot?.mode.current === 'bots' ? '将启动助手支持的本地 BOT 对局，使用 -insecure。' : panel.snapshot?.mode.current === 'skin_only' ? '只开换肤由于技术限制，暂未开放此功能。' : '将以正常在线模式启动，不修改在线模式文件。' }}</p><div class="overview-launch-summary"><span><b>模式</b>{{ modeSummary.label }} · {{ modeSummary.detail }}</span><span v-if="panel.snapshot?.mode.current === 'bots'"><b>难度</b>{{ panel.snapshot?.difficulty.current || '--' }}</span><span><b>录制</b>{{ recordingEnabled ? '自动录制' : '未开启' }}</span></div></div><button class="launch-button" :disabled="blocked || !cs2.writeUnlocked || panel.mutationKey === 'launch'" :aria-describedby="launchDisabledReason ? 'launch-disabled-reason' : undefined" @click="launch"><Play :size="21" fill="currentColor" />启动 CS2</button><p v-if="launchDisabledReason" id="launch-disabled-reason" class="launch-disabled-reason">{{ launchDisabledReason }}</p></section>
         <section class="overview-config-grid" aria-label="快速配置">
-          <div class="overview-config-card overview-mode-card"><div class="overview-card-heading"><span class="overview-card-icon">01</span><div><h2>启动模式</h2><p>决定本次对局的运行边界。</p></div></div><SegmentedControl :model-value="panel.snapshot?.mode.current ?? null" :options="modeOptions" label="启动模式" :disabled="blocked || (cs2.cs2Running && !cs2.writeUnlocked)" :pending="panel.mutationKey === 'mode'" @update:model-value="changeMode" /></div>
+          <div class="overview-config-card overview-mode-card"><div class="overview-card-heading"><span class="overview-card-icon">01</span><div><h2>启动模式</h2><p>决定本次对局的运行边界。</p></div></div><SegmentedControl :model-value="panel.snapshot?.mode.current ?? null" :options="modeOptions" label="启动模式" :disabled="blocked || (cs2.cs2Running && !cs2.writeUnlocked)" :pending="panel.mutationKey === 'mode'" @update:model-value="changeMode" /><p class="warning-note">只开换肤由于技术限制，暂未开放此功能。</p></div>
           <div class="overview-config-card overview-difficulty-card"><div class="overview-card-heading"><span class="overview-card-icon">02</span><div><h2>BOT 难度</h2><p>{{ panel.snapshot?.mode.current === 'skin_only' ? '只开换肤时不接管 BOT 难度。' : '选择内置强度，或进入自定义工坊。' }}</p></div></div><div class="difficulty-actions"><SegmentedControl :model-value="panel.snapshot?.difficulty.current ?? null" :options="difficultyOptions" label="BOT 难度" :disabled="blocked || panel.snapshot?.mode.current === 'skin_only'" :pending="panel.mutationKey === 'difficulty'" @update:model-value="changeDifficulty" /><button class="secondary-button" type="button" :disabled="!cs2.selectedRoot || panel.snapshot?.mode.current === 'skin_only'" @click="botWorkbenchOpen = true">自定义强度</button></div></div>
           <div class="overview-config-card overview-recording-card"><div class="overview-card-heading"><span class="overview-card-icon">03</span><div><h2>本地对局记录</h2><p>仅在 BOT 模式下自动录制，其他模式自动关闭。</p></div></div><ToggleSwitch :model-value="recordingEnabled" label="自动录制本地对局 Demo" :description="recordingEnabled ? 'BOT 模式固定开启，暂不支持手动修改。' : '当前模式固定关闭，暂不支持手动修改。'" :disabled="true" /><p class="warning-note">录制策略由启动模式自动决定：BOT 模式开启，在线模式和只开换肤关闭。由于技术限制，暂未开放手动调整。</p></div>
         </section>

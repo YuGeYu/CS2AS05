@@ -46,6 +46,9 @@ const REFERENCE_PROJECTS: &[(&str, &str)] = &[
 ];
 const AUTOSTART_ENTRY: &str = "CS2BotImproverAssistant";
 const FAULT_REPORT_URL: &str = "https://cs2as.600318.xyz/api/client-faults";
+const IDEAS_API_URL: &str = "https://cs2as.600318.xyz/api/ideas";
+const IDEA_SECTIONS_API_URL: &str = "https://cs2as.600318.xyz/api/admin/idea-sections";
+const AUTH_ME_URL: &str = "https://cs2as.600318.xyz/api/auth/me";
 const QUICK_REGISTER_URL: &str = "https://cs2as.600318.xyz/api/auth/quick-register";
 const LOGIN_URL: &str = "https://cs2as.600318.xyz/api/auth/login";
 const REGISTER_URL: &str = "https://cs2as.600318.xyz/register";
@@ -939,6 +942,122 @@ pub async fn login_assistant(
     let _ = authenticate(&client, &credentials).await?;
     save_account(app, &credentials)?;
     get_assistant_account(app)
+}
+
+pub async fn quick_register_assistant(app: &AppHandle) -> Result<AssistantAccount, AppError> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|error| AppError::runtime(format!("无法初始化一键注册：{error}")))?;
+    let (_, credentials) = quick_register(&client).await?;
+    save_account(app, &credentials)?;
+    get_assistant_account(app)
+}
+
+/// Loads the public ideas page and, when an assistant account exists, its current
+/// web role. Credentials and session cookies remain inside the Rust process.
+pub async fn load_ideas(app: &AppHandle) -> Result<Value, AppError> {
+    let client = idea_client()?;
+    let cookie = match load_account(app)? {
+        Some(account) => Some(authenticate(&client, &account).await?),
+        None => None,
+    };
+    let mut request = client.get(IDEAS_API_URL);
+    if let Some(cookie) = cookie.as_deref() {
+        request = request.header("Cookie", cookie);
+    }
+    let response = request
+        .send()
+        .await
+        .map_err(|error| AppError::runtime(format!("意见加载失败，请检查网络后重试：{error}")))?;
+    let status = response.status();
+    let mut payload = response
+        .json::<Value>()
+        .await
+        .map_err(|error| AppError::runtime(format!("官网意见接口返回了无效内容：{error}")))?;
+    if !status.is_success() {
+        return Err(api_error(status, &payload, "意见加载失败"));
+    }
+    if let Some(cookie) = cookie.as_deref() {
+        let me_response = client
+            .get(AUTH_ME_URL)
+            .header("Cookie", cookie)
+            .send()
+            .await
+            .map_err(|error| AppError::runtime(format!("账号状态读取失败：{error}")))?;
+        if me_response.status().is_success() {
+            if let Ok(me) = me_response.json::<Value>().await {
+                payload["user"] = me.get("user").cloned().unwrap_or(Value::Null);
+            }
+        }
+    } else {
+        payload["user"] = Value::Null;
+    }
+    Ok(payload)
+}
+
+pub async fn create_idea(app: &AppHandle, section_id: &str, content: &str) -> Result<Value, AppError> {
+    idea_mutation(app, reqwest::Method::POST, IDEAS_API_URL, json!({ "sectionId": section_id, "content": content })).await
+}
+
+pub async fn update_idea(app: &AppHandle, idea_id: &str, content: &str) -> Result<Value, AppError> {
+    idea_mutation(app, reqwest::Method::PATCH, &format!("{IDEAS_API_URL}/{idea_id}"), json!({ "content": content })).await
+}
+
+pub async fn delete_idea(app: &AppHandle, idea_id: &str) -> Result<Value, AppError> {
+    idea_mutation(app, reqwest::Method::DELETE, &format!("{IDEAS_API_URL}/{idea_id}"), Value::Null).await
+}
+
+pub async fn create_idea_section(app: &AppHandle, title: &str) -> Result<Value, AppError> {
+    idea_mutation(app, reqwest::Method::POST, IDEA_SECTIONS_API_URL, json!({ "title": title })).await
+}
+
+pub async fn update_idea_section(app: &AppHandle, section_id: &str, title: &str) -> Result<Value, AppError> {
+    idea_mutation(app, reqwest::Method::PATCH, &format!("{IDEA_SECTIONS_API_URL}/{section_id}"), json!({ "title": title })).await
+}
+
+pub async fn delete_idea_section(app: &AppHandle, section_id: &str) -> Result<Value, AppError> {
+    idea_mutation(app, reqwest::Method::DELETE, &format!("{IDEA_SECTIONS_API_URL}/{section_id}"), Value::Null).await
+}
+
+pub async fn reply_idea(app: &AppHandle, idea_id: &str, content: &str) -> Result<Value, AppError> {
+    idea_mutation(app, reqwest::Method::PUT, &format!("https://cs2as.600318.xyz/api/admin/ideas/{idea_id}/reply"), json!({ "content": content })).await
+}
+
+fn idea_client() -> Result<reqwest::Client, AppError> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|error| AppError::runtime(format!("无法初始化意见服务：{error}")))
+}
+
+async fn idea_mutation(app: &AppHandle, method: reqwest::Method, url: &str, body: Value) -> Result<Value, AppError> {
+    let account = load_account(app)?.ok_or_else(|| AppError::runtime("请先登录官网账号后再提交意见。"))?;
+    let client = idea_client()?;
+    let cookie = authenticate(&client, &account).await?;
+    let mut request = client
+        .request(method, url)
+        .header("Origin", OFFICIAL_SITE_URL.trim_end_matches('/'))
+        .header("Referer", IDEA_PAGE_URL)
+        .header("Cookie", cookie);
+    if !body.is_null() {
+        request = request.json(&body);
+    }
+    let response = request
+        .send()
+        .await
+        .map_err(|error| AppError::runtime(format!("意见操作失败，请检查网络后重试：{error}")))?;
+    let status = response.status();
+    let payload = response.json::<Value>().await.unwrap_or(Value::Null);
+    if !status.is_success() {
+        return Err(api_error(status, &payload, "意见操作失败"));
+    }
+    Ok(payload)
+}
+
+fn api_error(status: reqwest::StatusCode, payload: &Value, fallback: &str) -> AppError {
+    let message = payload.get("error").and_then(Value::as_str).unwrap_or(fallback);
+    AppError::runtime(format!("{message}（HTTP {}）", status.as_u16()))
 }
 
 pub async fn get_community_auth(app: &AppHandle) -> Result<CommunityAuth, AppError> {
