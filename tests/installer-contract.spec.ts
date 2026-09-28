@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -14,26 +13,27 @@ describe('0.5.5 integrated Panel contract', () => {
     expect(read('src-tauri/src/lib.rs')).toContain('commands::cs2::open_upstream_panel')
   })
 
-  it('verifies the current v1.4.4 customization package before installation', () => {
+  it('allows upstream package replacements without a fixed ZIP hash or legacy entry list', () => {
     const service = read('src-tauri/src/services/cs2.rs')
-    expect(service).toContain('const CUSTOM_ZIP_SHA256')
     expect(service).toContain('verify_custom_zip(&zip_path)?')
+    expect(service).not.toContain('CUSTOM_ZIP_SHA256')
+    expect(service).not.toContain('REQUIRED_ZIP_ENTRIES')
+    expect(service).not.toContain('ZIP_STRUCTURE_INVALID')
+    expect(service).toContain('ZipArchive::new(file)')
+    expect(service).toContain('gameinfo.manifest.json')
+    expect(service).toContain('payload_entries')
     expect(service).toContain('基于上游 CS2-Bot-Improver v1.4.4 的定制包')
     expect(read('src/views/InstallView.vue')).toContain('appConfig.appVersion')
     expect(read('src/views/InstallView.vue')).toContain('CS2-Bot-Improver v1.4.4')
     expect(read('src-tauri/src/services/cs2.rs')).not.toContain('bot_randomizer_options.json')
   })
 
-  it('pins CUSTOM_ZIP_SHA256 to the actual bundled resource zip', () => {
+  it('does not regenerate a fixed whole-ZIP hash guard', () => {
     const service = read('src-tauri/src/services/cs2.rs')
     const generator = read('scripts/generate-plugin-manifest.ps1')
-    const pinned = service.match(/const CUSTOM_ZIP_SHA256: &str = "([0-9A-F]+)"/)?.[1]
-    expect(pinned).toBeTruthy()
-    const zip = readFileSync('src-tauri/resources/CS2BotImprover.zip')
-    const actual = createHash('sha256').update(zip).digest('hex').toUpperCase()
-    expect(pinned).toBe(actual)
-    expect(generator).toContain('CUSTOM_ZIP_SHA256')
-    expect(generator).toContain('rustHashSynchronized=$true')
+    expect(service).not.toContain('CUSTOM_ZIP_SHA256')
+    expect(generator).not.toContain('CUSTOM_ZIP_SHA256')
+    expect(generator).toContain('fixedZipHashGuard=$false')
   })
 
   it('keeps support and sources in the installation diagnostics view', () => {

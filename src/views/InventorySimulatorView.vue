@@ -129,7 +129,7 @@ async function openWorkshop() {
   busy.value = 'open'
   try {
     await openInventoryWorkshop()
-    dispatchToast({ tone: 'ready', title: '饰品工坊已打开', message: '在网站保存装备后，回到游戏输入 !ws。' })
+    dispatchToast({ tone: 'ready', title: '饰品工坊已打开', message: '保存装备后，请先在本地服务端启用 !ws 刷新。' })
   } catch (reason) {
     error.value = normalizeError(reason)
   } finally {
@@ -142,7 +142,7 @@ async function copyWs() {
   try {
     const { writeText } = await import('@tauri-apps/plugin-clipboard-manager')
     await writeText('!ws')
-    dispatchToast({ tone: 'ready', title: '已复制 !ws', message: '进入本地 BOT 对局后，粘贴到聊天框发送即可。' })
+    dispatchToast({ tone: 'ready', title: '已复制 !ws', message: '先在本地服务端控制台启用 invsim_ws_enabled，再到聊天框发送。' })
   } catch (reason) {
     error.value = normalizeError(reason)
   } finally {
@@ -192,7 +192,7 @@ onBeforeUnmount(() => { alive = false; requestGeneration += 1 })
       <ol class="inventory-steps">
         <li :data-state="status?.ready ? 'done' : 'current'"><span class="inventory-step-index"><Check v-if="status?.ready" :size="18" /><Wrench v-else :size="18" /></span><div><strong>一键准备插件</strong><p>自动移除旧换肤，只安装 Ian Lucas 的库存模拟器。</p></div></li>
         <li :data-state="status?.ready ? 'current' : 'waiting'"><span class="inventory-step-index"><Sparkles :size="18" /></span><div><strong>在饰品工坊搭配</strong><p>Steam 登录后，为 CT/T 装备武器、刀、手套和角色。</p></div></li>
-        <li data-state="waiting"><span class="inventory-step-index"><Gamepad2 :size="18" /></span><div><strong>启动并输入 !ws</strong><p>进入本地 BOT，发送一次 <code>!ws</code>，重生后就能看到。</p></div></li>
+        <li data-state="waiting"><span class="inventory-step-index"><Gamepad2 :size="18" /></span><div><strong>启动并刷新库存</strong><p>先在本地服务端启用 <code>invsim_ws_enabled true</code>，再发送 <code>!ws</code>。</p></div></li>
       </ol>
       <div class="inventory-primary-actions">
         <button class="primary-button" type="button" :disabled="Boolean(busy) || Boolean(status?.cs2Running && !cs2.writeUnlocked && primaryAction.kind === 'install')" @click="runPrimaryAction"><LoaderCircle v-if="busy === 'install' || busy === 'open'" :size="18" class="spin" /><ExternalLink v-else-if="primaryAction.kind === 'workshop'" :size="18" /><Wrench v-else :size="18" />{{ busy === 'install' ? '正在准备，请稍等' : primaryAction.label }}</button>
@@ -215,14 +215,14 @@ onBeforeUnmount(() => { alive = false; requestGeneration += 1 })
           <details><summary><span>02</span><div><strong>点击“一键启用库存换肤”</strong><small>不用找文件夹，也不用手工复制插件。</small></div><ChevronRight :size="18" /></summary><p>助手会校验内置文件，精确移除旧 PlayerSkinMod，再安装 Inventory Simulator。其他插件、Demo 和游戏文件都不会动。</p></details>
           <details><summary><span>03</span><div><strong>打开饰品工坊并登录 Steam</strong><small>网站用 SteamID 把库存认到你的玩家。</small></div><ChevronRight :size="18" /></summary><p>只在 <code>inventory.cstrike.app</code> 或 Steam 官方登录页输入信息。助手不会读取密码、Cookie，也不会在程序里嵌入登录页面。</p></details>
           <details><summary><span>04</span><div><strong>制作并“装备”饰品</strong><small>创建物品后，还要放进 CT/T 对应槽位。</small></div><ChevronRight :size="18" /></summary><p>网站支持武器、刀、手套、角色、音乐盒、贴纸、挂件、收藏品和涂鸦。CT 与 T 是两套装备；只创建但没有装备的物品不会出现在游戏里。</p></details>
-          <details><summary><span>05</span><div><strong>启动本地 BOT，发送 !ws</strong><small>刷新后在重生或换图时稳定应用。</small></div><ChevronRight :size="18" /></summary><p>点击本页“启动本地 BOT”。进入地图后，在聊天框发送 <code>!ws</code>。刷新冷却为 30 秒，不需要连续发送；重生或换图后查看新外观。</p></details>
+          <details><summary><span>05</span><div><strong>启动本地 BOT，发送 !ws</strong><small>官方版本需要先开启聊天刷新。</small></div><ChevronRight :size="18" /></summary><p>进入地图后，在本地服务端控制台执行 <code>invsim_ws_enabled true</code>，然后在聊天框发送 <code>!ws</code>。刷新冷却为 30 秒，重生或换图后查看新外观。</p></details>
           <details><summary><span>06</span><div><strong>以后换搭配更简单</strong><small>不需要重复安装插件。</small></div><ChevronRight :size="18" /></summary><p>在网站修改并保存，回到游戏发送一次 <code>!ws</code>，然后重生即可。网站暂时打不开时不要反复重装，稍后再试。</p></details>
         </div>
-        <div class="inventory-faq"><h3>没显示怎么办？</h3><p><strong>还是默认皮肤：</strong>确认网站物品已装备到当前 CT/T 槽位，等待 30 秒后发送一次 <code>!ws</code>，然后重生。</p><p><strong>网站暂时打不开：</strong>插件仍然在本机，不会影响助手其他功能；网络恢复后重新同步即可。</p><p><strong>StatTrak 或喷漆变化：</strong>这是上游完整库存能力，相关计数可能同步到公共饰品服务。</p></div>
+        <div class="inventory-faq"><h3>没显示怎么办？</h3><p><strong>还是默认皮肤：</strong>先确认本地服务端已启用 <code>invsim_ws_enabled true</code>，网站物品也已装备到当前 CT/T 槽位，再发送 <code>!ws</code> 并重生。</p><p><strong>网站暂时打不开：</strong>插件仍然在本机，不会影响助手其他功能；网络恢复后重新同步即可。</p><p><strong>StatTrak 或喷漆变化：</strong>这是上游完整库存能力，相关计数可能同步到公共饰品服务。</p></div>
       </section>
     </Transition>
 
-    <footer class="inventory-provenance"><span><ShieldCheck :size="15" />上游 <strong>ianlucas/cs2-css-inventory-simulator</strong> · MIT</span><span>正式 Release {{ status?.upstreamTag || '3.1.1' }} · 不再使用自制换肤引擎</span></footer>
+    <footer class="inventory-provenance"><span><ShieldCheck :size="15" />上游 <strong>ianlucas/cs2-css-inventory-simulator</strong> · MIT</span><span>正式 Release {{ status?.upstreamTag || '3.2.0' }} · 不再使用自制换肤引擎</span></footer>
   </section>
   <Teleport to="body">
     <div v-if="removeDialogOpen" class="inventory-remove-backdrop" role="presentation" @click.self="removeDialogOpen = false">

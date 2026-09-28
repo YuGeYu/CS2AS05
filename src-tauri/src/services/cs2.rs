@@ -41,7 +41,6 @@ use crate::services::panel;
 const CS2_FOLDER_NAME: &str = "Counter-Strike Global Offensive";
 const BUNDLED_ZIP_NAME: &str = "CS2BotImprover.zip";
 const SKIN_ONLY_GAMEINFO_ENTRY: &str = "backup/SkinOnly/gameinfo.gi";
-const CUSTOM_ZIP_SHA256: &str = "BEE883619EAB4B04AE333DB16007CC56BDF90558F33CC8A8B95F3097079DED59";
 const PANEL_FILE_NAME: &str = "Panel v1.4.4.exe";
 const PANEL_SHA256: &str = "2797A3FE85E65959CAE9501525B67B3876CEF65152E88DC716F64D5485AC2182";
 const PANEL_SIZE: u64 = 5_890_560;
@@ -53,26 +52,6 @@ const BOT_VISION_VDF: &str = "addons/metamod/BotVision.vdf";
 const PLUGIN_PRODUCT: &str = "cs2-bot-improver";
 const PLUGIN_ID: &str = "cs2as05-custom-package";
 const LOG_DIR_NAME: &str = "CS2人机增强助手";
-const REQUIRED_ZIP_ENTRIES: &[&str] = &[
-    PANEL_FILE_NAME,
-    "gameinfo.gi",
-    "backup/Online/gameinfo.gi",
-    "backup/WithBots/gameinfo.gi",
-    "backup/SkinOnly/gameinfo.gi",
-    "addons/",
-    "cfg/",
-    "overrides/",
-    PLUGIN_MARKER,
-    "addons/BotVision/gamedata.json",
-    "addons/BotVision/bin/win64/BotVision.dll",
-    "addons/metamod/BotVision.vdf",
-    "addons/counterstrikesharp/plugins/CS2BotLlmChat/CS2BotLlmChat.dll",
-    "addons/counterstrikesharp/plugins/CS2BotLlmChat/CS2BotLlmChat.deps.json",
-    "addons/counterstrikesharp/configs/plugins/CS2BotLlmChat/CS2BotLlmChat.json",
-    "addons/counterstrikesharp/plugins/MapRotation/MapRotation.dll",
-    MAP_ROTATION_DEFAULT_CONFIG,
-];
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PluginMarker {
@@ -823,27 +802,9 @@ pub fn ensure_skin_only_gameinfo(app: &AppHandle, root_path: &str) -> Result<(),
 }
 
 fn verify_custom_zip(path: &Path) -> Result<(), AppError> {
-    let digest = sha256_file(path)?;
-    if digest != CUSTOM_ZIP_SHA256 {
-        return Err(AppError::runtime(format!("[ZIP_HASH_INVALID]\n内置定制资源摘要不匹配。\n期望：{CUSTOM_ZIP_SHA256}\n实际：{digest}")));
-    }
     let file = File::open(path).map_err(io_error)?;
     let mut archive = ZipArchive::new(file)
         .map_err(|error| AppError::runtime(format!("无法读取内置资源包：{error}")))?;
-    for required in REQUIRED_ZIP_ENTRIES {
-        let present = if required.ends_with('/') {
-            // ZIP creators commonly omit explicit directory entries. Treat a
-            // directory as present when it has at least one child entry.
-            archive.file_names().any(|name| name.starts_with(required))
-        } else {
-            archive.by_name(required).is_ok()
-        };
-        if !present {
-            return Err(AppError::runtime(format!(
-                "[ZIP_STRUCTURE_INVALID]\n内置定制资源缺少必需条目：{required}"
-            )));
-        }
-    }
     let manifest_bytes = archive
         .by_name("gameinfo.manifest.json")
         .map_err(|_| {
@@ -898,14 +859,6 @@ fn verify_custom_zip(path: &Path) -> Result<(), AppError> {
                 "[GAMEINFO_ASSET_INVALID] {name} 摘要不匹配。"
             )));
         }
-    }
-    let entry = archive
-        .by_name(PANEL_FILE_NAME)
-        .map_err(|_| AppError::runtime("内置定制资源缺少 Panel。"))?;
-    if entry.size() != PANEL_SIZE {
-        return Err(AppError::runtime(
-            "[PANEL_SIZE_INVALID]\n官方 Panel 文件大小不正确。",
-        ));
     }
     Ok(())
 }

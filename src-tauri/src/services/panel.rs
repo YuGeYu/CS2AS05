@@ -58,15 +58,48 @@ const SKIN_ONLY_NATIVE_METAMOD_VDFS: &[&str] = &[
     "BotVision.vdf",
     "RayTrace.vdf",
 ];
-const BOT_ITEM_KEYS: [(&str, &str); 8] = [
-    ("profiles", "bot_hider github.com/XBribo all"),
-    ("agents", "bot_randomizer github.com/ed0ard agents"),
-    ("music", "bot_randomizer github.com/ed0ard music"),
-    ("weapons", "bot_randomizer github.com/ed0ard weapons"),
-    ("knives", "bot_randomizer github.com/ed0ard knives"),
-    ("gloves", "bot_randomizer github.com/ed0ard gloves"),
-    ("stickers", "bot_randomizer github.com/ed0ard stickers"),
-    ("charms", "bot_randomizer github.com/ed0ard charms"),
+// (logical item, canonical v1.4.4 key, legacy v1.4.3 alias)
+const BOT_ITEM_KEYS: [(&str, &str, &str); 8] = [
+    (
+        "profiles",
+        "bot_hider github.com/XBribo/CS2-Bot-Hider all",
+        "bot_hider github.com/XBribo all",
+    ),
+    (
+        "agents",
+        "bot_randomizer github.com/ed0ard/CS2-Bot-Randomizer agents",
+        "bot_randomizer github.com/ed0ard agents",
+    ),
+    (
+        "music",
+        "bot_randomizer github.com/ed0ard/CS2-Bot-Randomizer music",
+        "bot_randomizer github.com/ed0ard music",
+    ),
+    (
+        "weapons",
+        "bot_randomizer github.com/ed0ard/CS2-Bot-Randomizer weapons",
+        "bot_randomizer github.com/ed0ard weapons",
+    ),
+    (
+        "knives",
+        "bot_randomizer github.com/ed0ard/CS2-Bot-Randomizer knives",
+        "bot_randomizer github.com/ed0ard knives",
+    ),
+    (
+        "gloves",
+        "bot_randomizer github.com/ed0ard/CS2-Bot-Randomizer gloves",
+        "bot_randomizer github.com/ed0ard gloves",
+    ),
+    (
+        "stickers",
+        "bot_randomizer github.com/ed0ard/CS2-Bot-Randomizer stickers",
+        "bot_randomizer github.com/ed0ard stickers",
+    ),
+    (
+        "charms",
+        "bot_randomizer github.com/ed0ard/CS2-Bot-Randomizer charms",
+        "bot_randomizer github.com/ed0ard charms",
+    ),
 ];
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -267,10 +300,14 @@ fn initialize_panel_defaults_at_with_running(
             preferences.nades = Some(preference(value));
             initialized_fields.push("nades".into());
         }
+        let bot_items_path = csgo.join(CORE_CONFIG_FILE);
+        let bot_items = read_bot_items_strict(&bot_items_path)?;
+        let bot_items_needs_migration = core_has_legacy_bot_item_keys(&bot_items_path)?;
+        if bot_items_needs_migration {
+            write_bot_items_at(&bot_items_path, &bot_items)?;
+        }
         if preferences.bot_items.is_none() {
-            let path = csgo.join(CORE_CONFIG_FILE);
-            let items = read_bot_items_strict(&path)?;
-            preferences.bot_items = Some(bot_items_preference_at(&path, &items));
+            preferences.bot_items = Some(bot_items_preference_at(&bot_items_path, &bot_items));
             initialized_fields.push("botItems".into());
         }
         if preferences.drop_knives.is_none() {
@@ -657,12 +694,12 @@ fn read_bot_items_strict(path: &Path) -> Result<BotItemsState, AppError> {
         invalid("[PANEL_BOT_ITEM_SCHEMA] CounterStrikeSharp core.json 不是 JSON 对象。")
     })?;
     let read = |item: &str| -> Result<bool, AppError> {
-        let key = bot_item_core_key(item).expect("managed Bot Item key");
-        match object.get(key) {
+        let (key, legacy_key) = bot_item_core_keys(item).expect("managed Bot Item key");
+        match object.get(key).or_else(|| object.get(legacy_key)) {
             None => Ok(true),
             Some(value) => value.as_bool().ok_or_else(|| {
                 invalid(format!(
-                    "[PANEL_BOT_ITEM_SCHEMA] core.json 字段 {key} 必须为布尔值。"
+                    "[PANEL_BOT_ITEM_SCHEMA] core.json 字段 {key} 或其旧别名必须为布尔值。"
                 ))
             }),
         }
@@ -721,14 +758,32 @@ fn read_bot_item_unknown_fields(path: &Path) -> Result<Map<String, Value>, AppEr
     let mut object = value.as_object().cloned().ok_or_else(|| {
         invalid("[PANEL_BOT_ITEM_SCHEMA] CounterStrikeSharp core.json 不是 JSON 对象。")
     })?;
-    for (_, key) in BOT_ITEM_KEYS {
+    for (_, key, legacy_key) in BOT_ITEM_KEYS {
         object.remove(key);
+        object.remove(legacy_key);
     }
     Ok(object)
 }
 
+fn core_has_legacy_bot_item_keys(path: &Path) -> Result<bool, AppError> {
+    let bytes = fs::read(path)
+        .map_err(|error| io_context("读取 CounterStrikeSharp core.json", path, error))?;
+    let value = serde_json::from_slice::<Value>(&bytes).map_err(|error| {
+        invalid(format!(
+            "[PANEL_BOT_ITEM_CORRUPT] CounterStrikeSharp core.json 损坏：{}\n{error}",
+            path.display()
+        ))
+    })?;
+    let object = value.as_object().ok_or_else(|| {
+        invalid("[PANEL_BOT_ITEM_SCHEMA] CounterStrikeSharp core.json 不是 JSON 对象。")
+    })?;
+    Ok(BOT_ITEM_KEYS
+        .iter()
+        .any(|(_, key, legacy_key)| object.contains_key(*legacy_key) || !object.contains_key(*key)))
+}
+
 fn set_bot_item_values(object: &mut Map<String, Value>, items: &BotItemsState) {
-    for (item, key) in BOT_ITEM_KEYS {
+    for (item, key, legacy_key) in BOT_ITEM_KEYS {
         let enabled = match item {
             "profiles" => items.profiles,
             "agents" => items.agents,
@@ -740,14 +795,17 @@ fn set_bot_item_values(object: &mut Map<String, Value>, items: &BotItemsState) {
             "charms" => items.charms,
             _ => unreachable!(),
         };
+        // Canonical v1.4.4 namespaces are authoritative; remove stale aliases
+        // so CounterStrikeSharp cannot resolve two conflicting values.
+        object.remove(legacy_key);
         object.insert(key.into(), Value::Bool(enabled));
     }
 }
 
-fn bot_item_core_key(item: &str) -> Option<&'static str> {
+fn bot_item_core_keys(item: &str) -> Option<(&'static str, &'static str)> {
     BOT_ITEM_KEYS
         .iter()
-        .find_map(|(managed, key)| (*managed == item).then_some(*key))
+        .find_map(|(managed, key, legacy_key)| (*managed == item).then_some((*key, *legacy_key)))
 }
 
 fn write_mode_at(csgo: &Path, mode: &str) -> Result<(), AppError> {
@@ -1250,6 +1308,11 @@ fn set_mode_inner(
         preferences.mode = Some(preference(mode.to_string()));
         save_preferences(&csgo, &preferences)
     })?;
+    if let Some(app) = app {
+        let recording_enabled = mode == "bots";
+        apply_demo_recording(root_path, recording_enabled)?;
+        demo::set_recording_desired(app, recording_enabled)?;
+    }
     snapshot_at(&root)
 }
 
@@ -1296,7 +1359,7 @@ pub fn set_preset(root_path: &str, command: &str, value: &str) -> Result<PanelSn
 }
 
 pub fn set_bot_item(root_path: &str, item: &str, enabled: bool) -> Result<PanelSnapshot, AppError> {
-    if bot_item_core_key(item).is_none() {
+    if bot_item_core_keys(item).is_none() {
         return Err(invalid("[PANEL_BOT_ITEM_INVALID] 未知 Bot 物品开关。"));
     }
     cs2::ensure_cs2_not_running(root_path)?;
@@ -1388,9 +1451,9 @@ fn launch_cs2_inner(
     let (root, steam) = prepare_launch_paths(root_path, cs2::check_cs2_process, |root| {
         cs2_discovery::find_steam_executable(Some(root))
     })?;
-    if mode == "bots" && demo::recording_desired(app)? {
-        apply_demo_recording(root_path, true)?;
-    }
+    let recording_enabled = mode == "bots";
+    apply_demo_recording(root_path, recording_enabled)?;
+    demo::set_recording_desired(app, recording_enabled)?;
     if mode == "bots" {
         initialize_panel_defaults_at(&root, false)?;
     }
@@ -2364,6 +2427,96 @@ mod tests {
             .into_string();
         assert!(error.contains("PANEL_BOT_ITEM_CORRUPT"));
         assert_eq!(fs::read(csgo.join(CORE_CONFIG_FILE)).unwrap(), b"{broken");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn bot_items_read_legacy_aliases_and_migrate_to_canonical_keys() {
+        let root = test_root("bot-item-key-migration");
+        create_panel_environment(
+            &root,
+            "bots",
+            "Low",
+            "bot_aim mixed\nbot_nades normal\n",
+            Some(
+                r#"{"futureOption":42,"bot_hider github.com/XBribo all":false,"bot_randomizer github.com/ed0ard agents":true,"bot_randomizer github.com/ed0ard music":false,"bot_randomizer github.com/ed0ard weapons":true,"bot_randomizer github.com/ed0ard knives":false,"bot_randomizer github.com/ed0ard gloves":true,"bot_randomizer github.com/ed0ard stickers":false,"bot_randomizer github.com/ed0ard charms":true}"#,
+            ),
+        );
+
+        let before = snapshot_at(&root).unwrap();
+        assert!(!before.bot_items.profiles);
+        assert!(before.bot_items.agents);
+        assert!(!before.bot_items.music);
+        assert!(before.bot_items.weapons);
+
+        let root_text = root.to_string_lossy();
+        set_bot_item(&root_text, "music", true).unwrap();
+        let object: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("game/csgo").join(CORE_CONFIG_FILE)).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(object["futureOption"], 42);
+        assert_eq!(
+            object["bot_randomizer github.com/ed0ard/CS2-Bot-Randomizer music"],
+            true
+        );
+        assert!(object
+            .get("bot_randomizer github.com/ed0ard music")
+            .is_none());
+        assert!(object.get("bot_hider github.com/XBribo all").is_none());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn initialized_panel_state_still_migrates_legacy_bot_item_keys() {
+        let root = test_root("bot-item-key-migration-with-state");
+        create_panel_environment(
+            &root,
+            "bots",
+            "Low",
+            "bot_aim mixed\nbot_nades normal\n",
+            Some(
+                r#"{"bot_hider github.com/XBribo all":true,"bot_randomizer github.com/ed0ard agents":false,"unrelated":7}"#,
+            ),
+        );
+        let csgo = root.join("game/csgo");
+        fs::write(
+            csgo.join(PANEL_STATE_FILE),
+            serde_json::to_vec(&serde_json::json!({
+                "schema": 1,
+                "initializedBy": "0.5.14",
+                "botItems": {
+                    "initialized": true,
+                    "profiles": true,
+                    "agents": false,
+                    "music": true,
+                    "weapons": true,
+                    "knives": true,
+                    "gloves": true,
+                    "stickers": true,
+                    "charms": true
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        initialize_panel_defaults_at_with_running(&root, false, false).unwrap();
+        let object: serde_json::Value =
+            serde_json::from_slice(&fs::read(csgo.join(CORE_CONFIG_FILE)).unwrap()).unwrap();
+        assert_eq!(object["unrelated"], 7);
+        assert_eq!(
+            object["bot_hider github.com/XBribo/CS2-Bot-Hider all"],
+            true
+        );
+        assert_eq!(
+            object["bot_randomizer github.com/ed0ard/CS2-Bot-Randomizer agents"],
+            false
+        );
+        assert!(object.get("bot_hider github.com/XBribo all").is_none());
+        assert!(object
+            .get("bot_randomizer github.com/ed0ard agents")
+            .is_none());
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -9,9 +9,9 @@
 - Upstream license: GPL-3.0 (repository README)
 
 The downstream source contains one product-default patch: `_enabled` is initialized
-to `true` on plugin load so the assistant's local-BOT installation actually performs
-automatic rotation. The `lbtv_map_rotation 0|1` command remains available to pause
-or resume rotation. The downstream project file changes the target framework and
+to `false` on plugin load so the assistant's local-BOT installation does not perform
+automatic rotation unless the player explicitly enables it. The `lbtv_map_rotation 0|1`
+command remains available to enable or disable rotation. The downstream project file changes the target framework and
 CounterStrikeSharp API package to match this assistant's net10.0 / 1.0.371 plugin
 toolchain. The compiled DLL is redistributed inside the main `CS2BotImprover.zip`
 package as `MapRotation`.

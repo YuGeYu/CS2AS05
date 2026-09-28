@@ -11,6 +11,14 @@ describe('概览本地对局启动台契约', () => {
     expect(overview).toContain('本地 BOT 对局，使用 -insecure')
     expect(overview).toContain('不修改在线模式文件')
     expect(overview).toContain('BotDifficultyWorkbench')
+    expect(overview).toContain('getInventorySimulatorStatus')
+    expect(overview).toContain("nextMode === 'skin_only'")
+    expect(overview).toContain("detail: 'inventory'")
+    expect(overview).toContain('返回概览页面再次点击“启动 CS2”')
+    expect(overview).toContain('仅在 BOT 模式下自动录制')
+    expect(overview).toContain('由于技术限制，暂未开放手动调整')
+    expect(overview).toContain(':disabled="true"')
+    expect(overview).toContain('const recordingEnabled = computed(() => panel.snapshot?.mode.current === \'bots\')')
   })
 
   it('主启动面、快速配置和目录检查器具备响应式样式', () => {

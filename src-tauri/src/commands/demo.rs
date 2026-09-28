@@ -1,6 +1,7 @@
 use tauri::AppHandle;
 
 use crate::{
+    errors::AppError,
     demo::playback,
     models::demo::*,
     services::{demo, panel},
@@ -219,7 +220,18 @@ pub fn get_demo_settings(
     app: AppHandle,
     root_path: String,
 ) -> Result<DemoRecordingSettings, String> {
-    let desired = demo::recording_desired(&app).map_err(|e| e.into_string())?;
+    let bots_mode = panel::snapshot(&root_path)
+        .map_err(AppError::into_string)?
+        .mode
+        .current
+        .as_deref()
+        == Some("bots");
+    let stored = demo::recording_desired(&app).map_err(|e| e.into_string())?;
+    let desired = stored && bots_mode;
+    if stored != desired && !crate::services::cs2::check_cs2_process().unwrap_or(true) {
+        panel::apply_demo_recording(&root_path, desired).map_err(|e| e.into_string())?;
+        demo::set_recording_desired(&app, desired).map_err(|e| e.into_string())?;
+    }
     let state = panel::demo_recording_state(&root_path, desired).map_err(|e| e.into_string())?;
     if state.drifted && !crate::services::cs2::check_cs2_process().unwrap_or(true) {
         panel::apply_demo_recording(&root_path, desired).map_err(|e| e.into_string())?;
@@ -233,7 +245,14 @@ pub fn set_demo_recording_enabled(
     root_path: String,
     enabled: bool,
 ) -> Result<DemoRecordingSettings, String> {
-    panel::apply_demo_recording(&root_path, enabled).map_err(|e| e.into_string())?;
-    demo::set_recording_desired(&app, enabled).map_err(|e| e.into_string())?;
-    panel::demo_recording_state(&root_path, enabled).map_err(|e| e.into_string())
+    let bots_mode = panel::snapshot(&root_path)
+        .map_err(AppError::into_string)?
+        .mode
+        .current
+        .as_deref()
+        == Some("bots");
+    let effective = enabled && bots_mode;
+    panel::apply_demo_recording(&root_path, effective).map_err(|e| e.into_string())?;
+    demo::set_recording_desired(&app, effective).map_err(|e| e.into_string())?;
+    panel::demo_recording_state(&root_path, effective).map_err(|e| e.into_string())
 }

@@ -8,12 +8,16 @@ import AppearanceSettingsDrawer from '@/components/AppearanceSettingsDrawer.vue'
 import AnnouncementCenter from '@/components/AnnouncementCenter.vue'
 import GlobalToast from '@/components/GlobalToast.vue'
 import PendingUpdateExitModal from '@/components/PendingUpdateExitModal.vue'
+import PromotionPushModal from '@/components/PromotionPushModal.vue'
 import SoftwareUpdateModal from '@/components/SoftwareUpdateModal.vue'
 import { closeSoftwareUpdate, deferSoftwareUpdateInstall, installSoftwareUpdate, openSoftwareUpdateDownload, openSoftwareUpdateReleasePage, showPendingSoftwareUpdate, softwareUpdateCoordinatorState, startSoftwareUpdateCoordinator, startSoftwareUpdateDownload } from '@/features/software-updates/coordinator'
 import { hasPendingDownloadedUpdate, prepareDeferredUpdateForExit, softwareUpdaterState } from '@/features/software-updates/updater-state'
 import { announcementState, loadAnnouncements } from '@/features/announcements/state'
 import { initializeAppearancePreferences } from '@/composables/useAppearancePreferences'
 import { markStartupIntroPlayed, shouldPlayStartupIntro } from '@/services/intro-schedule'
+import { loadVaultResources } from '@/services/resource-vault'
+import { choosePromotionKind, duePromotionCount, nextIndex, PROMOTION_INTERVAL_MS } from '@/features/promotion-push/scheduler'
+import type { PromotionPayload } from '@/features/promotion-push/types'
 
 const exitConfirmOpen = ref(false)
 const closeChoiceOpen = ref(false)
@@ -25,6 +29,10 @@ const easterEggOpen = ref(false)
 const appearanceOpen = ref(false)
 let easterEggTrigger: HTMLButtonElement | null = null
 let unlistenClose: (() => void) | undefined
+let promotionTimer: ReturnType<typeof setInterval> | undefined
+const promotionStartedAt = Date.now()
+const promotion = ref<PromotionPayload | null>(null)
+const promotionState = { shownCount: 0, resourceIndex: 0, localIndex: 0, resources: [] as Awaited<ReturnType<typeof loadVaultResources>> }
 const StartupIntro = defineAsyncComponent(() => import('@/components/intro/StartupIntro.vue'))
 const EasterEggGame = defineAsyncComponent(() => import('@/components/easter-egg/EasterEggGame.vue'))
 
@@ -79,14 +87,51 @@ async function closeEasterEgg() {
   easterEggTrigger = null
 }
 
+async function showNextPromotion() {
+  const kind = choosePromotionKind()
+  if (kind === 'resource') {
+    try {
+      if (!promotionState.resources.length) promotionState.resources = await loadVaultResources()
+      const resources = [...promotionState.resources]
+        .sort((a, b) => Date.parse(b.updatedAt || b.publishedAt || b.createdAt) - Date.parse(a.updatedAt || a.publishedAt || a.createdAt))
+        .slice(0, 10)
+      if (resources.length) {
+        const index = nextIndex(promotionState.resourceIndex, resources.length)
+        const resource = resources[index]
+        if (!resource) return
+        promotionState.resourceIndex = index + 1
+        promotion.value = { kind: 'resource', resource }
+        return
+      }
+    } catch {
+      // Resource push falls back to the local push library when the vault is unavailable.
+    }
+  }
+  const localItems = ['community', 'donate'] as const
+  const index = nextIndex(promotionState.localIndex, localItems.length)
+  const localId = localItems[index]
+  if (!localId) return
+  promotionState.localIndex = index + 1
+  promotion.value = { kind: 'local', localId }
+}
+
+function checkPromotionSchedule() {
+  const due = duePromotionCount(promotionStartedAt)
+  if (due <= promotionState.shownCount) return
+  promotionState.shownCount = due
+  void showNextPromotion()
+}
+
 onMounted(async () => {
   if (introOpen.value) markStartupIntroPlayed()
   window.addEventListener('cs2as:show-pending-update', showPendingSoftwareUpdate)
   void startSoftwareUpdateCoordinator()
   void loadAnnouncements()
+  promotionTimer = setInterval(checkPromotionSchedule, Math.min(PROMOTION_INTERVAL_MS, 15_000))
   if (isTauri()) unlistenClose = await getCurrentWindow().onCloseRequested(onCloseRequested)
 })
 onBeforeUnmount(() => {
+  if (promotionTimer) clearInterval(promotionTimer)
   unlistenClose?.()
   window.removeEventListener('cs2as:show-pending-update', showPendingSoftwareUpdate)
 })
@@ -104,6 +149,7 @@ onBeforeUnmount(() => {
   <Suspense><StartupIntro v-if="introOpen && !easterEggOpen" @close="introOpen = false" /></Suspense>
   <Suspense><EasterEggGame v-if="easterEggOpen" @close="closeEasterEgg" /></Suspense>
   <PendingUpdateExitModal v-if="exitConfirmOpen" :version="softwareUpdaterState.version" :exiting="exiting" @return-install="returnToInstall" @exit-anyway="exitAnyway" />
+  <PromotionPushModal :promotion="promotion" @close="promotion = null" />
   <div v-if="closeChoiceOpen" class="app-modal-backdrop" role="presentation">
     <section class="app-modal" role="dialog" aria-modal="true" aria-labelledby="close-choice-title">
       <h2 id="close-choice-title">要如何关闭助手？</h2>

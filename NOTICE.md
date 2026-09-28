@@ -38,16 +38,15 @@ upstream application is included.
 
 ## ianlucas/cs2-css-inventory-simulator
 
-The 0.5.9 inventory customization workflow redistributes Inventory Simulator
-from https://github.com/ianlucas/cs2-css-inventory-simulator at tag `3.1.0`,
-commit `5e3c96283b3d3f5aeba44822a38031df2e213376`, copyright Ian Lucas, under the
-MIT License. The complete license, fixed source snapshot, build instructions,
-patch and hashes are preserved in `third_party/cs2-css-inventory-simulator/`.
+The inventory customization workflow redistributes Inventory Simulator
+from https://github.com/ianlucas/cs2-css-inventory-simulator at tag `3.3.0`,
+copyright Ian Lucas, under the
+MIT License. The complete license, fixed source snapshot, Release provenance,
+and hashes are preserved in `third_party/cs2-css-inventory-simulator/`.
 
-The downstream `3.1.0-cs2as.1` build changes only the default value of
-`invsim_ws_enabled` from `false` to `true`, so the user-facing `!ws` refresh
-flow works without a transient server-console command. Inventory modeling,
-SteamID association and CS2 runtime hooks remain the upstream implementation.
+The bundled `3.3.0` plugin binaries come directly from the upstream Release
+asset, without downstream changes. The upstream `invsim_ws_enabled` default is
+`false`; the `!ws` command requires explicit server-side enabling.
 
 ## CS2-insight-agent behavior reference
 

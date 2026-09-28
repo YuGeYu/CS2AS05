@@ -479,6 +479,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .peer-volume { display: grid; gap: 5px; color: var(--text-muted); font-size: 12px; }
 .app-modal-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; background: rgb(8 12 20 / 58%); backdrop-filter: blur(8px); }
 .app-modal { width: min(420px, 100%); padding: 26px; border: 1px solid var(--border-strong); border-radius: 18px; background: var(--surface); box-shadow: 0 24px 80px rgb(0 0 0 / 30%); }
+.promotion-push-backdrop { z-index: 180; }
+.promotion-push-dialog { width: min(560px, 100%); max-height: min(760px, calc(100vh - 40px)); overflow: auto; }
+.promotion-push-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.promotion-push-header h2 { display: flex; align-items: center; gap: 8px; }
+.promotion-push-header h2 span { display: inline-flex; align-items: center; gap: 8px; }
+.promotion-push-lead { margin-top: 14px !important; }
+.promotion-resource-card { margin-top: 18px; padding: 16px; border: 1px solid var(--border); border-left: 3px solid var(--primary); background: var(--surface-raised); }
+.promotion-resource-card h3 { margin: 8px 0 6px; color: var(--text); font-size: 18px; letter-spacing: 0; }
+.promotion-resource-card p { margin: 0; }
+.promotion-resource-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.promotion-resource-tags span { padding: 3px 7px; border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 11px; }
+.promotion-push-actions { margin-top: 20px; }
+.promotion-full-button { width: 100%; margin-top: 20px; }
+.promotion-push-donate-code { margin-top: 18px; max-height: min(46vh, 360px); }
 .app-modal h2 { margin: 0 0 8px; }.app-modal p { color: var(--text-muted); line-height: 1.6; }.modal-check { display: flex; gap: 8px; align-items: center; margin: 18px 0; color: var(--text-muted); font-size: 13px; }.modal-actions { display: flex; justify-content: flex-end; gap: 10px; }.modal-actions button { padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-raised); color: var(--text); cursor: pointer; }
 .update-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 .update-actions .primary-button { min-width: 150px; }

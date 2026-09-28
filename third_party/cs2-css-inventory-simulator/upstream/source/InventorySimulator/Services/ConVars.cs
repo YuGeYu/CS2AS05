@@ -31,7 +31,7 @@ public static class ConVars
     public static readonly FakeConVar<bool> IsWsEnabled = new(
         "invsim_ws_enabled",
         "Allow players to refresh their inventory using the !ws command.",
-        true
+        false
     );
 
     public static readonly FakeConVar<bool> IsWsImmediately = new(

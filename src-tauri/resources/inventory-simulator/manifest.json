@@ -1,10 +1,8 @@
 {
   "schemaVersion": 1,
-  "resourceVersion": "3.1.1-cs2as.1",
-  "upstreamTag": "3.1.1",
-  "upstreamCommit": "6d2cb8a99e021b88523b77079b4a4ce765b44807",
-  "counterStrikeSharpApi": "1.0.371",
-  "downstreamPatches": [
-    "invsim_ws_enabled defaults to true"
-  ]
+  "resourceVersion": "3.3.0-release",
+  "upstreamTag": "3.3.0",
+  "upstreamCommit": null,
+  "counterStrikeSharpApi": "1.0.375",
+  "downstreamPatches": []
 }

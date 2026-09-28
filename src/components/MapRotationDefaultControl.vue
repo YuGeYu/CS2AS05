@@ -20,8 +20,8 @@ onMounted(() => void load())
 
 <template>
   <div class="control-group map-rotation-control">
-    <div class="map-rotation-heading"><div class="map-rotation-copy"><h2><Route :size="18" aria-hidden="true" />自动换图默认状态</h2><p>{{ state?.enabled ? '下一次插件载入时自动换图' : '下一次插件载入时保持当前地图' }}</p><small>只影响下一次 MapRotation 载入；游戏运行中请使用 lbtv_map_rotation 0|1。</small><code v-if="state" :title="state.configPath">{{ state.configPath }}</code></div><button v-if="state?.source === 'fallback'" class="icon-button" type="button" title="恢复默认开启" aria-label="恢复默认开启" :disabled="disabled" @click="reset"><RotateCcw :size="17" /></button></div>
-    <div class="map-rotation-toggle-row"><ToggleSwitch :model-value="state?.enabled ?? true" label="启用自动换图" description="默认开启；修改会在下一次插件载入时生效。" :disabled="disabled" @update:model-value="change" /></div>
+    <div class="map-rotation-heading"><div class="map-rotation-copy"><h2><Route :size="18" aria-hidden="true" />自动换图默认状态</h2><p>{{ state?.enabled ? '下一次插件载入时自动换图' : '下一次插件载入时保持当前地图' }}</p><small>只影响下一次 MapRotation 载入；游戏运行中请使用 lbtv_map_rotation 0|1。</small><code v-if="state" :title="state.configPath">{{ state.configPath }}</code></div><button v-if="state?.source === 'fallback'" class="icon-button" type="button" title="恢复默认关闭" aria-label="恢复默认关闭" :disabled="disabled" @click="reset"><RotateCcw :size="17" /></button></div>
+    <div class="map-rotation-toggle-row"><ToggleSwitch :model-value="state?.enabled ?? false" label="启用自动换图" description="默认关闭；修改会在下一次插件载入时生效。" :disabled="disabled" @update:model-value="change" /></div>
     <p v-if="props.cs2Running" class="warning-note">请先退出 CS2，再修改下一次载入默认值。</p>
     <p v-if="state?.warning" class="warning-note" role="status">{{ state.warning }}</p>
     <p v-if="state" class="map-rotation-evidence" role="status">回读 {{ state.readBackEnabled ? (state.enabled ? 'enabled=1' : 'enabled=0') : '未建立配置' }} · SHA-256 {{ state.configSha256 || '--' }} · {{ state.loadSemantics }}</p>

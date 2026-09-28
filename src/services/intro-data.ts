@@ -1,6 +1,5 @@
 import type { IntroData, SupporterAcknowledgement, UpstreamProjectSummary } from '@/features/intro/types'
 import { STATIC_INTRO_DATA } from '@/features/intro/static-data'
-import { getIntroPublicData } from '@/services/tauri/intro'
 
 function text(value: unknown, max: number, nullable = false): string | null {
   if (value === null && nullable) return null
@@ -27,10 +26,5 @@ export function parseUpstream(value: unknown): UpstreamProjectSummary {
   return { fullName, description: text(row.description, 240, true) ?? STATIC_INTRO_DATA.upstream.description, url: text(row.html_url, 300) || STATIC_INTRO_DATA.upstream.url, license: license || 'AGPL-3.0', stars: integer(row.stargazers_count), forks: integer(row.forks_count), pushedAt: text(row.pushed_at, 40, true) }
 }
 export function loadCachedIntroData(): IntroData { return structuredClone(STATIC_INTRO_DATA) }
-let inFlight: Promise<IntroData> | null = null
-export async function loadIntroData(): Promise<IntroData> {
-  if (inFlight) return inFlight
-  inFlight = getIntroPublicData().then(payload => ({ supporters: parseSupporters({ supporters: payload.supporters }), upstream: parseUpstream({ full_name: payload.upstream.fullName, description: payload.upstream.description, html_url: payload.upstream.url, license: { spdx_id: payload.upstream.license }, stargazers_count: payload.upstream.stars, forks_count: payload.upstream.forks, pushed_at: payload.upstream.pushedAt }), fetchedAt: new Date().toISOString(), sources: payload.sources })).catch(() => loadCachedIntroData()).finally(() => { inFlight = null })
-  return inFlight
-}
+export async function loadIntroData(): Promise<IntroData> { return loadCachedIntroData() }
 export const FALLBACK_UPSTREAM = STATIC_INTRO_DATA.upstream

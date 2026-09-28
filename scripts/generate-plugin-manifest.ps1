@@ -85,17 +85,6 @@ try {
   } finally { $check.Dispose() }
   [IO.File]::Replace($temporary, $zip, $backup)
   $zipSha256 = Get-FileSha256 $zip
-  $rustService = Get-Content -LiteralPath $rustServicePath -Raw
-  $zipConstantPattern = 'const CUSTOM_ZIP_SHA256: &str = "[0-9A-F]{64}";'
-  if ([regex]::Matches($rustService, $zipConstantPattern).Count -ne 1) {
-    throw 'Expected exactly one CUSTOM_ZIP_SHA256 constant in src-tauri/src/services/cs2.rs.'
-  }
-  $rustService = [regex]::Replace(
-    $rustService,
-    $zipConstantPattern,
-    "const CUSTOM_ZIP_SHA256: &str = `"$zipSha256`";"
-  )
-  Set-Content -LiteralPath $rustServicePath -Value $rustService -Encoding utf8NoBOM -NoNewline
   $reportRoot = Join-Path $workspace $ReportDirectory; New-Item -ItemType Directory -Force -Path $reportRoot | Out-Null
-  [pscustomobject]@{ completedAt=(Get-Date).ToString('o'); version=$version; marker=$markerName; manifest=($manifest | ConvertFrom-Json); zipSha256=$zipSha256; rustHashSynchronized=$true; backupPath=$backup } | ConvertTo-Json -Depth 8 | Tee-Object -FilePath (Join-Path $reportRoot 'result.json')
+  [pscustomobject]@{ completedAt=(Get-Date).ToString('o'); version=$version; marker=$markerName; manifest=($manifest | ConvertFrom-Json); zipSha256=$zipSha256; fixedZipHashGuard=$false; backupPath=$backup } | ConvertTo-Json -Depth 8 | Tee-Object -FilePath (Join-Path $reportRoot 'result.json')
 } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force } }

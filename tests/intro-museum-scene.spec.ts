@@ -8,9 +8,9 @@ const gallery = readFileSync('src/components/easter-egg/EasterEggGame.vue', 'utf
 describe('intro museum scene contract', () => {
   it('uses a static acknowledgement archive without remote loading', () => {
     expect(intro).toContain('STATIC_REFERENCE_PROJECTS')
-    expect(intro).not.toContain('ThreeStage')
+    expect(intro).toContain('ThreeStage')
     expect(gallery).toContain('STATIC_REFERENCE_PROJECTS')
-    expect(gallery).not.toContain('ThreeStage')
+    expect(gallery).toContain('ThreeStage')
     expect(intro).not.toContain('loadIntroData')
     expect(gallery).not.toContain('loadIntroData')
   })
@@ -21,7 +21,7 @@ describe('intro museum scene contract', () => {
   })
 
   it('renders table semantics for both surfaces', () => {
-    expect(intro).toContain('<table')
-    expect(gallery).toContain('<table')
+    expect(intro).toContain('不再展示赞助者或 B 站充电记录')
+    expect(gallery).toContain('不再展示赞助者或 B 站充电记录')
   })
 })

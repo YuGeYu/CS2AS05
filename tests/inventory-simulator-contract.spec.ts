@@ -5,14 +5,13 @@ import { describe, expect, it } from 'vitest'
 const read = (path: string) => readFileSync(path, 'utf8')
 
 describe('Inventory Simulator migration contract', () => {
-  it('uses only the fixed Ian Lucas runtime and enables the documented ws flow', () => {
+  it('uses the InventorySimulator 3.3.0 release with its upstream ws default', () => {
     const convars = read('third_party/cs2-css-inventory-simulator/upstream/source/InventorySimulator/Services/ConVars.cs')
     const notice = read('NOTICE.md')
-    expect(convars).toMatch(/invsim_ws_enabled[\s\S]*?true/)
+    expect(convars).toMatch(/invsim_ws_enabled[\s\S]*?false/)
     expect(convars).toMatch(/invsim_ws_immediately[\s\S]*?false/)
     expect(convars).toMatch(/invsim_ws_cooldown[\s\S]*?30/)
-    expect(notice).toContain('5e3c96283b3d3f5aeba44822a38031df2e213376')
-    expect(notice).toContain('3.1.0-cs2as.1')
+    expect(notice).toContain('3.3.0')
   })
 
   it('registers the new Tauri surface and removes the old editor commands', () => {
@@ -46,6 +45,7 @@ describe('Inventory Simulator migration contract', () => {
       expect(view).toContain(text)
     }
     expect(view).toContain('inventory.cstrike.app')
+    expect(view).toContain('invsim_ws_enabled true')
     expect(view).toContain('-insecure')
     expect(view).not.toContain('paintKit')
     expect(view).not.toContain('player_loadout')

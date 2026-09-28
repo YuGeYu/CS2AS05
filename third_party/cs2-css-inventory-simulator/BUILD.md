@@ -1,4 +1,8 @@
-# Reproducible build
+# Optional source build for investigation
+
+The application ships the official `InventorySimulator-v3.3.0.zip` Release
+asset directly. The following command is for source investigation only; its
+output is not copied into application resources.
 
 From this directory:
 
@@ -18,6 +22,6 @@ The gamedata output is written to:
 upstream/bin/Release/gamedata/inventory-simulator.json
 ```
 
-Copy the built files into `src-tauri/resources/inventory-simulator` and update
-`manifest.json` plus `SHA256SUMS.txt`. Never label an upstream release hash as
-the hash of this downstream build.
+For a future update, extract the pinned official Release asset into
+`src-tauri/resources/inventory-simulator` and regenerate `manifest.json` plus
+`SHA256SUMS.txt`. Never label a local build as the official Release asset.

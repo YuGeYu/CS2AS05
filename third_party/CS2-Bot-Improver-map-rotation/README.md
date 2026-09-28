@@ -254,4 +254,4 @@ Run `sv_standable_normal 0.7` in your game console
 GPL-3.0
 # MapRotation
 
-默认配置位于 `addons/counterstrikesharp/configs/plugins/MapRotation/MapRotation.json`，仅读取 `enabled` 布尔字段。缺失、损坏或字段非法时插件回退为开启并记录 `[MapRotation]` 警告。`lbtv_map_rotation 0|1` 只改变当前进程内状态，不会写回配置文件；自动换图固定等待 15 秒，`lbtv_map_next` 仍立即执行。
+默认配置位于 `addons/counterstrikesharp/configs/plugins/MapRotation/MapRotation.json`，仅读取 `enabled` 布尔字段。缺失、损坏或字段非法时插件回退为关闭并记录 `[MapRotation]` 警告。`lbtv_map_rotation 0|1` 只改变当前进程内状态，不会写回配置文件；自动换图固定等待 15 秒，`lbtv_map_next` 仍立即执行。

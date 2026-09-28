@@ -178,8 +178,8 @@ useCs2ProcessPolling(cs2.refreshProcessStatus)
     <aside class="sidebar">
       <div class="sidebar-brand">
         <span class="sidebar-brand-mark"><PackageCheck :size="20" /></span><span class="sidebar-brand-copy">工作区导航</span
-        ><button type="button" class="version-easter-egg" :title="`版本 ${appConfig.appVersion}`" :aria-label="`版本 ${appConfig.appVersion}`" @click="onVersionClick">
-          {{ appConfig.appVersion }}</button
+         ><button type="button" class="version-easter-egg" :title="`版本 ${appConfig.appVersion}`" :aria-label="`版本 ${appConfig.appVersion}`" @click="onVersionClick">
+           {{ appConfig.appVersion }}</button>
         ><button type="button" class="sidebar-collapse-button" :title="sidebarCollapsed ? '展开导航' : '收起导航'" :aria-label="sidebarCollapsed ? '展开导航' : '收起导航'" :aria-expanded="!sidebarCollapsed" @click="sidebarCollapsed = !sidebarCollapsed"><ChevronRight v-if="sidebarCollapsed" :size="16" /><ChevronLeft v-else :size="16" /></button>
       </div>
       <nav aria-label="主导航">

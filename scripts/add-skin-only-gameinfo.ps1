@@ -23,7 +23,7 @@ try {
   $o = $dst.CreateEntry('backup/SkinOnly/gameinfo.gi', [IO.Compression.CompressionLevel]::Optimal)
   $bytes = [IO.File]::ReadAllBytes($skin); $s = $o.Open()
   try { $s.Write($bytes, 0, $bytes.Length) } finally { $s.Dispose() }
-  $manifest = [ordered]@{ schema = 1; resourceVersion = '0.5.13'; officialSha256 = $null; entries = [ordered]@{} }
+  $manifest = [ordered]@{ schema = 1; resourceVersion = ((Get-Content (Join-Path (Resolve-Path '.') 'package.json') -Raw | ConvertFrom-Json).version); officialSha256 = $null; entries = [ordered]@{} }
   $needed = @('gameinfo.gi','backup/Online/gameinfo.gi','backup/WithBots/gameinfo.gi','backup/SkinOnly/gameinfo.gi')
   foreach ($name in $needed) {
     $old = $src.GetEntry($name)

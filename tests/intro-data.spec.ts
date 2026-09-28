@@ -27,7 +27,7 @@ describe('intro data', () => {
     const fetch = vi.fn()
     vi.stubGlobal('fetch', fetch)
     const result = await loadIntroData()
-    expect(result.supporters).toHaveLength(6)
+    expect(result.supporters).toHaveLength(0)
     expect(result.upstream.fullName).toBe(FALLBACK_UPSTREAM.fullName)
     expect(result.sources).toEqual({ supporters: 'fallback', upstream: 'fallback' })
     expect(fetch).not.toHaveBeenCalled()
@@ -36,14 +36,14 @@ describe('intro data', () => {
   it('ignores legacy cached supporter records', async () => {
     localStorage.setItem('cs2as:intro:supporters:v1', JSON.stringify({ savedAt: Date.now(), value: { supporters: [{ id: 'old', nickname: '旧记录', amountCents: 100 }] } }))
     const result = await loadIntroData()
-    expect(result.supporters).toHaveLength(6)
+    expect(result.supporters).toHaveLength(0)
     expect(result.sources.supporters).toBe('fallback')
   })
 
   it('ignores browser cache in favor of the build-time archive', () => {
     localStorage.setItem('cs2as:intro:supporters:v1', JSON.stringify({ savedAt: Date.now(), value: { supporters: [{ id: 'cached', nickname: '缓存同路人', message: '先亮馆，再刷新', amountCents: 600, updatedAt: 'now' }] } }))
     const result = loadCachedIntroData()
-    expect(result.supporters).toHaveLength(6)
+    expect(result.supporters).toHaveLength(0)
     expect(result.sources.supporters).toBe('fallback')
   })
 })

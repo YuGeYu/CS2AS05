@@ -46,7 +46,7 @@ fn read_at(root: &Path, path: &Path, writable: bool) -> Result<MapRotationDefaul
                     value
                         .get("enabled")
                         .and_then(|v| v.as_bool())
-                        .unwrap_or(true),
+                        .unwrap_or(false),
                     "existing",
                     None,
                     fs::metadata(path)
@@ -58,17 +58,17 @@ fn read_at(root: &Path, path: &Path, writable: bool) -> Result<MapRotationDefaul
                 )
             }
             _ => (
-                true,
+                false,
                 "fallback",
-                Some("配置损坏，已回退开启；点击“恢复默认”后才会覆盖。".into()),
+                Some("配置损坏，已回退关闭；点击“恢复默认”后才会覆盖。".into()),
                 None,
                 None,
             ),
         },
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => (
-            true,
+            false,
             "default",
-            Some("尚未建立，当前默认开启。".into()),
+            Some("尚未建立，当前默认关闭。".into()),
             None,
             None,
         ),
@@ -139,5 +139,5 @@ pub fn set(root_path: &str, enabled: bool) -> Result<MapRotationDefault, AppErro
     write(root_path, enabled, false)
 }
 pub fn reset(root_path: &str) -> Result<MapRotationDefault, AppError> {
-    write(root_path, true, true)
+    write(root_path, false, true)
 }

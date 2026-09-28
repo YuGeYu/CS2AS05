@@ -217,20 +217,20 @@ describe('technology motion interaction boundaries', () => {
     wrapper.unmount()
   })
 
-  it('renders all eight Bot Items and rolls visible state back on write failure', async () => {
+  it('renders all eight Bot Items as enabled and read-only', async () => {
     const pinia = createPinia(); setActivePinia(pinia)
     useCs2Store().selectedRoot = 'root'
     const panel = usePanelStore(); panel.snapshot = snapshot()
-    tauri.setBotItem.mockRejectedValueOnce(new Error('item write failed'))
     const wrapper = mount(BotItemsView, { global: { plugins: [pinia] } })
     expect(wrapper.findAll('.toggle-row')).toHaveLength(8)
-    const first = wrapper.findAll('input[type="checkbox"]')[0]!
-    expect((first.element as HTMLInputElement).checked).toBe(true)
-    await first.setValue(false)
+    const switches = wrapper.findAll('input[type="checkbox"]')
+    expect(switches).toHaveLength(8)
+    expect(switches.every(input => (input.element as HTMLInputElement).checked)).toBe(true)
+    expect(switches.every(input => (input.element as HTMLInputElement).disabled)).toBe(true)
     await flushPromises()
     expect(panel.snapshot?.botItems.profiles).toBe(true)
-    expect((first.element as HTMLInputElement).checked).toBe(true)
-    expect(wrapper.get('[role="alert"]').text()).toContain('item write failed')
+    expect(tauri.setBotItem).not.toHaveBeenCalled()
+    expect(wrapper.get('[role="status"]').text()).toContain('技术限制')
     wrapper.unmount()
   })
 })

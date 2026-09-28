@@ -22,7 +22,7 @@ public sealed class MapRotationPlugin : BasePlugin
     private const int DefaultMaxRounds = 24;
     private const int DefaultOvertimeMaxRounds = 6;
     private const string DefaultConfigRelativePath = "addons/counterstrikesharp/configs/plugins/MapRotation/MapRotation.json";
-    private const bool DefaultEnabled = true;
+    private const bool DefaultEnabled = false;
     private const float AutoChangeDelaySeconds = 15.0f;
 
     private static readonly RotationMap[] Rotation =

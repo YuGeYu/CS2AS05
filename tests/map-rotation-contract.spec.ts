@@ -8,19 +8,20 @@ const source = readFileSync(
 )
 
 describe('MapRotation release contract', () => {
-  it('starts automatic rotation enabled while retaining an explicit pause switch', () => {
+  it('starts automatic rotation disabled while retaining an explicit enable switch', () => {
     expect(source).toContain('_enabled = LoadDefaultEnabled();')
     expect(source).toContain('lbtv_map_rotation [0|1]')
     expect(source).toContain('ScheduleNextMap')
     expect(source).toContain('System.Text.Json')
     expect(source).toContain('AutoChangeDelaySeconds = 15.0f')
     expect(source).toContain('DefaultConfigRelativePath')
+    expect(source).toContain('private const bool DefaultEnabled = false;')
     expect(source).toContain('lbtv_map_next')
   })
 
   it('ships the external default config in the release zip', () => {
     const zip = readFileSync('src-tauri/resources/CS2BotImprover.zip')
     expect(zip.length).toBeGreaterThan(1)
-    expect(createHash('sha256').update(zip).digest('hex').toUpperCase()).toBe('AD5F049C8E5DA59FDD175E786FE13F90D3EF8A41DF8629F91A127561A0ACE600')
+    expect(createHash('sha256').update(zip).digest('hex').toUpperCase()).toBe('EC3280E6848CA06B094FBAC2741674BA7E5586DF6679DB8D6ECC3B43109BB648')
   })
 })
