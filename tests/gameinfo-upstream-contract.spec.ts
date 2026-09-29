@@ -38,6 +38,17 @@ describe('gameinfo official and BOT variants', () => {
     expect(bundled.length).toBeGreaterThan(0)
   })
 
+  it('ships every BOT difficulty VPK required by the panel', () => {
+    for (const name of [
+      'overrides/Low/botprofile.vpk',
+      'overrides/Medium/botprofile.vpk',
+      'overrides/High/botprofile.vpk',
+      'overrides/botprofile.vpk',
+    ]) {
+      expect(zipEntry(name).length).toBeGreaterThan(0)
+    }
+  })
+
   it('ships a manifest matching every upstream gameinfo entry', () => {
     const manifest = JSON.parse(execFileSync('tar', ['-xOf', zipPath, 'gameinfo.manifest.json'], { encoding: 'utf8' })) as {
       entries: Record<string, { sha256: string; size: number }>
@@ -50,5 +61,11 @@ describe('gameinfo official and BOT variants', () => {
     expect(skinOnly).not.toContain('csgo/overrides')
     expect(skinOnly).not.toContain('botprofile.vpk')
     expect(Buffer.compare(zipEntry('backup/SkinOnly/gameinfo.gi'), readFileSync(officialPath))).toBe(0)
+  })
+
+  it('keeps the manifest at the archive root for the installer validator', () => {
+    const manifest = JSON.parse(execFileSync('tar', ['-xOf', zipPath, 'gameinfo.manifest.json'], { encoding: 'utf8' }))
+    expect(manifest.schema).toBeDefined()
+    expect(manifest.entries).toBeDefined()
   })
 })

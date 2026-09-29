@@ -1,8 +1,8 @@
 use tauri::AppHandle;
 
 use crate::{
-    errors::AppError,
     demo::playback,
+    errors::AppError,
     models::demo::*,
     services::{demo, panel},
 };

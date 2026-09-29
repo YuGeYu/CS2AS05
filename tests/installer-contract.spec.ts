@@ -28,6 +28,17 @@ describe('0.5.5 integrated Panel contract', () => {
     expect(read('src-tauri/src/services/cs2.rs')).not.toContain('bot_randomizer_options.json')
   })
 
+  it('selects only a bundled ZIP that contains the root gameinfo manifest', () => {
+    const service = read('src-tauri/src/services/cs2.rs')
+    const config = read('src-tauri/tauri.conf.json')
+    expect(service).toContain('zip_has_root_manifest')
+    expect(service).toContain('path.is_file() && zip_has_root_manifest(path)')
+    expect(config).toContain('"resources/CS2BotImprover.zip"')
+    expect(service).toContain('resource_dir.join("resources").join(BUNDLED_ZIP_NAME)')
+    expect(service).toContain('include_bytes!("../../resources/CS2BotImprover.zip")')
+    expect(service).toContain('bundled-resources')
+  })
+
   it('does not regenerate a fixed whole-ZIP hash guard', () => {
     const service = read('src-tauri/src/services/cs2.rs')
     const generator = read('scripts/generate-plugin-manifest.ps1')

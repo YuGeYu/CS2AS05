@@ -996,32 +996,82 @@ pub async fn load_ideas(app: &AppHandle) -> Result<Value, AppError> {
     Ok(payload)
 }
 
-pub async fn create_idea(app: &AppHandle, section_id: &str, content: &str) -> Result<Value, AppError> {
-    idea_mutation(app, reqwest::Method::POST, IDEAS_API_URL, json!({ "sectionId": section_id, "content": content })).await
+pub async fn create_idea(
+    app: &AppHandle,
+    section_id: &str,
+    content: &str,
+) -> Result<Value, AppError> {
+    idea_mutation(
+        app,
+        reqwest::Method::POST,
+        IDEAS_API_URL,
+        json!({ "sectionId": section_id, "content": content }),
+    )
+    .await
 }
 
 pub async fn update_idea(app: &AppHandle, idea_id: &str, content: &str) -> Result<Value, AppError> {
-    idea_mutation(app, reqwest::Method::PATCH, &format!("{IDEAS_API_URL}/{idea_id}"), json!({ "content": content })).await
+    idea_mutation(
+        app,
+        reqwest::Method::PATCH,
+        &format!("{IDEAS_API_URL}/{idea_id}"),
+        json!({ "content": content }),
+    )
+    .await
 }
 
 pub async fn delete_idea(app: &AppHandle, idea_id: &str) -> Result<Value, AppError> {
-    idea_mutation(app, reqwest::Method::DELETE, &format!("{IDEAS_API_URL}/{idea_id}"), Value::Null).await
+    idea_mutation(
+        app,
+        reqwest::Method::DELETE,
+        &format!("{IDEAS_API_URL}/{idea_id}"),
+        Value::Null,
+    )
+    .await
 }
 
 pub async fn create_idea_section(app: &AppHandle, title: &str) -> Result<Value, AppError> {
-    idea_mutation(app, reqwest::Method::POST, IDEA_SECTIONS_API_URL, json!({ "title": title })).await
+    idea_mutation(
+        app,
+        reqwest::Method::POST,
+        IDEA_SECTIONS_API_URL,
+        json!({ "title": title }),
+    )
+    .await
 }
 
-pub async fn update_idea_section(app: &AppHandle, section_id: &str, title: &str) -> Result<Value, AppError> {
-    idea_mutation(app, reqwest::Method::PATCH, &format!("{IDEA_SECTIONS_API_URL}/{section_id}"), json!({ "title": title })).await
+pub async fn update_idea_section(
+    app: &AppHandle,
+    section_id: &str,
+    title: &str,
+) -> Result<Value, AppError> {
+    idea_mutation(
+        app,
+        reqwest::Method::PATCH,
+        &format!("{IDEA_SECTIONS_API_URL}/{section_id}"),
+        json!({ "title": title }),
+    )
+    .await
 }
 
 pub async fn delete_idea_section(app: &AppHandle, section_id: &str) -> Result<Value, AppError> {
-    idea_mutation(app, reqwest::Method::DELETE, &format!("{IDEA_SECTIONS_API_URL}/{section_id}"), Value::Null).await
+    idea_mutation(
+        app,
+        reqwest::Method::DELETE,
+        &format!("{IDEA_SECTIONS_API_URL}/{section_id}"),
+        Value::Null,
+    )
+    .await
 }
 
 pub async fn reply_idea(app: &AppHandle, idea_id: &str, content: &str) -> Result<Value, AppError> {
-    idea_mutation(app, reqwest::Method::PUT, &format!("https://cs2as.600318.xyz/api/admin/ideas/{idea_id}/reply"), json!({ "content": content })).await
+    idea_mutation(
+        app,
+        reqwest::Method::PUT,
+        &format!("https://cs2as.600318.xyz/api/admin/ideas/{idea_id}/reply"),
+        json!({ "content": content }),
+    )
+    .await
 }
 
 fn idea_client() -> Result<reqwest::Client, AppError> {
@@ -1031,8 +1081,14 @@ fn idea_client() -> Result<reqwest::Client, AppError> {
         .map_err(|error| AppError::runtime(format!("无法初始化意见服务：{error}")))
 }
 
-async fn idea_mutation(app: &AppHandle, method: reqwest::Method, url: &str, body: Value) -> Result<Value, AppError> {
-    let account = load_account(app)?.ok_or_else(|| AppError::runtime("请先登录官网账号后再提交意见。"))?;
+async fn idea_mutation(
+    app: &AppHandle,
+    method: reqwest::Method,
+    url: &str,
+    body: Value,
+) -> Result<Value, AppError> {
+    let account =
+        load_account(app)?.ok_or_else(|| AppError::runtime("请先登录官网账号后再提交意见。"))?;
     let client = idea_client()?;
     let cookie = authenticate(&client, &account).await?;
     let mut request = client
@@ -1056,7 +1112,10 @@ async fn idea_mutation(app: &AppHandle, method: reqwest::Method, url: &str, body
 }
 
 fn api_error(status: reqwest::StatusCode, payload: &Value, fallback: &str) -> AppError {
-    let message = payload.get("error").and_then(Value::as_str).unwrap_or(fallback);
+    let message = payload
+        .get("error")
+        .and_then(Value::as_str)
+        .unwrap_or(fallback);
     AppError::runtime(format!("{message}（HTTP {}）", status.as_u16()))
 }
 

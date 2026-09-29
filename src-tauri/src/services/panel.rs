@@ -1486,7 +1486,7 @@ fn launch_cs2_inner(
     }
     cs2::write_runtime_log("INFO", &format!("使用 Steam 客户端：{}", steam.display()));
     let session_id = crate::demo::post_match::mark_next_live(app);
-    if let Err(error) = Command::new(&steam).args(&options).spawn() {
+    if let Err(error) = spawn_steam(&steam, &options) {
         crate::demo::post_match::cancel_pending(app, &session_id);
         return Err(io_context("启动 Steam", &steam, error));
     }
@@ -1500,6 +1500,67 @@ fn launch_cs2_inner(
             &fs::read(root.join("game/csgo/gameinfo.gi")).map_err(io_error)?,
         ),
     })
+}
+
+/// Steam 的某些安装器/启动器带有 `requireAdministrator` 清单。直接
+/// `CreateProcess` 会在非管理员面板中返回 740；只对这个明确错误走系统
+/// Shell 的 UAC 提升，避免让整个面板永久以管理员身份运行。
+fn spawn_steam(steam: &Path, options: &[&str]) -> std::io::Result<()> {
+    match Command::new(steam).args(options).spawn() {
+        Ok(_) => Ok(()),
+        Err(error) if cfg!(windows) && error.raw_os_error() == Some(740) => {
+            #[cfg(windows)]
+            {
+                return spawn_steam_elevated(steam, options).map_err(|error| {
+                    std::io::Error::new(
+                        error.kind(),
+                        format!("Steam 需要管理员权限，系统提升启动失败：{error}"),
+                    )
+                });
+            }
+            #[cfg(not(windows))]
+            unreachable!();
+        }
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(windows)]
+fn spawn_steam_elevated(steam: &Path, options: &[&str]) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr::null_mut;
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let verb: Vec<u16> = std::ffi::OsStr::new("runas")
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let file: Vec<u16> = steam
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let parameters = options.join(" ");
+    let parameters: Vec<u16> = std::ffi::OsStr::new(&parameters)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let result = unsafe {
+        ShellExecuteW(
+            null_mut(),
+            verb.as_ptr(),
+            file.as_ptr(),
+            parameters.as_ptr(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    } as isize;
+    if result <= 32 {
+        Err(std::io::Error::from_raw_os_error(result as i32))
+    } else {
+        Ok(())
+    }
 }
 
 fn prepare_launch_paths(

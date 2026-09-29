@@ -200,7 +200,11 @@ fn status(app: &AppHandle, root_path: &str) -> Result<InventorySimulatorStatus, 
     let gamedata_present = gamedata.is_file();
     let inventory_simulator_present = plugin.join("InventorySimulator.dll").is_file();
     let deployed_version = read_deployed_version(&plugin.join("CS2AS05.inventory-simulator.json"));
-    let core_guideline_compatible = read_core_compatibility(&csgo.join(CORE_CONFIG_RELATIVE))?;
+    // CounterStrikeSharp creates core.json lazily on its first server start. A
+    // missing file is therefore a not-yet-initialized environment, not a hard
+    // incompatibility; install() materializes the required setting safely.
+    let core_guideline_compatible =
+        read_core_compatibility(&csgo.join(CORE_CONFIG_RELATIVE))?.or(Some(true));
     let cs2_running = cs2::check_cs2_process()?;
     let ready = counter_strike_sharp_installed
         && !legacy_player_skin_mod_present
@@ -277,11 +281,7 @@ fn install(app: &AppHandle, root_path: &str) -> Result<InventorySimulatorInstall
             "[COUNTERSTRIKESHARP_MISSING] 还缺少基础插件环境，请先到“安装与诊断”完成安装。",
         ));
     }
-    if read_core_compatibility(&csgo.join(CORE_CONFIG_RELATIVE))? != Some(true) {
-        return Err(AppError::runtime(
-            "[CORE_GUIDELINE_ENABLED] CounterStrikeSharp 尚未允许本地库存模拟，请先在“安装与诊断”修复基础环境。",
-        ));
-    }
+    ensure_core_guideline_compatible(&csgo.join(CORE_CONFIG_RELATIVE))?;
 
     let source = resolve_resource_dir(app)?;
     verify_resource_dir(&source)?;
@@ -567,6 +567,32 @@ fn read_core_compatibility(path: &Path) -> Result<Option<bool>, AppError> {
         .map(|enabled| !enabled))
 }
 
+fn ensure_core_guideline_compatible(path: &Path) -> Result<(), AppError> {
+    let mut object = if path.is_file() {
+        let bytes = fs::read(path).map_err(io_error)?;
+        serde_json::from_slice::<serde_json::Value>(&bytes)
+            .map_err(|error| {
+                AppError::runtime(format!("CounterStrikeSharp core.json 无法读取：{error}"))
+            })?
+            .as_object()
+            .cloned()
+            .ok_or_else(|| AppError::runtime("CounterStrikeSharp core.json 不是 JSON 对象。"))?
+    } else {
+        serde_json::Map::new()
+    };
+    object.insert(
+        "FollowCS2ServerGuidelines".into(),
+        serde_json::Value::Bool(false),
+    );
+    let bytes = serde_json::to_vec_pretty(&serde_json::Value::Object(object)).map_err(|error| {
+        AppError::runtime(format!("无法写入 CounterStrikeSharp core.json：{error}"))
+    })?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(io_error)?;
+    }
+    fs::write(path, bytes).map_err(io_error)
+}
+
 fn read_deployed_version(path: &Path) -> Option<String> {
     let bytes = fs::read(path).ok()?;
     let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
@@ -625,7 +651,8 @@ fn io_error(error: std::io::Error) -> AppError {
 #[cfg(test)]
 mod tests {
     use super::{
-        checked_child, ensure_removable_directory, read_core_compatibility, verify_resource_dir,
+        checked_child, ensure_core_guideline_compatible, ensure_removable_directory,
+        read_core_compatibility, verify_resource_dir,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -680,6 +707,19 @@ mod tests {
         assert_eq!(read_core_compatibility(&config).unwrap(), Some(true));
         let after = fs::read_to_string(&config).unwrap();
         assert!(after.contains("UnrelatedSetting"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn missing_core_config_is_created_with_guideline_disabled() {
+        let root = temp_dir("core-create");
+        let config = root.join("nested").join("core.json");
+        ensure_core_guideline_compatible(&config).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&fs::read(&config).unwrap()).unwrap();
+        assert_eq!(
+            value.get("FollowCS2ServerGuidelines"),
+            Some(&serde_json::Value::Bool(false))
+        );
         fs::remove_dir_all(root).unwrap();
     }
 }

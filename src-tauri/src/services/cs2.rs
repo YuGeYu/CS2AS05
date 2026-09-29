@@ -40,6 +40,7 @@ use crate::services::panel;
 
 const CS2_FOLDER_NAME: &str = "Counter-Strike Global Offensive";
 const BUNDLED_ZIP_NAME: &str = "CS2BotImprover.zip";
+const EMBEDDED_BUNDLED_ZIP: &[u8] = include_bytes!("../../resources/CS2BotImprover.zip");
 const SKIN_ONLY_GAMEINFO_ENTRY: &str = "backup/SkinOnly/gameinfo.gi";
 const PANEL_FILE_NAME: &str = "Panel v1.4.4.exe";
 const PANEL_SHA256: &str = "2797A3FE85E65959CAE9501525B67B3876CEF65152E88DC716F64D5485AC2182";
@@ -725,14 +726,117 @@ fn resolve_zip_path(app: &AppHandle) -> Result<PathBuf, AppError> {
         .path()
         .resource_dir()
         .map_err(|error| AppError::runtime(format!("无法定位内置资源：{error}")))?;
-    let candidates = [
+    let mut candidates = vec![
         resource_dir.join(BUNDLED_ZIP_NAME),
         resource_dir.join("resources").join(BUNDLED_ZIP_NAME),
+        resource_dir.join("../resources").join(BUNDLED_ZIP_NAME),
+        resource_dir.join("../").join(BUNDLED_ZIP_NAME),
     ];
-    candidates
-        .into_iter()
-        .find(|path| path.is_file())
-        .ok_or_else(|| AppError::runtime("未找到内置定制 CS2BotImprover.zip，无法继续。"))
+    // Windows bundle layouts have changed between Tauri releases. Search only
+    // the resource tree (and only a few levels) so a stale unrelated ZIP can
+    // never become an install source.
+    collect_bundled_zip_candidates(&resource_dir, 3, &mut candidates);
+    let mut rejected = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for path in candidates {
+        let Ok(path) = dunce::canonicalize(&path) else {
+            continue;
+        };
+        if !seen.insert(path.clone()) {
+            continue;
+        }
+        if !path.is_file() {
+            continue;
+        }
+        if zip_has_root_manifest(&path) {
+            write_runtime_log("INFO", &format!("已定位内置定制包：{}。", path.display()));
+            return Ok(path);
+        }
+        rejected.push(path.display().to_string());
+    }
+    let fallback_root = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| AppError::runtime(format!("无法定位应用数据目录：{error}")))?
+        .join("bundled-resources");
+    fs::create_dir_all(&fallback_root).map_err(io_error)?;
+    let fallback = fallback_root.join(BUNDLED_ZIP_NAME);
+    if !zip_has_root_manifest(&fallback)
+        || fs::metadata(&fallback).map(|meta| meta.len()).ok()
+            != Some(EMBEDDED_BUNDLED_ZIP.len() as u64)
+    {
+        fs::write(&fallback, EMBEDDED_BUNDLED_ZIP).map_err(io_error)?;
+    }
+    if zip_has_root_manifest(&fallback) {
+        return Ok(fallback);
+    }
+    let detail = if rejected.is_empty() {
+        "未发现候选资源文件".to_string()
+    } else {
+        format!("已发现但校验失败：{}", rejected.join("；"))
+    };
+    Err(AppError::runtime(format!(
+        "未找到内置定制 CS2BotImprover.zip，无法继续。{}。请重新安装程序。",
+        detail
+    )))
+}
+
+fn collect_bundled_zip_candidates(root: &Path, depth: usize, output: &mut Vec<PathBuf>) {
+    if depth == 0 {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file()
+            && path
+                .file_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case(BUNDLED_ZIP_NAME))
+        {
+            output.push(path);
+        } else if path.is_dir() {
+            collect_bundled_zip_candidates(&path, depth - 1, output);
+        }
+    }
+}
+
+fn zip_has_root_manifest(path: &Path) -> bool {
+    let Ok(file) = File::open(path) else {
+        return false;
+    };
+    let Ok(mut archive) = ZipArchive::new(file) else {
+        return false;
+    };
+    find_zip_entry_index(&mut archive, "gameinfo.manifest.json").is_some()
+}
+
+fn find_zip_entry_index<R: Read + io::Seek>(
+    archive: &mut ZipArchive<R>,
+    expected: &str,
+) -> Option<usize> {
+    (0..archive.len()).find(|index| {
+        archive
+            .by_index(*index)
+            .ok()
+            .and_then(|entry| safe_zip_path(entry.name()).ok())
+            .is_some_and(|path| path == Path::new(expected))
+    })
+}
+
+fn read_zip_entry<R: Read + io::Seek>(
+    archive: &mut ZipArchive<R>,
+    expected: &str,
+) -> Result<Vec<u8>, AppError> {
+    let index = find_zip_entry_index(archive, expected)
+        .ok_or_else(|| AppError::runtime(format!("缺少资源条目：{expected}")))?;
+    let mut entry = archive
+        .by_index(index)
+        .map_err(|error| AppError::runtime(format!("无法读取资源条目 {expected}：{error}")))?;
+    let mut bytes = Vec::new();
+    entry.read_to_end(&mut bytes).map_err(io_error)?;
+    Ok(bytes)
 }
 
 /// Materialize the SkinOnly gameinfo for installations created before the
@@ -805,24 +909,23 @@ fn verify_custom_zip(path: &Path) -> Result<(), AppError> {
     let file = File::open(path).map_err(io_error)?;
     let mut archive = ZipArchive::new(file)
         .map_err(|error| AppError::runtime(format!("无法读取内置资源包：{error}")))?;
-    let manifest_bytes = archive
-        .by_name("gameinfo.manifest.json")
-        .map_err(|_| {
-            AppError::runtime("[GAMEINFO_ASSET_INVALID] 内置资源缺少 gameinfo manifest。")
-        })?
-        .bytes()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| {
-            AppError::runtime(format!("[GAMEINFO_ASSET_INVALID] manifest 读取失败：{e}"))
-        })?;
+    let manifest_bytes = read_zip_entry(&mut archive, "gameinfo.manifest.json").map_err(|_| {
+        AppError::runtime("[GAMEINFO_ASSET_INVALID] 内置资源缺少 gameinfo manifest。")
+    })?;
     let manifest: serde_json::Value = serde_json::from_slice(&manifest_bytes)
         .map_err(|_| AppError::runtime("[GAMEINFO_ASSET_INVALID] gameinfo manifest 无法解析。"))?;
-    let marker_bytes = archive
-        .by_name(PLUGIN_MARKER)
-        .map_err(|_| AppError::runtime("[BOT_PLUGIN_PAYLOAD_INVALID] 内置包缺少 marker。"))?
-        .bytes()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(io_error)?;
+    if manifest.get("schema").and_then(serde_json::Value::as_u64) != Some(1)
+        || manifest
+            .get("entries")
+            .and_then(serde_json::Value::as_object)
+            .is_none()
+    {
+        return Err(AppError::runtime(
+            "[GAMEINFO_ASSET_INVALID] gameinfo manifest 版本或 entries 无效。",
+        ));
+    }
+    let marker_bytes = read_zip_entry(&mut archive, PLUGIN_MARKER)
+        .map_err(|_| AppError::runtime("[BOT_PLUGIN_PAYLOAD_INVALID] 内置包缺少 marker。"))?;
     let marker: PluginMarker = serde_json::from_slice(&marker_bytes)
         .map_err(|_| AppError::runtime("[BOT_PLUGIN_PAYLOAD_INVALID] marker 无法解析。"))?;
     if marker
@@ -847,11 +950,8 @@ fn verify_custom_zip(path: &Path) -> Result<(), AppError> {
         let expected = manifest["entries"][name]["sha256"]
             .as_str()
             .unwrap_or_default();
-        let mut entry = archive
-            .by_name(name)
+        let bytes = read_zip_entry(&mut archive, name)
             .map_err(|_| AppError::runtime("[GAMEINFO_ASSET_INVALID] gameinfo 条目缺失。"))?;
-        let mut bytes = Vec::new();
-        std::io::Read::read_to_end(&mut entry, &mut bytes).map_err(io_error)?;
         let mut hasher = Sha256::new();
         hasher.update(&bytes);
         if format!("{:X}", hasher.finalize()) != expected {
@@ -1332,7 +1432,8 @@ pub(crate) fn normalize_root(path: &str) -> Result<PathBuf, AppError> {
 }
 
 fn safe_zip_path(name: &str) -> Result<PathBuf, AppError> {
-    let path = Path::new(name);
+    let normalized = name.trim_start_matches("./");
+    let path = Path::new(normalized);
     if path.is_absolute()
         || path.components().any(|component| {
             matches!(
@@ -1638,7 +1739,7 @@ mod tests {
         assert!(assertions.3, "Panel must not be installed into game files");
         assert_eq!(
             assertions.4,
-            "F9BBE17D1CA4729144A4F7CC37E1CD47B76729BC476E741987D0AC77F142F907"
+            "A300FEAEB2EE9ACC0BAFB7B6E243ED4BEF6B22F73AC53EE44EF9111078A9D7FC"
         );
         assert!(
             assertions.5,

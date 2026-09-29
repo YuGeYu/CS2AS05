@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 
-const cs2Tauri = vi.hoisted(() => ({ guess: vi.fn(), stop: vi.fn(), inspect: vi.fn() }))
+const cs2Tauri = vi.hoisted(() => ({ guess: vi.fn(), stop: vi.fn(), inspect: vi.fn(), discover: vi.fn() }))
 const panelTauri = vi.hoisted(() => ({ snapshot: vi.fn() }))
 const demoTauri = vi.hoisted(() => ({ ensureRoot: vi.fn() }))
 
 vi.mock('@/services/tauri/cs2', () => ({
-  checkCs2Process: vi.fn(), discoverCs2Roots: vi.fn(), inspectCs2Root: cs2Tauri.inspect,
+  checkCs2Process: vi.fn(), discoverCs2Roots: cs2Tauri.discover, inspectCs2Root: cs2Tauri.inspect,
   getDiagnosticsPayload: vi.fn(), installBotPackage: vi.fn(), openUpstreamPanel: vi.fn(), uninstallBotPackage: vi.fn(),
   guessCs2Roots: cs2Tauri.guess, stopGuessCs2Roots: cs2Tauri.stop,
 }))
@@ -31,9 +31,11 @@ describe('CS2 root suggestions', () => {
     cs2Tauri.guess.mockReset()
     cs2Tauri.stop.mockReset()
     cs2Tauri.inspect.mockReset()
+    cs2Tauri.discover.mockReset()
     panelTauri.snapshot.mockReset()
     demoTauri.ensureRoot.mockReset()
     cs2Tauri.inspect.mockResolvedValue({ rootPath: candidate.path })
+    cs2Tauri.discover.mockResolvedValue([])
     panelTauri.snapshot.mockResolvedValue(null)
     demoTauri.ensureRoot.mockResolvedValue({ path: candidate.path, scanDepth: 5, origin: 'selected_cs2_root' })
   })
@@ -57,5 +59,14 @@ describe('CS2 root suggestions', () => {
     expect(cs2Tauri.inspect).toHaveBeenCalledWith(candidate.path)
     expect(wrapper.emitted('close')).toHaveLength(1)
     wrapper.unmount()
+  })
+
+  it('keeps a valid saved root from producing a false not-found warning', async () => {
+    const { useCs2Store } = await import('@/stores/cs2')
+    const store = useCs2Store()
+    cs2Tauri.inspect.mockResolvedValue({ rootPath: candidate.path, gameDirExists: true, csgoDirExists: true })
+    await store.selectRoot(candidate.path)
+    await store.scanRoots()
+    expect(store.message).toEqual({ tone: 'ready', title: '目录已确认', message: '已确认当前保存的 CS2 游戏目录可用。' })
   })
 })

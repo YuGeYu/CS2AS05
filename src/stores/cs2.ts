@@ -57,8 +57,24 @@ export const useCs2Store = defineStore('cs2', () => {
     try {
       candidates.value = dedupe(await discoverCs2Roots())
       if (!selectedRoot.value && candidates.value[0]) await selectRoot(candidates.value[0].path)
+      // The saved root is the source of truth for the overview. A Steam scan
+      // can miss custom libraries, so verify that root before showing a
+      // "not found" toast instead of treating an empty scan as a failure.
+      let savedRootReady = false
+      if (selectedRoot.value) {
+        try {
+          const status = await inspectCs2Root(selectedRoot.value)
+          environment.value = status
+          selectedRoot.value = status.rootPath
+          savedRootReady = status.gameDirExists && status.csgoDirExists
+        } catch {
+          savedRootReady = false
+        }
+      }
       message.value = candidates.value.length
         ? { tone: 'ready', title: '扫描完成', message: '已完成目录扫描。' }
+        : savedRootReady
+          ? { tone: 'ready', title: '目录已确认', message: '已确认当前保存的 CS2 游戏目录可用。' }
         : { tone: 'warn', title: '未找到目录', message: '没有自动找到 CS2 目录，请手动选择。' }
     } catch (error) {
       message.value = failure(error)
