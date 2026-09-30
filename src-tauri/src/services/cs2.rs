@@ -977,23 +977,20 @@ pub fn ensure_bot_plugin_current(app: &AppHandle, root_path: &str) -> Result<Str
     let zip_hash = sha256_file(&zip_path)?;
     let _ = install_game_files_transactionally(&zip_path, &destination, false)?;
     apply_bot_vision_state(&destination, bot_vision_enabled_at(&destination))?;
-    let expected = current_plugin_version()?;
     match inspect_bot_plugin_version_at(&destination)? {
-        PluginVersionStatus::Valid { version }
-            if version == expected =>
-        {
-            write_log("INFO", &format!("BOT 插件已自动更新到 {version}。"));
+        PluginVersionStatus::Valid { version } => {
+            write_log(
+                "INFO",
+                &format!("BOT 插件资源已安装，使用 marker 版本 {version}。"),
+            );
             Ok(version.to_string())
         }
         PluginVersionStatus::Invalid { reason, .. } => Err(AppError::runtime(format!(
-            "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后插件校验失败：{reason}\nexpectedVersion={expected}\ninstalledVersion=invalid\nzipSha256={zip_hash}\nmarkerPath={}", destination.join(PLUGIN_MARKER).display()
+            "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后插件校验失败：{reason}\ninstalledVersion=invalid\nzipSha256={zip_hash}\nmarkerPath={}", destination.join(PLUGIN_MARKER).display()
         ))),
         PluginVersionStatus::Missing => Err(AppError::runtime(
-            format!("[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后未找到插件版本标记。\nexpectedVersion={expected}\ninstalledVersion=missing\nzipSha256={zip_hash}\nmarkerPath={}", destination.join(PLUGIN_MARKER).display()),
+            format!("[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后未找到插件版本标记。\ninstalledVersion=missing\nzipSha256={zip_hash}\nmarkerPath={}", destination.join(PLUGIN_MARKER).display()),
         )),
-        PluginVersionStatus::Valid { version } => Err(AppError::runtime(format!(
-            "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后的插件版本 {version} 与当前程序版本 {expected} 不一致。\nexpectedVersion={expected}\ninstalledVersion={version}\nzipSha256={zip_hash}\nmarkerPath={}", destination.join(PLUGIN_MARKER).display()
-        ))),
     }
 }
 
@@ -1046,14 +1043,6 @@ fn restore_bot_vision_vdf(zip_path: &Path, csgo: &Path) -> Result<(), AppError> 
         fs::remove_file(&target).map_err(io_error)?;
     }
     fs::rename(temporary, target).map_err(io_error)
-}
-
-fn current_plugin_version() -> Result<Version, AppError> {
-    Version::parse(env!("CARGO_PKG_VERSION")).map_err(|error| {
-        AppError::runtime(format!(
-            "[BOT_PLUGIN_VERSION_INVALID] 当前程序版本无效：{error}"
-        ))
-    })
 }
 
 fn inspect_bot_plugin_version_at(csgo: &Path) -> Result<PluginVersionStatus, AppError> {

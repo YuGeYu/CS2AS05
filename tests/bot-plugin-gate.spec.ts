@@ -11,7 +11,8 @@ describe('BOT plugin launch gate', () => {
     expect(command).toContain('app: AppHandle')
     expect(service).toContain('if mode == "bots"')
     expect(service).toContain('ensure_current_bot_plugin(app, root_path)')
-    expect(service).toContain('BOT_PLUGIN_HIGHER_VERSION_UNTRUSTED')
+    expect(service).toContain('PluginVersionStatus::Valid { version }')
+    expect(service).not.toContain('version == *current')
   })
 
   it('does not change the manual installation IPC', () => {

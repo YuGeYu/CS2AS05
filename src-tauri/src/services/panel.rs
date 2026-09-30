@@ -8,7 +8,6 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Mutex, OnceLock};
 
 use chrono::Local;
-use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -1610,12 +1609,7 @@ fn ensure_current_bot_plugin(
     app: &AppHandle,
     root_path: &str,
 ) -> Result<(String, String), AppError> {
-    let current = Version::parse(env!("CARGO_PKG_VERSION")).map_err(|error| {
-        invalid(format!(
-            "[BOT_PLUGIN_VERSION_INVALID] 当前程序版本无效：{error}"
-        ))
-    })?;
-    match plugin_gate_decision(cs2::inspect_bot_plugin_version(root_path)?, &current)? {
+    match plugin_gate_decision(cs2::inspect_bot_plugin_version(root_path)?)? {
         PluginGateDecision::Unchanged(version) => Ok(("unchanged".into(), version)),
         PluginGateDecision::Install => {
             let version = cs2::ensure_bot_plugin_current(app, root_path).map_err(|error| {
@@ -1635,12 +1629,9 @@ enum PluginGateDecision {
     Install,
 }
 
-fn plugin_gate_decision(
-    status: cs2::PluginVersionStatus,
-    current: &Version,
-) -> Result<PluginGateDecision, AppError> {
+fn plugin_gate_decision(status: cs2::PluginVersionStatus) -> Result<PluginGateDecision, AppError> {
     match status {
-        cs2::PluginVersionStatus::Valid { version } if version == *current => {
+        cs2::PluginVersionStatus::Valid { version } => {
             Ok(PluginGateDecision::Unchanged(version.to_string()))
         }
         _ => Ok(PluginGateDecision::Install),
@@ -1982,6 +1973,7 @@ fn io_context(action: &str, path: &Path, error: std::io::Error) -> AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use semver::Version;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn test_root(name: &str) -> PathBuf {
@@ -2094,50 +2086,37 @@ mod tests {
     }
 
     #[test]
-    fn bot_plugin_gate_self_repairs_invalid_versions_without_blocking() {
-        let current = Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+    fn bot_plugin_gate_accepts_any_valid_plugin_version_without_version_blocking() {
         assert_eq!(
-            plugin_gate_decision(
-                cs2::PluginVersionStatus::Valid {
-                    version: Version::parse("0.5.5-test.1").unwrap()
-                },
-                &current
-            )
+            plugin_gate_decision(cs2::PluginVersionStatus::Valid {
+                version: Version::parse("0.5.5-test.1").unwrap(),
+            })
             .unwrap(),
+            PluginGateDecision::Unchanged("0.5.5-test.1".into())
+        );
+        assert_eq!(
+            plugin_gate_decision(cs2::PluginVersionStatus::Missing).unwrap(),
             PluginGateDecision::Install
         );
         assert_eq!(
-            plugin_gate_decision(cs2::PluginVersionStatus::Missing, &current).unwrap(),
-            PluginGateDecision::Install
-        );
-        assert_eq!(
-            plugin_gate_decision(
-                cs2::PluginVersionStatus::Valid {
-                    version: Version::parse("0.5.4").unwrap()
-                },
-                &current
-            )
+            plugin_gate_decision(cs2::PluginVersionStatus::Valid {
+                version: Version::parse("0.5.4").unwrap(),
+            })
             .unwrap(),
-            PluginGateDecision::Install
+            PluginGateDecision::Unchanged("0.5.4".into())
         );
         assert_eq!(
-            plugin_gate_decision(
-                cs2::PluginVersionStatus::Valid {
-                    version: Version::parse("0.6.0-test").unwrap()
-                },
-                &current
-            )
+            plugin_gate_decision(cs2::PluginVersionStatus::Valid {
+                version: Version::parse("0.6.0-test").unwrap(),
+            })
             .unwrap(),
-            PluginGateDecision::Install
+            PluginGateDecision::Unchanged("0.6.0-test".into())
         );
         assert_eq!(
-            plugin_gate_decision(
-                cs2::PluginVersionStatus::Invalid {
-                    reason: "tampered".into(),
-                    version: Some(Version::parse("0.6.0-test").unwrap()),
-                },
-                &current,
-            )
+            plugin_gate_decision(cs2::PluginVersionStatus::Invalid {
+                reason: "tampered".into(),
+                version: Some(Version::parse("0.6.0-test").unwrap()),
+            })
             .unwrap(),
             PluginGateDecision::Install
         );
