@@ -27,12 +27,14 @@ function Get-Payload([System.IO.Compression.ZipArchive]$Archive) {
   $hash = [Security.Cryptography.SHA256]::Create()
   try {
     $entries = @($Archive.Entries | Where-Object {
+      $normalized = $_.FullName.TrimStart('./')
       -not $_.FullName.EndsWith('/') -and
-      $_.FullName -ne $markerName -and
-      ($_.FullName.StartsWith('addons/counterstrikesharp/plugins/NadeSystem/') -or $_.FullName.StartsWith('addons/counterstrikesharp/plugins/CS2BotLlmChat/') -or $_.FullName -eq $mapRotationEntry)
+      $normalized -ne $markerName -and
+      ($normalized.StartsWith('addons/counterstrikesharp/plugins/NadeSystem/') -or $normalized.StartsWith('addons/counterstrikesharp/plugins/CS2BotLlmChat/') -or $normalized -eq $mapRotationEntry)
     } | Sort-Object FullName)
     foreach ($entry in $entries) {
-      Add-Text $hash "$($entry.FullName)`0$($entry.Length)`0"
+      $normalized = $entry.FullName.TrimStart('./')
+      Add-Text $hash "$normalized`0$($entry.Length)`0"
       $stream = $entry.Open()
       try {
         $buffer = New-Object byte[] 65536
@@ -40,7 +42,7 @@ function Get-Payload([System.IO.Compression.ZipArchive]$Archive) {
       } finally { $stream.Dispose() }
     }
     [void]$hash.TransformFinalBlock(@(), 0, 0)
-    return [pscustomobject]@{ sha256 = Get-Hex $hash.Hash; entries = @($entries | ForEach-Object FullName) }
+    return [pscustomobject]@{ sha256 = Get-Hex $hash.Hash; entries = @($entries | ForEach-Object { $_.FullName.TrimStart('./') }) }
   } finally { $hash.Dispose() }
 }
 function Get-FileSha256([string]$Path) {
