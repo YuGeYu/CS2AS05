@@ -54,7 +54,6 @@
       }
     },
     "resources": [
-      "resources/CS2BotImprover.zip",
       "resources/demo-maps",
       "resources/inventory-simulator",
       "resources/vpkedit",
