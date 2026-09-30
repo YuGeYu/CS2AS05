@@ -16,6 +16,7 @@
 - 修复部分玩家在 CounterStrikeSharp 已安装、但 `addons/counterstrikesharp/configs/core.json` 不存在时，助手提示“读取 core.json 失败：系统找不到指定的文件”的问题。
 - 修复同一个 `CS2BotImprover.zip` 同时嵌入主程序并作为 Tauri 外置资源打包，造成最终安装器重复携带资源的问题。
 - 修复安装器契约测试与实际资源回退逻辑不一致的问题，防止后续构建重新引入重复 ZIP。
+- 修复资源包 manifest 生成脚本未规范化 ZIP 条目 `./` 前缀，导致 payload 校验条目可能为空的问题。
 
 【其他】
 
