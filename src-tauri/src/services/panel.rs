@@ -301,9 +301,30 @@ fn initialize_panel_defaults_at_with_running(
             initialized_fields.push("nades".into());
         }
         let bot_items_path = csgo.join(CORE_CONFIG_FILE);
-        let bot_items = read_bot_items_strict(&bot_items_path)?;
-        let bot_items_needs_migration = core_has_legacy_bot_item_keys(&bot_items_path)?;
-        if bot_items_needs_migration {
+        // CounterStrikeSharp creates core.json lazily on its first server
+        // start. Treat a missing file as a fresh default, but keep strict
+        // parsing for an existing file so corruption is still surfaced.
+        let bot_items = if bot_items_path.is_file() {
+            read_bot_items_strict(&bot_items_path)?
+        } else {
+            BotItemsState {
+                profiles: true,
+                agents: true,
+                music: true,
+                weapons: true,
+                knives: true,
+                gloves: true,
+                stickers: true,
+                charms: true,
+                writable: false,
+            }
+        };
+        let bot_items_needs_migration = if bot_items_path.is_file() {
+            core_has_legacy_bot_item_keys(&bot_items_path)?
+        } else {
+            false
+        };
+        if !bot_items_path.is_file() || bot_items_needs_migration {
             write_bot_items_at(&bot_items_path, &bot_items)?;
         }
         if preferences.bot_items.is_none() {
@@ -2578,6 +2599,30 @@ mod tests {
         assert!(object
             .get("bot_randomizer github.com/ed0ard agents")
             .is_none());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn missing_core_json_is_created_during_panel_initialization() {
+        let root = test_root("missing-core-json");
+        create_panel_environment(&root, "bots", "Low", "echo template\n", None);
+        let core = root.join("game/csgo").join(CORE_CONFIG_FILE);
+        fs::remove_file(&core).unwrap();
+
+        let result = initialize_panel_defaults_at_with_running(&root, true, false).unwrap();
+        assert_eq!(result.status, "initialized");
+        assert!(core.is_file());
+        let snapshot = snapshot_at(&root).unwrap();
+        assert!(
+            snapshot.bot_items.profiles
+                && snapshot.bot_items.agents
+                && snapshot.bot_items.music
+                && snapshot.bot_items.weapons
+                && snapshot.bot_items.knives
+                && snapshot.bot_items.gloves
+                && snapshot.bot_items.stickers
+                && snapshot.bot_items.charms
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
