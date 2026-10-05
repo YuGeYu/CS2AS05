@@ -2,11 +2,11 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import * as api from '@/services/tauri/demo'
 import { dispatchToast } from '@/services/toast'
-import type { DemoAnalysisJob, DemoListItem, DemoRecordingSettings, DemoReport, DemoRoot, DemoScanResult } from '@/types/demo'
+import type { DemoAnalysisJob, DemoListItem, DemoReport, DemoRoot, DemoScanResult } from '@/types/demo'
 
 export const useDemoStore = defineStore('demo', () => {
   const roots = ref<DemoRoot[]>([]); const items = ref<DemoListItem[]>([]); const total = ref(0); const report = ref<DemoReport | null>(null)
-  const query = ref(''); const status = ref('all'); const page = ref(1); const pageSize = ref(25); const busy = ref(''); const error = ref(''); const settings = ref<DemoRecordingSettings | null>(null)
+  const query = ref(''); const status = ref('all'); const page = ref(1); const pageSize = ref(25); const busy = ref(''); const error = ref('')
   const scanResult = ref<DemoScanResult | null>(null)
   const jobs = ref<DemoAnalysisJob[]>([])
   const rowBusy = ref<Record<number, 'play' | 'reveal' | 'delete'>>({})
@@ -38,7 +38,5 @@ export const useDemoStore = defineStore('demo', () => {
       throw e
     } finally { busy.value = '' }
   }
-  async function loadSettings(rootPath: string) { if (!rootPath) return; try { settings.value = await api.getDemoSettings(rootPath) } catch { settings.value = null } }
-  async function setRecording(rootPath: string, enabled: boolean) { busy.value = 'recording'; try { settings.value = await api.setDemoRecordingEnabled(rootPath, enabled) } catch (e) { error.value = normalize(e); throw e } finally { busy.value = '' } }
-  return { roots, items, total, report, jobs, query, status, page, pageSize, busy, rowBusy, error, settings, scanResult, refresh, addRoot, updateRoot, removeRoot, scan, importFile, openReport, retry, play, reveal, deleteFile, deleteFiles, loadSettings, setRecording }
+  return { roots, items, total, report, jobs, query, status, page, pageSize, busy, rowBusy, error, scanResult, refresh, addRoot, updateRoot, removeRoot, scan, importFile, openReport, retry, play, reveal, deleteFile, deleteFiles }
 })

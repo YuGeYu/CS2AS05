@@ -1,11 +1,6 @@
 use tauri::AppHandle;
 
-use crate::{
-    demo::playback,
-    errors::AppError,
-    models::demo::*,
-    services::{demo, panel},
-};
+use crate::{demo::playback, models::demo::*, services::demo};
 
 #[tauri::command]
 pub fn play_demo(
@@ -214,45 +209,4 @@ pub async fn retry_demo_parse(app: AppHandle, id: i64) -> Result<DemoImportResul
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.into_string())
-}
-#[tauri::command]
-pub fn get_demo_settings(
-    app: AppHandle,
-    root_path: String,
-) -> Result<DemoRecordingSettings, String> {
-    let bots_mode = panel::snapshot(&root_path)
-        .map_err(AppError::into_string)?
-        .mode
-        .current
-        .as_deref()
-        == Some("bots");
-    let stored = demo::recording_desired(&app).map_err(|e| e.into_string())?;
-    let desired = stored && bots_mode;
-    if stored != desired && !crate::services::cs2::check_cs2_process().unwrap_or(true) {
-        panel::apply_demo_recording(&root_path, desired).map_err(|e| e.into_string())?;
-        demo::set_recording_desired(&app, desired).map_err(|e| e.into_string())?;
-    }
-    let state = panel::demo_recording_state(&root_path, desired).map_err(|e| e.into_string())?;
-    if state.drifted && !crate::services::cs2::check_cs2_process().unwrap_or(true) {
-        panel::apply_demo_recording(&root_path, desired).map_err(|e| e.into_string())?;
-        return panel::demo_recording_state(&root_path, desired).map_err(|e| e.into_string());
-    }
-    Ok(state)
-}
-#[tauri::command]
-pub fn set_demo_recording_enabled(
-    app: AppHandle,
-    root_path: String,
-    enabled: bool,
-) -> Result<DemoRecordingSettings, String> {
-    let bots_mode = panel::snapshot(&root_path)
-        .map_err(AppError::into_string)?
-        .mode
-        .current
-        .as_deref()
-        == Some("bots");
-    let effective = enabled && bots_mode;
-    panel::apply_demo_recording(&root_path, effective).map_err(|e| e.into_string())?;
-    demo::set_recording_desired(&app, effective).map_err(|e| e.into_string())?;
-    panel::demo_recording_state(&root_path, effective).map_err(|e| e.into_string())
 }

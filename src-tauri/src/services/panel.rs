@@ -14,14 +14,12 @@ use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 
 use crate::errors::AppError;
-use crate::models::demo::DemoRecordingSettings;
 use crate::models::panel::{
     BotItemsState, DifficultyState, DropKnivesState, GameInfoState, LaunchResult, ModeState,
     PanelInitializationResult, PanelSnapshot, PresetsState,
 };
 use crate::services::cs2;
 use crate::services::cs2_discovery;
-use crate::services::demo;
 
 const KNIVES: [u16; 20] = [
     500, 503, 505, 506, 507, 508, 509, 512, 514, 515, 516, 517, 518, 519, 520, 521, 522, 523, 525,
@@ -988,22 +986,28 @@ fn write_drop_knives_at(csgo: &Path, bind_key: &str, selected: &[u16]) -> Result
     Ok(())
 }
 
-const DEMO_RECORDING_BEGIN: &str = "// CS2AS05 DEMO RECORDING BEGIN";
-const DEMO_RECORDING_END: &str = "// CS2AS05 DEMO RECORDING END";
+// 本地对局自动录制已从产品中移除。升级旧版本时，只清理助手曾写入的完整标记块，保留玩家自己的 tv_* 配置。
+const RETIRED_DEMO_RECORDING_BEGIN: &str = "// CS2AS05 DEMO RECORDING BEGIN";
+const RETIRED_DEMO_RECORDING_END: &str = "// CS2AS05 DEMO RECORDING END";
 
-fn replace_demo_recording_block(path: &Path, enabled: bool) -> Result<(), AppError> {
+fn remove_retired_demo_recording_block(path: &Path) -> Result<(), AppError> {
+    if !path.is_file() {
+        return Ok(());
+    }
     let text = read_text(path).map_err(|e| io_context("读取 cfg", path, e))?;
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let has_bom = text.starts_with('\u{feff}');
-    let mut lines = Vec::new();
     let mut in_block = false;
+    let mut removed = false;
+    let mut lines = Vec::new();
     for original in text.trim_start_matches('\u{feff}').lines() {
         let line = original.trim();
-        if line == DEMO_RECORDING_BEGIN {
+        if line == RETIRED_DEMO_RECORDING_BEGIN {
             in_block = true;
+            removed = true;
             continue;
         }
-        if line == DEMO_RECORDING_END {
+        if line == RETIRED_DEMO_RECORDING_END {
             in_block = false;
             continue;
         }
@@ -1011,80 +1015,24 @@ fn replace_demo_recording_block(path: &Path, enabled: bool) -> Result<(), AppErr
             lines.push(original.to_string());
         }
     }
-    while lines.last().is_some_and(|line| line.trim().is_empty()) {
-        lines.pop();
+    if !removed {
+        return Ok(());
     }
-    let value = if enabled { 1 } else { 0 };
-    lines.extend([
-        DEMO_RECORDING_BEGIN.to_string(),
-        format!("tv_enable {value}"),
-        format!("tv_autorecord {value}"),
-        DEMO_RECORDING_END.to_string(),
-    ]);
-    let mut output = format!("{}{newline}", lines.join(newline));
+    let mut output = lines.join(newline);
+    if text.ends_with(newline) {
+        output.push_str(newline);
+    }
     if has_bom {
         output.insert(0, '\u{feff}');
     }
     atomic_write(path, output.as_bytes())
 }
 
-fn cfg_demo_recording_applied(path: &Path, enabled: bool) -> bool {
-    let Ok(text) = read_text(path) else {
-        return false;
-    };
-    let expected = if enabled { "1" } else { "0" };
-    let mut in_block = false;
-    let mut tv_enable = false;
-    let mut tv_autorecord = false;
-    for line in text.lines().map(str::trim) {
-        if line == DEMO_RECORDING_BEGIN {
-            in_block = true;
-            continue;
-        }
-        if line == DEMO_RECORDING_END {
-            in_block = false;
-            continue;
-        }
-        if in_block {
-            tv_enable |= line == format!("tv_enable {expected}");
-            tv_autorecord |= line == format!("tv_autorecord {expected}");
-        }
+fn remove_retired_demo_recording_blocks(csgo: &Path) -> Result<(), AppError> {
+    for relative in CFG_FILES {
+        remove_retired_demo_recording_block(&csgo.join(relative))?;
     }
-    tv_enable && tv_autorecord
-}
-
-pub fn apply_demo_recording(root_path: &str, enabled: bool) -> Result<(), AppError> {
-    if cs2::check_cs2_process_for_write(root_path)? {
-        return Err(invalid(
-            "[DEMO_RECORDING_CS2_RUNNING] CS2 运行中不能修改自动录制设置。",
-        ));
-    }
-    let root = cs2::normalize_root(root_path)?;
-    let csgo = root.join("game/csgo");
-    panel_transaction(&csgo, || {
-        for relative in CFG_FILES {
-            replace_demo_recording_block(&csgo.join(relative), enabled)?;
-        }
-        Ok(())
-    })
-}
-
-pub fn demo_recording_state(
-    root_path: &str,
-    desired: bool,
-) -> Result<DemoRecordingSettings, AppError> {
-    let root = cs2::normalize_root(root_path)?;
-    let csgo = root.join("game/csgo");
-    let normal = cfg_demo_recording_applied(&csgo.join(CFG_FILES[0]), desired);
-    let ffa = cfg_demo_recording_applied(&csgo.join(CFG_FILES[1]), desired);
-    Ok(DemoRecordingSettings {
-        desired_enabled: desired,
-        normal_cfg_applied: normal,
-        ffa_cfg_applied: ffa,
-        drifted: !normal || !ffa,
-        writable: !cs2::check_cs2_process_for_write(root_path)?,
-        scope: "bots-only",
-    })
+    Ok(())
 }
 
 fn panel_transaction<T>(
@@ -1331,16 +1279,12 @@ fn set_mode_inner(
             cs2::ensure_skin_only_gameinfo(app, root_path)?;
             ensure_skin_only_gameinfo_sidecar(&csgo)?;
         }
+        remove_retired_demo_recording_blocks(&csgo)?;
         write_mode_at(&csgo, mode)?;
         set_skin_only_plugins(&csgo, mode == "skin_only")?;
         preferences.mode = Some(preference(mode.to_string()));
         save_preferences(&csgo, &preferences)
     })?;
-    if let Some(app) = app {
-        let recording_enabled = mode == "bots";
-        apply_demo_recording(root_path, recording_enabled)?;
-        demo::set_recording_desired(app, recording_enabled)?;
-    }
     snapshot_at(&root)
 }
 
@@ -1481,9 +1425,6 @@ fn launch_cs2_inner(
     })?;
     // Validate Steam-owned game layers before changing Panel state, plugins, or gameinfo.
     cs2::ensure_core_game_layers(&root)?;
-    let recording_enabled = mode == "bots";
-    apply_demo_recording(root_path, recording_enabled)?;
-    demo::set_recording_desired(app, recording_enabled)?;
     if mode == "bots" {
         initialize_panel_defaults_at(&root, false)?;
     }
@@ -2647,34 +2588,22 @@ mod tests {
     }
 
     #[test]
-    fn demo_recording_block_preserves_unknown_lines_and_converges_duplicates() {
-        let root = test_root("demo-recording-block");
+    fn retired_demo_recording_block_is_removed_without_touching_player_tv_settings() {
+        let root = test_root("retired-demo-recording");
         fs::create_dir_all(&root).unwrap();
         let cfg = root.join("managed.cfg");
-        fs::write(&cfg, "echo before\r\n// CS2AS05 DEMO RECORDING BEGIN\r\ntv_enable 0\r\n// CS2AS05 DEMO RECORDING END\r\necho after\r\n// CS2AS05 DEMO RECORDING BEGIN\r\ntv_autorecord 0\r\n// CS2AS05 DEMO RECORDING END\r\n").unwrap();
-        replace_demo_recording_block(&cfg, true).unwrap();
+        fs::write(
+            &cfg,
+            "tv_enable 1\r\n// CS2AS05 DEMO RECORDING BEGIN\r\ntv_enable 1\r\ntv_autorecord 1\r\n// CS2AS05 DEMO RECORDING END\r\ntv_autorecord 0\r\n",
+        )
+        .unwrap();
+        remove_retired_demo_recording_block(&cfg).unwrap();
         let text = fs::read_to_string(&cfg).unwrap();
-        assert!(text.contains("echo before\r\n"));
-        assert!(text.contains("echo after\r\n"));
-        assert_eq!(text.matches(DEMO_RECORDING_BEGIN).count(), 1);
-        assert_eq!(text.matches("tv_enable 1").count(), 1);
-        assert_eq!(text.matches("tv_autorecord 1").count(), 1);
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn demo_recording_block_preserves_utf8_bom_and_supports_disabled_state() {
-        let root = test_root("demo-recording-bom");
-        fs::create_dir_all(&root).unwrap();
-        let cfg = root.join("managed.cfg");
-        fs::write(&cfg, "\u{feff}echo custom\n").unwrap();
-        replace_demo_recording_block(&cfg, false).unwrap();
-        let bytes = fs::read(&cfg).unwrap();
-        assert!(bytes.starts_with(&[0xef, 0xbb, 0xbf]));
-        let text = String::from_utf8(bytes).unwrap();
-        assert!(text.contains("echo custom\n"));
-        assert!(text.contains("tv_enable 0\n"));
-        assert!(text.contains("tv_autorecord 0\n"));
+        assert!(text.contains("tv_enable 1\r\n"));
+        assert!(text.contains("tv_autorecord 0\r\n"));
+        assert!(!text.contains(RETIRED_DEMO_RECORDING_BEGIN));
+        assert!(!text.contains(RETIRED_DEMO_RECORDING_END));
+        assert!(!text.contains("tv_autorecord 1"));
         fs::remove_dir_all(root).unwrap();
     }
 

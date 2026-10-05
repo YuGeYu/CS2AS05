@@ -12,8 +12,7 @@
 - 安装或覆盖更新内置的上游官方 `CS2BotImprover.zip`，并保留安装事务与失败回滚。
 - 通过上游 `Panel v1.4.5` 使用 Online/BOT 模式、难度、Aim、Nades、Bot 物品、丢刀、规则和开发者信息；助手不再维护一套平行控制面板。
 - 保留本项目的“指令研究所”，用于检索公开指令资料和复制命令；上游 Panel 的常用指令页仍是游戏配置的权威入口。
-- 提供本地 Demo 目录扫描、手动导入、SQLite 录像库，以及基于可靠事件字段的回合、击杀、炸弹时间线、对局战报和个人表现雷达。
-- 可为助手启动的 BOT/本地托管对局写入 `tv_enable` / `tv_autorecord`；官方匹配是否提供 Demo 仍由服务器或平台决定。
+- 提供本地 Demo 目录扫描、手动导入、SQLite 录像库，以及基于可靠事件字段的回合、击杀、炸弹时间线、对局战报和个人表现雷达；助手不再自动录制本地对局。
 - 在“安装与诊断”和概览页安全提取并打开原版 `Panel v1.4.5.exe`，它是模式、规则和 BOT 预设的主要操作入口。
 - 将官方 Inventory Simulator v3.5.0 资源按 `addons/counterstrikesharp/plugins/InventorySimulator` 与 `gamedata/inventory-simulator.json` 目录安装、校验和移除；它只服务助手启动的 `-insecure` 本地 BOT 场景，并包含武器、刀、手套、角色、贴纸、挂件、音乐盒、涂鸦、StatTrak、磨损和宠物能力。
 - 卸载定制插件文件、读取基础诊断信息，并提供可随时停止的快快客服会话；会话保存在应用数据目录，不使用浏览器存储。

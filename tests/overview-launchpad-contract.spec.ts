@@ -15,10 +15,10 @@ describe('概览本地对局启动台契约', () => {
     expect(overview).toContain('只开换肤由于技术限制，暂未开放此功能。')
     expect(overview).toContain('只开换肤暂未开放')
     expect(overview).toContain('请切换到在线模式或 BOT 模式')
-    expect(overview).toContain('仅在 BOT 模式下自动录制')
-    expect(overview).toContain('由于技术限制，暂未开放手动调整')
-    expect(overview).toContain(':disabled="true"')
-    expect(overview).toContain('const recordingEnabled = computed(() => panel.snapshot?.mode.current === \'bots\')')
+    expect(overview).not.toContain('本地对局记录')
+    expect(overview).not.toContain('自动录制本地对局 Demo')
+    expect(overview).not.toContain('recordingEnabled')
+    expect(overview).not.toContain('overview-recording-card')
   })
 
   it('主启动面、快速配置和目录检查器具备响应式样式', () => {

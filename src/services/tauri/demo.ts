@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { DemoAnalysisJob, DemoListPage, DemoPlaybackResult, DemoRecordingSettings, DemoReport, DemoRoot, DemoScanResult, ExportMatchResult, HeatmapExportResult, HeatmapFilters, HeatmapPoint, MatchDuelMatrix, MatchEconomyRow, MatchEventFilters, MatchEventPage, MatchOverview, MatchPerformanceRadar, MatchRoundSummary, MatchScoreboardPlayer, MatchUtilityRow, PlayerMatchDetail, RevealDemoResult, RoundPositions } from '@/types/demo'
+import type { DemoAnalysisJob, DemoListPage, DemoPlaybackResult, DemoReport, DemoRoot, DemoScanResult, ExportMatchResult, HeatmapExportResult, HeatmapFilters, HeatmapPoint, MatchDuelMatrix, MatchEconomyRow, MatchEventFilters, MatchEventPage, MatchOverview, MatchPerformanceRadar, MatchRoundSummary, MatchScoreboardPlayer, MatchUtilityRow, PlayerMatchDetail, RevealDemoResult, RoundPositions } from '@/types/demo'
 
 export const listDemoRoots = () => invoke<DemoRoot[]>('list_demo_roots')
 export const playDemo = (demoId: number, rootPath: string) => invoke<DemoPlaybackResult>('play_demo', { demoId, rootPath })
@@ -33,5 +33,3 @@ export const saveHeatmapPng = (demoId: number, filters: HeatmapFilters, destinat
 export const launchDemoAtTick = (demoId: number, tick: number, playerKey?: string) => invoke<{ demoFileId: number; tick: number; path: string }>('launch_demo_at_tick', { demoId, tick, playerKey })
 export const getDemoReport = (id: number) => invoke<DemoReport>('get_demo_report', { id })
 export const retryDemoParse = (id: number) => invoke<{ demoFileId: number; status: string }>('retry_demo_parse', { id })
-export const getDemoSettings = (rootPath: string) => invoke<DemoRecordingSettings>('get_demo_settings', { rootPath })
-export const setDemoRecordingEnabled = (rootPath: string, enabled: boolean) => invoke<DemoRecordingSettings>('set_demo_recording_enabled', { rootPath, enabled })

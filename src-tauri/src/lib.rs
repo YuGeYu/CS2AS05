@@ -48,8 +48,6 @@ macro_rules! app_invoke_handler {
             commands::demo::launch_demo_at_tick,
             commands::demo::get_demo_report,
             commands::demo::retry_demo_parse,
-            commands::demo::get_demo_settings,
-            commands::demo::set_demo_recording_enabled,
             commands::cs2::discover_cs2_roots,
             commands::cs2::inspect_cs2_root,
             commands::cs2::install_bot_package,

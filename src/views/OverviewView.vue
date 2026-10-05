@@ -1,23 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, toRef, watch } from 'vue'
+import { computed, ref, toRef } from 'vue'
 import { AlertCircle, CheckCircle2, FolderOpen, Play, RefreshCw, ScanSearch, TerminalSquare, Wrench } from 'lucide-vue-next'
 
 import Cs2RootSuggestionsDialog from '@/components/Cs2RootSuggestionsDialog.vue'
 import BotDifficultyWorkbench from '@/components/BotDifficultyWorkbench.vue'
 import LaunchExperience from '@/components/LaunchExperience.vue'
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
-import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import { useCs2LaunchExperience } from '@/composables/useCs2LaunchExperience'
 import type { Difficulty, PanelMode } from '@/features/panel/types'
 import { dispatchToast } from '@/services/toast'
 import { openUpstreamPanel } from '@/services/tauri/cs2'
 import { useCs2Store } from '@/stores/cs2'
 import { usePanelStore } from '@/stores/panel'
-import { useDemoStore } from '@/stores/demo'
 
 const cs2 = useCs2Store()
 const panel = usePanelStore()
-const demo = useDemoStore()
 const suggestionsOpen = ref(false)
 const botWorkbenchOpen = ref(false)
 const launchExperience = useCs2LaunchExperience(toRef(cs2, 'selectedRoot'))
@@ -50,8 +47,6 @@ const launchDisabledReason = computed(() => {
   if (panel.snapshot?.mode.current === 'skin_only') return '由于技术限制，暂未开放只开换肤功能，请切换到在线模式或 BOT 模式。'
   return ''
 })
-const recordingEnabled = computed(() => panel.snapshot?.mode.current === 'bots')
-
 async function openOfficialPanel() {
   try {
     await openUpstreamPanel()
@@ -81,21 +76,18 @@ function launch() {
 const changeMode = (value: PanelMode) => panel.setMode(cs2.selectedRoot, value).catch(() => undefined)
 const changeDifficulty = (value: Difficulty) => panel.setDifficulty(cs2.selectedRoot, value).catch(() => undefined)
 const openInstall = () => window.dispatchEvent(new CustomEvent('cs2as:navigate', { detail: 'install' }))
-watch(() => cs2.selectedRoot, root => void demo.loadSettings(root))
-onMounted(() => void demo.loadSettings(cs2.selectedRoot))
 </script>
 
 <template>
   <section class="tool-view overview-launchpad" aria-labelledby="overview-title">
-    <header class="overview-heading"><div><p class="overline">运行控制 / LOCAL SESSION</p><h1 id="overview-title">本地对局启动台</h1><p>安装官方资源后，模式、难度、预设、刀具、Bot 物品和规则请交给上游 Panel v1.4.5；这里保留本地状态和复盘入口。</p></div><div class="overview-heading-actions"><button class="secondary-button" type="button" @click="openOfficialPanel"><TerminalSquare :size="17" />打开官方 Panel</button><button class="icon-button" title="刷新状态" aria-label="刷新状态" @click="panel.refresh(cs2.selectedRoot)"><RefreshCw :size="18" /></button></div></header>
+    <header class="overview-heading"><div><p class="overline">运行控制 / LOCAL SESSION</p><h1 id="overview-title">本地对局启动台</h1><p>安装官方资源后，模式、难度、预设、刀具、Bot 物品和规则请交给上游 Panel v1.4.5；这里保留本地状态和启动入口。</p></div><div class="overview-heading-actions"><button class="secondary-button" type="button" @click="openOfficialPanel"><TerminalSquare :size="17" />打开官方 Panel</button><button class="icon-button" title="刷新状态" aria-label="刷新状态" @click="panel.refresh(cs2.selectedRoot)"><RefreshCw :size="18" /></button></div></header>
     <section class="overview-environment" :data-tone="environmentState.tone" role="status" aria-live="polite"><div class="overview-environment-icon"><CheckCircle2 v-if="environmentState.tone === 'ready'" :size="20" /><AlertCircle v-else :size="20" /></div><div class="overview-environment-copy"><span class="overview-kicker">环境状态</span><strong>{{ environmentState.label }}</strong><p>{{ environmentState.detail }}</p></div><div class="overview-environment-meta"><span v-if="cs2.selectedRoot" :title="cs2.selectedRoot">{{ cs2.selectedRoot }}</span><span v-else>等待目录</span><span v-if="cs2.closeOverride" class="overview-override-badge">玩家已确认 · 本次会话已解锁</span><button v-if="environmentState.key === 'install'" class="primary-button" type="button" @click="openInstall"><Wrench :size="16" />前往安装与诊断</button></div></section>
     <section class="overview-layout">
       <div class="overview-primary-column">
-        <section class="overview-hero"><div class="overview-hero-copy"><p class="overline">主操作</p><h2>启动 Counter-Strike 2</h2><p>{{ panel.snapshot?.mode.current === 'bots' ? '将启动助手支持的本地 BOT 对局，使用 -insecure。' : panel.snapshot?.mode.current === 'skin_only' ? '只开换肤由于技术限制，暂未开放此功能。' : '将以正常在线模式启动，不修改在线模式文件。' }}</p><div class="overview-launch-summary"><span><b>模式</b>{{ modeSummary.label }} · {{ modeSummary.detail }}</span><span v-if="panel.snapshot?.mode.current === 'bots'"><b>难度</b>{{ panel.snapshot?.difficulty.current || '--' }}</span><span><b>录制</b>{{ recordingEnabled ? '自动录制' : '未开启' }}</span></div></div><button class="launch-button" :disabled="blocked || !cs2.writeUnlocked || panel.mutationKey === 'launch'" :aria-describedby="launchDisabledReason ? 'launch-disabled-reason' : undefined" @click="launch"><Play :size="21" fill="currentColor" />启动 CS2</button><p v-if="launchDisabledReason" id="launch-disabled-reason" class="launch-disabled-reason">{{ launchDisabledReason }}</p></section>
+        <section class="overview-hero"><div class="overview-hero-copy"><p class="overline">主操作</p><h2>启动 Counter-Strike 2</h2><p>{{ panel.snapshot?.mode.current === 'bots' ? '将启动助手支持的本地 BOT 对局，使用 -insecure。' : panel.snapshot?.mode.current === 'skin_only' ? '只开换肤由于技术限制，暂未开放此功能。' : '将以正常在线模式启动，不修改在线模式文件。' }}</p><div class="overview-launch-summary"><span><b>模式</b>{{ modeSummary.label }} · {{ modeSummary.detail }}</span><span v-if="panel.snapshot?.mode.current === 'bots'"><b>难度</b>{{ panel.snapshot?.difficulty.current || '--' }}</span></div></div><button class="launch-button" :disabled="blocked || !cs2.writeUnlocked || panel.mutationKey === 'launch'" :aria-describedby="launchDisabledReason ? 'launch-disabled-reason' : undefined" @click="launch"><Play :size="21" fill="currentColor" />启动 CS2</button><p v-if="launchDisabledReason" id="launch-disabled-reason" class="launch-disabled-reason">{{ launchDisabledReason }}</p></section>
         <section class="overview-config-grid" aria-label="快速配置">
           <div class="overview-config-card overview-mode-card"><div class="overview-card-heading"><span class="overview-card-icon">01</span><div><h2>启动模式</h2><p>决定本次对局的运行边界。</p></div></div><SegmentedControl :model-value="panel.snapshot?.mode.current ?? null" :options="modeOptions" label="启动模式" :disabled="blocked || (cs2.cs2Running && !cs2.writeUnlocked)" :pending="panel.mutationKey === 'mode'" @update:model-value="changeMode" /><p class="warning-note">只开换肤由于技术限制，暂未开放此功能。</p></div>
           <div class="overview-config-card overview-difficulty-card"><div class="overview-card-heading"><span class="overview-card-icon">02</span><div><h2>BOT 难度</h2><p>{{ panel.snapshot?.mode.current === 'skin_only' ? '只开换肤时不接管 BOT 难度。' : '选择内置强度，或进入自定义工坊。' }}</p></div></div><div class="difficulty-actions"><SegmentedControl :model-value="panel.snapshot?.difficulty.current ?? null" :options="difficultyOptions" label="BOT 难度" :disabled="blocked || panel.snapshot?.mode.current === 'skin_only'" :pending="panel.mutationKey === 'difficulty'" @update:model-value="changeDifficulty" /><button class="secondary-button" type="button" :disabled="!cs2.selectedRoot || panel.snapshot?.mode.current === 'skin_only'" @click="botWorkbenchOpen = true">自定义强度</button></div></div>
-          <div class="overview-config-card overview-recording-card"><div class="overview-card-heading"><span class="overview-card-icon">03</span><div><h2>本地对局记录</h2><p>仅在 BOT 模式下自动录制，其他模式自动关闭。</p></div></div><ToggleSwitch :model-value="recordingEnabled" label="自动录制本地对局 Demo" :description="recordingEnabled ? 'BOT 模式固定开启，暂不支持手动修改。' : '当前模式固定关闭，暂不支持手动修改。'" :disabled="true" /><p class="warning-note">录制策略由启动模式自动决定：BOT 模式开启，在线模式和只开换肤关闭。由于技术限制，暂未开放手动调整。</p></div>
         </section>
       </div>
       <aside class="overview-side-panel" aria-label="环境操作"><div class="overview-side-heading"><span class="overview-kicker">ENVIRONMENT</span><h2>游戏目录</h2><p>选择根目录、`game` 或 `game/csgo` 目录。</p></div><div class="overview-path" :title="cs2.selectedRoot || undefined"><FolderOpen :size="17" /><span>{{ cs2.selectedRoot || '尚未选择 CS2 目录' }}</span></div><div class="overview-side-actions"><button class="secondary-button" type="button" @click="suggestionsOpen = true"><ScanSearch :size="17" />猜你想选</button><button class="secondary-button" type="button" @click="browse"><FolderOpen :size="17" />选择目录</button></div><div class="overview-side-facts"><div><span>游戏进程</span><strong>{{ cs2.cs2Running ? '运行中' : cs2.cs2ProcessState === 'checking' ? '检查中' : '已退出' }}</strong></div><div><span>定制资源</span><strong>{{ cs2.environment?.baseEnvironmentReady ? '已就绪' : cs2.selectedRoot ? '待安装' : '--' }}</strong></div><div><span>当前配置</span><strong>{{ panel.snapshot?.mode.current === 'bots' ? 'BOT' : panel.snapshot?.mode.current === 'skin_only' ? '只开换肤' : panel.snapshot?.mode.current === 'online' ? '在线' : '--' }}</strong></div></div></aside>

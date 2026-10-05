@@ -4387,24 +4387,6 @@ fn parse_report(id: i64, path: &Path, meta: &fs::Metadata) -> Result<DemoReport,
     Ok(report)
 }
 
-pub fn recording_desired(app: &AppHandle) -> Result<bool, AppError> {
-    let db = open_db(app)?;
-    Ok(db
-        .query_row(
-            "SELECT value_json FROM settings WHERE key='recording'",
-            [],
-            |r| r.get::<_, String>(0),
-        )
-        .optional()
-        .map_err(|e| err("DEMO_DB_QUERY", e))?
-        .as_deref()
-        == Some("true"))
-}
-pub fn set_recording_desired(app: &AppHandle, enabled: bool) -> Result<(), AppError> {
-    open_db(app)?.execute("INSERT INTO settings(key,value_json,updated_at)VALUES('recording',?1,?2)ON CONFLICT(key)DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",params![if enabled{"true"}else{"false"},now_ms()]).map_err(|e|err("DEMO_SETTINGS_SAVE",e))?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

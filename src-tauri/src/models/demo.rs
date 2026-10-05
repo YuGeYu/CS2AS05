@@ -633,14 +633,3 @@ pub struct DemoEvent {
     #[serde(default)]
     pub payload: serde_json::Value,
 }
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DemoRecordingSettings {
-    pub desired_enabled: bool,
-    pub normal_cfg_applied: bool,
-    pub ffa_cfg_applied: bool,
-    pub drifted: bool,
-    pub writable: bool,
-    pub scope: &'static str,
-}
