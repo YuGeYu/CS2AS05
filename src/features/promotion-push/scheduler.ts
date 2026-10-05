@@ -1,10 +1,12 @@
 import type { PromotionKind } from './types'
 
-export const PROMOTION_INTERVAL_MS = 10 * 60 * 1_000
+export const PROMOTION_INTERVAL_MS = 24 * 60 * 60 * 1_000
+export const PROMOTION_FIRST_DELAY_MS = 20 * 60 * 1_000
 
 export function duePromotionCount(startedAt: number, now = Date.now()): number {
   if (!Number.isFinite(startedAt) || now <= startedAt) return 0
-  return Math.floor((now - startedAt) / PROMOTION_INTERVAL_MS)
+  if (now - startedAt < PROMOTION_FIRST_DELAY_MS) return 0
+  return 1
 }
 
 export function choosePromotionKind(random = Math.random()): PromotionKind {

@@ -1,10 +1,8 @@
-pub mod bot_chat_config;
 pub mod bot_difficulty;
 pub mod cs2;
 pub mod demo;
 pub mod intro;
 pub mod inventory_simulator;
-pub mod map_rotation;
 pub mod panel;
 pub mod scoreboard;
 pub mod support;

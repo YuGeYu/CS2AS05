@@ -19,7 +19,6 @@ const db = new DatabaseSync(dbPath)
 db.exec(`CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, room TEXT NOT NULL, user_id TEXT NOT NULL, display_name TEXT NOT NULL, kind TEXT NOT NULL, content TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, expires_at INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS messages_expiry ON messages(expires_at); CREATE TABLE IF NOT EXISTS daily_jobs (job_key TEXT PRIMARY KEY, created_at INTEGER NOT NULL);`)
 try { db.exec("ALTER TABLE messages ADD COLUMN role TEXT NOT NULL DEFAULT 'user'") } catch {}
 
-function b64(value) { return Buffer.from(value).toString('base64url') }
 function verifyToken(token) {
   if (!secret) throw new Error('token secret is not configured')
   const parts = String(token || '').split('.')
@@ -37,7 +36,10 @@ function normalize(text) {
   return match ? `connect [${match[1]}] (${match[2]})` : value
 }
 function contentDisposition(originalName, extension) {
-  const cleaned = String(originalName || `download${extension || ''}`).replace(/[\r\n\0-\x1F\x7F"\\]/g, '_').trim() || `download${extension || ''}`
+  const cleaned = Array.from(String(originalName || `download${extension || ''}`), character => {
+    const code = character.codePointAt(0) || 0
+    return code <= 0x1f || code === 0x7f || character === '"' || character === '\\' ? '_' : character
+  }).join('').trim() || `download${extension || ''}`
   const fallback = cleaned.replace(/[^\x20-\x7E]/g, '_').replace(/[;:]/g, '_').slice(0, 120) || `download${extension || ''}`
   const encoded = encodeURIComponent(cleaned).replace(/[!'()*]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`)
   return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, toRef, watch } from 'vue'
-import { AlertCircle, CheckCircle2, FolderOpen, Play, RefreshCw, ScanSearch, Wrench } from 'lucide-vue-next'
+import { AlertCircle, CheckCircle2, FolderOpen, Play, RefreshCw, ScanSearch, TerminalSquare, Wrench } from 'lucide-vue-next'
 
 import Cs2RootSuggestionsDialog from '@/components/Cs2RootSuggestionsDialog.vue'
 import BotDifficultyWorkbench from '@/components/BotDifficultyWorkbench.vue'
@@ -10,6 +10,7 @@ import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import { useCs2LaunchExperience } from '@/composables/useCs2LaunchExperience'
 import type { Difficulty, PanelMode } from '@/features/panel/types'
 import { dispatchToast } from '@/services/toast'
+import { openUpstreamPanel } from '@/services/tauri/cs2'
 import { useCs2Store } from '@/stores/cs2'
 import { usePanelStore } from '@/stores/panel'
 import { useDemoStore } from '@/stores/demo'
@@ -51,6 +52,14 @@ const launchDisabledReason = computed(() => {
 })
 const recordingEnabled = computed(() => panel.snapshot?.mode.current === 'bots')
 
+async function openOfficialPanel() {
+  try {
+    await openUpstreamPanel()
+  } catch (error) {
+    dispatchToast({ tone: 'danger', title: '官方 Panel 打开失败', message: String(error) })
+  }
+}
+
 async function browse() {
   const { open } = await import('@tauri-apps/plugin-dialog')
   const result = await open({ directory: true, multiple: false, title: '选择 CS2 游戏目录' })
@@ -78,7 +87,7 @@ onMounted(() => void demo.loadSettings(cs2.selectedRoot))
 
 <template>
   <section class="tool-view overview-launchpad" aria-labelledby="overview-title">
-    <header class="overview-heading"><div><p class="overline">运行控制 / LOCAL SESSION</p><h1 id="overview-title">本地对局启动台</h1><p>把环境检查、启动模式和常用配置收在同一个清晰入口。</p></div><button class="icon-button" title="刷新状态" aria-label="刷新状态" @click="panel.refresh(cs2.selectedRoot)"><RefreshCw :size="18" /></button></header>
+    <header class="overview-heading"><div><p class="overline">运行控制 / LOCAL SESSION</p><h1 id="overview-title">本地对局启动台</h1><p>安装官方资源后，模式、难度、预设、刀具、Bot 物品和规则请交给上游 Panel v1.4.5；这里保留本地状态和复盘入口。</p></div><div class="overview-heading-actions"><button class="secondary-button" type="button" @click="openOfficialPanel"><TerminalSquare :size="17" />打开官方 Panel</button><button class="icon-button" title="刷新状态" aria-label="刷新状态" @click="panel.refresh(cs2.selectedRoot)"><RefreshCw :size="18" /></button></div></header>
     <section class="overview-environment" :data-tone="environmentState.tone" role="status" aria-live="polite"><div class="overview-environment-icon"><CheckCircle2 v-if="environmentState.tone === 'ready'" :size="20" /><AlertCircle v-else :size="20" /></div><div class="overview-environment-copy"><span class="overview-kicker">环境状态</span><strong>{{ environmentState.label }}</strong><p>{{ environmentState.detail }}</p></div><div class="overview-environment-meta"><span v-if="cs2.selectedRoot" :title="cs2.selectedRoot">{{ cs2.selectedRoot }}</span><span v-else>等待目录</span><span v-if="cs2.closeOverride" class="overview-override-badge">玩家已确认 · 本次会话已解锁</span><button v-if="environmentState.key === 'install'" class="primary-button" type="button" @click="openInstall"><Wrench :size="16" />前往安装与诊断</button></div></section>
     <section class="overview-layout">
       <div class="overview-primary-column">

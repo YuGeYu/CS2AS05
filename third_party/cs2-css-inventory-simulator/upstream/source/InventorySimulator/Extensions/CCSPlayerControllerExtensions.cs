@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 using System.Collections.Concurrent;
+using System.Numerics;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 
@@ -15,6 +16,9 @@ public static class CCSPlayerControllerExtensions
         uint,
         CCSPlayerControllerState
     > _controllerStateManager = [];
+
+    public static IEnumerable<CCSPlayerControllerState> GetAllStates() =>
+        _controllerStateManager.Values;
 
     public static CCSPlayerControllerState GetState(this CCSPlayerController self)
     {
@@ -71,7 +75,6 @@ public static class CCSPlayerControllerExtensions
     public static async Task FetchInventory(this CCSPlayerController self, bool force = false)
     {
         var controllerState = self.GetState();
-        var existing = controllerState.Inventory;
         if (!force && controllerState.Inventory != null)
             return;
         if (controllerState.IsFetching)
@@ -81,8 +84,6 @@ public static class CCSPlayerControllerExtensions
         if (response != null)
         {
             var inventory = new PlayerInventory(response);
-            if (existing != null)
-                inventory.WeaponWearCache = existing.WeaponWearCache;
             inventory.InitializeWearOverrides();
             controllerState.WsUpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             controllerState.Inventory = inventory;
@@ -109,7 +110,21 @@ public static class CCSPlayerControllerExtensions
             self.RegiveAgent(inventory, oldInventory);
             self.RegiveGloves(inventory, oldInventory);
             self.RegiveWeapons(inventory, oldInventory);
+            self.RegivePet(inventory, oldInventory);
         }
+    }
+
+    public static void HandleSpawn(this CCSPlayerController self)
+    {
+        Server.NextWorldUpdate(() =>
+        {
+            if (!self.IsValid)
+                return;
+            var gloves = self.GetState()
+                .Inventory?.GetGloves(self.TeamNum, ConVars.IsFallbackTeam.Value);
+            self.PlayerPawn.Value?.RefreshGloves(gloves != null);
+            self.RespawnPet();
+        });
     }
 
     public static bool IsUseCmdBusy(this CCSPlayerController self)
@@ -168,7 +183,13 @@ public static class CCSPlayerControllerExtensions
             return;
         pawn.SetModelFromLoadout();
         pawn.SetModelFromClass();
-        pawn.AcceptInput("SetBodygroup", value: "default_gloves,1");
+        var itemServices = pawn.ItemServices?.As<CCSPlayer_ItemServices>();
+        if (itemServices != null)
+            pawn.AcceptInput(
+                "SetBodygroup",
+                value: $"defusekit,{(itemServices.HasDefuser ? 1 : 0)}"
+            );
+        pawn.RefreshGloves(inventory.GetGloves(teamNum, ConVars.IsFallbackTeam.Value) != null);
     }
 
     public static void RegiveGloves(
@@ -178,8 +199,7 @@ public static class CCSPlayerControllerExtensions
     )
     {
         var pawn = self.PlayerPawn.Value;
-        var itemServices = pawn?.ItemServices?.As<CCSPlayer_ItemServices>();
-        if (pawn == null || itemServices == null)
+        if (pawn == null || pawn.ItemServices == null)
             return;
         var isFallbackTeam = ConVars.IsFallbackTeam.Value;
         var teamNum = self.TeamNum;
@@ -187,14 +207,48 @@ public static class CCSPlayerControllerExtensions
         var oldItem = oldInventory?.GetGloves(teamNum, isFallbackTeam);
         if (oldItem == item)
             return;
-        itemServices.UpdateWearables();
-        // Thanks to @samyycX.
-        pawn.AcceptInput("SetBodygroup", value: "first_or_third_person,0");
-        Server.NextWorldUpdate(() =>
-        {
-            if (pawn.IsValid && itemServices.Handle != nint.Zero)
-                pawn.AcceptInput("SetBodygroup", value: "first_or_third_person,1");
-        });
+        pawn.RefreshGloves(item != null);
+    }
+
+    public static void RegivePet(
+        this CCSPlayerController self,
+        PlayerInventory inventory,
+        PlayerInventory? oldInventory
+    )
+    {
+        if (!ConVars.IsPetEnabled.Value)
+            return;
+        if (oldInventory?.Pet == inventory.Pet)
+            return;
+        var chicken = self.GetPetChicken();
+        if (chicken == null || chicken.LifeState != (byte)LifeState_t.LIFE_ALIVE)
+            return;
+        var sceneNode = chicken.CBodyComponent?.SceneNode;
+        if (sceneNode == null)
+            return;
+        var position = (Vector3)sceneNode.AbsOrigin;
+        var angles = (Vector3)sceneNode.AbsRotation;
+        var canRoam = chicken.CanRoam();
+        chicken.Remove();
+        // The client only applies the pet's look when the chicken is created.
+        var pet = CChicken.CreatePet(self, position, angles);
+        pet?.SetCanRoam(canRoam);
+    }
+
+    public static void RespawnPet(this CCSPlayerController self)
+    {
+        if (!ConVars.IsPetRespawn.Value || !ConVars.IsPetEnabled.Value)
+            return;
+        if (ConVars.IsPetRespawnWarmupOnly.Value && !EntityHelper.IsWarmupPeriod())
+            return;
+        var chicken = self.GetPetChicken();
+        if (chicken != null && chicken.LifeState == (byte)LifeState_t.LIFE_ALIVE)
+            return;
+        // The game spawns pets at a random spot near their team's spawn points, or anywhere
+        // on the map in deathmatch.
+        var position = EntityHelper.GetRandomSpawnPoint(self.TeamNum)?.AbsOrigin;
+        if (position != null)
+            CChicken.CreatePet(self, (Vector3)position, null);
     }
 
     public static void RegiveWeapons(
@@ -433,7 +487,6 @@ public static class CCSPlayerControllerExtensions
             "kill eater",
             statTrak
         );
-        Utilities.SetStateChanged(weapon, "CBasePlayerWeapon", "m_AttributeManager");
         Api.SendStatTrakIncrement(self.SteamID, item.Uid.Value);
     }
 
@@ -455,5 +508,16 @@ public static class CCSPlayerControllerExtensions
     {
         if (!ConVars.IsPersistInventory.Value && !Inventories.Has(self.SteamID))
             self.GetState().Inventory = null;
+    }
+
+    public static CChicken? GetPetChicken(this CCSPlayerController self)
+    {
+        var ptr = Natives.CCSPlayerController_GetPetChicken.Invoke(self.Handle);
+        return ptr != nint.Zero ? new CChicken(ptr) : null;
+    }
+
+    public static void SetPetChicken(this CCSPlayerController self, CChicken chicken)
+    {
+        Natives.CCSPlayerController_SetPetChicken.Invoke(self.Handle, chicken.Handle);
     }
 }

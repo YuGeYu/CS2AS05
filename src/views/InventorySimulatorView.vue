@@ -214,15 +214,24 @@ onBeforeUnmount(() => { alive = false; requestGeneration += 1 })
           <details open><summary><span>01</span><div><strong>先把 CS2 完全关掉</strong><small>插件安装时游戏不能占用文件。</small></div><ChevronRight :size="18" /></summary><p>确认 CS2 已经退出。如果按钮提示没有基础环境，先去“安装与诊断”完成安装，再回到这里。</p></details>
           <details><summary><span>02</span><div><strong>点击“一键启用库存换肤”</strong><small>不用找文件夹，也不用手工复制插件。</small></div><ChevronRight :size="18" /></summary><p>助手会校验内置文件，精确移除旧 PlayerSkinMod，再安装 Inventory Simulator。其他插件、Demo 和游戏文件都不会动。</p></details>
           <details><summary><span>03</span><div><strong>打开饰品工坊并登录 Steam</strong><small>网站用 SteamID 把库存认到你的玩家。</small></div><ChevronRight :size="18" /></summary><p>只在 <code>inventory.cstrike.app</code> 或 Steam 官方登录页输入信息。助手不会读取密码、Cookie，也不会在程序里嵌入登录页面。</p></details>
-          <details><summary><span>04</span><div><strong>制作并“装备”饰品</strong><small>创建物品后，还要放进 CT/T 对应槽位。</small></div><ChevronRight :size="18" /></summary><p>网站支持武器、刀、手套、角色、音乐盒、贴纸、挂件、收藏品和涂鸦。CT 与 T 是两套装备；只创建但没有装备的物品不会出现在游戏里。</p></details>
+          <details><summary><span>04</span><div><strong>制作并“装备”饰品</strong><small>创建物品后，还要放进 CT/T 对应槽位。</small></div><ChevronRight :size="18" /></summary><p>网站支持武器、刀、手套、角色、音乐盒、贴纸、挂件、收藏品、涂鸦和宠物。CT 与 T 是两套装备；只创建但没有装备的物品不会出现在游戏里。</p></details>
           <details><summary><span>05</span><div><strong>启动本地 BOT，发送 !ws</strong><small>官方版本需要先开启聊天刷新。</small></div><ChevronRight :size="18" /></summary><p>进入地图后，在本地服务端控制台执行 <code>invsim_ws_enabled true</code>，然后在聊天框发送 <code>!ws</code>。刷新冷却为 30 秒，重生或换图后查看新外观。</p></details>
           <details><summary><span>06</span><div><strong>以后换搭配更简单</strong><small>不需要重复安装插件。</small></div><ChevronRight :size="18" /></summary><p>在网站修改并保存，回到游戏发送一次 <code>!ws</code>，然后重生即可。网站暂时打不开时不要反复重装，稍后再试。</p></details>
         </div>
-        <div class="inventory-faq"><h3>没显示怎么办？</h3><p><strong>还是默认皮肤：</strong>先确认本地服务端已启用 <code>invsim_ws_enabled true</code>，网站物品也已装备到当前 CT/T 槽位，再发送 <code>!ws</code> 并重生。</p><p><strong>网站暂时打不开：</strong>插件仍然在本机，不会影响助手其他功能；网络恢复后重新同步即可。</p><p><strong>StatTrak 或喷漆变化：</strong>这是上游完整库存能力，相关计数可能同步到公共饰品服务。</p></div>
+        <div class="inventory-faq"><h3>没显示怎么办？</h3><p><strong>还是默认皮肤：</strong>先确认本地服务端已启用 <code>invsim_ws_enabled true</code>，网站物品也已装备到当前 CT/T 槽位，再发送 <code>!ws</code> 并重生。</p><p><strong>宠物没有出现：</strong>确认服务端启用 <code>invsim_pet_enabled true</code>；需要暖身阶段复活时再开启 <code>invsim_pet_respawn true</code>，并保留 <code>invsim_pet_respawn_warmup_only true</code>。</p><p><strong>网站暂时打不开：</strong>插件仍然在本机，不会影响助手其他功能；网络恢复后重新同步即可。</p><p><strong>StatTrak 或喷漆变化：</strong>这是上游完整库存能力，相关计数可能同步到公共饰品服务。</p></div>
       </section>
     </Transition>
 
-    <footer class="inventory-provenance"><span><ShieldCheck :size="15" />上游 <strong>ianlucas/cs2-css-inventory-simulator</strong> · MIT</span><span>正式 Release {{ status?.upstreamTag || '3.2.0' }} · 不再使用自制换肤引擎</span></footer>
+    <section class="inventory-capabilities" aria-labelledby="inventory-capabilities-title">
+      <header><div><p class="overline">UPSTREAM 3.5.0</p><h2 id="inventory-capabilities-title">这一版新增了什么</h2></div><span>能力随官方资源包同步</span></header>
+      <div class="inventory-capability-grid">
+        <article><strong>完整饰品槽位</strong><p>武器、刀、手套、角色、音乐盒、贴纸、挂件、收藏品、涂鸦，以及 StatTrak、磨损和装备缓存。</p></article>
+        <article><strong>宠物与暖身</strong><p>支持宠物生成、受伤保护、暖身阶段复活与宠物自由漫游。服务端可按需设置 <code>invsim_pet_enabled</code>、<code>invsim_pet_respawn</code> 和 <code>invsim_pet_free_roam</code>。</p></article>
+        <article><strong>刷新与服务</strong><p><code>!ws</code> 刷新库存、<code>!spray</code> 使用涂鸦；插件默认不自动刷新，仍由本地 BOT 服务端显式开启。</p></article>
+      </div>
+    </section>
+
+    <footer class="inventory-provenance"><span><ShieldCheck :size="15" />上游 <strong>ianlucas/cs2-css-inventory-simulator</strong> · MIT</span><span>正式 Release {{ status?.upstreamTag || '3.5.0' }} · 不再使用自制换肤引擎</span></footer>
   </section>
   <Teleport to="body">
     <div v-if="removeDialogOpen" class="inventory-remove-backdrop" role="presentation" @click.self="removeDialogOpen = false">

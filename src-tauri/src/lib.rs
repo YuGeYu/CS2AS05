@@ -9,7 +9,7 @@ mod services;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
-    Manager, WindowEvent,
+    Manager,
 };
 
 macro_rules! app_invoke_handler {
@@ -83,11 +83,6 @@ macro_rules! app_invoke_handler {
             commands::bot_difficulty::rename_bot_profile,
             commands::bot_difficulty::delete_bot_profile,
             commands::bot_difficulty::apply_bot_profile,
-            commands::bot_chat_config::get_bot_chat_config,
-            commands::bot_chat_config::set_bot_chat_config,
-            commands::map_rotation::get_map_rotation_default,
-            commands::map_rotation::set_map_rotation_default,
-            commands::map_rotation::reset_map_rotation_default,
             commands::support::open_official_site,
             commands::support::open_idea_page,
             commands::support::open_api_purchase,
@@ -96,6 +91,7 @@ macro_rules! app_invoke_handler {
             commands::support::get_ai_chat_sessions,
             commands::support::save_ai_chat_sessions,
             commands::support::get_ai_models,
+            commands::support::get_command_library,
             commands::support::run_ai_powershell,
             commands::support::chat_ai,
             commands::support::open_fault_idea_page,
@@ -104,6 +100,7 @@ macro_rules! app_invoke_handler {
             commands::support::open_reference_project,
             commands::support::open_update_download,
             commands::support::open_resource_link,
+            commands::support::open_community_group,
             commands::support::open_community_download,
             commands::support::open_account_register,
             commands::support::launch_community_connect,
@@ -113,6 +110,8 @@ macro_rules! app_invoke_handler {
             commands::support::dismiss_bot_profile_guide,
             commands::support::get_assistant_preferences,
             commands::support::set_assistant_autostart,
+            commands::support::set_promotion_push_disabled,
+            commands::support::set_close_choice,
             commands::support::clear_assistant_data,
             commands::support::submit_fault_report,
             commands::support::get_assistant_account,
@@ -194,17 +193,6 @@ pub fn run() {
             services::demo::refresh_watcher(app.handle()).map_err(|error| error.into_string())?;
             demo::coordinator::start(app.handle());
             demo::post_match::start(app.handle());
-            if let Some(window) = app.get_webview_window("main") {
-                let handle = app.handle().clone();
-                window.on_window_event(move |event| {
-                    if let WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        if let Some(window) = handle.get_webview_window("main") {
-                            let _ = window.hide();
-                        }
-                    }
-                });
-            }
             Ok(())
         })
         .manage(services::cs2_discovery::ScanCoordinator::default())

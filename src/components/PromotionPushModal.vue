@@ -1,19 +1,20 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
 import { ExternalLink, Heart, MessageCircle, X } from 'lucide-vue-next'
-import { openResourceLink } from '@/services/tauri/support'
+import { openCommunityGroup, openResourceLink } from '@/services/tauri/support'
 import type { PromotionPayload } from '@/features/promotion-push/types'
 
-const props = defineProps<{ promotion: PromotionPayload | null }>()
-const emit = defineEmits<{ close: [] }>()
+const props = defineProps<{ promotion: PromotionPayload | null; disabled?: boolean }>()
+const emit = defineEmits<{ close: []; disable: [] }>()
 const closeButton = ref<HTMLButtonElement | null>(null)
 const donateCodeUrl = '/assets/wechat-reward.png'
-const groupUrl = 'https://qm.qq.com/q/DXLtk0KFby'
 let previousOverflow = ''
 
 function close() { emit('close') }
+function disable() { emit('disable') }
 function onKeydown(event: KeyboardEvent) { if (event.key === 'Escape') close() }
 function openLink(url: string) { void openResourceLink(url).catch(() => undefined) }
+function openCommunityGroupLink() { void openCommunityGroup().catch(() => undefined) }
 
 watch(() => props.promotion, async (promotion, previous) => {
   if (promotion) {
@@ -44,7 +45,7 @@ watch(() => props.promotion, async (promotion, previous) => {
               <span v-else><Heart :size="19" aria-hidden="true" />支持助手维护</span>
             </h2>
           </div>
-          <button ref="closeButton" class="icon-button" type="button" title="关闭推送" aria-label="关闭推送" @click="close"><X :size="19" /></button>
+          <button ref="closeButton" class="icon-button" type="button" title="暂不查看" aria-label="暂不查看" @click="close"><X :size="19" /></button>
         </header>
 
         <template v-if="promotion.kind === 'resource'">
@@ -63,15 +64,18 @@ watch(() => props.promotion, async (promotion, previous) => {
 
         <template v-else-if="promotion.localId === 'community'">
           <p id="promotion-push-description" class="promotion-push-lead">来玩家群聊聊配置、地图和实战体验。进群自愿，不影响助手任何功能。</p>
-          <button class="primary-button promotion-full-button" type="button" @click="openLink(groupUrl)"><MessageCircle :size="17" />打开“凉拌娱乐”QQ群</button>
+          <button class="primary-button promotion-full-button" type="button" @click="openCommunityGroupLink"><MessageCircle :size="17" />打开“凉拌娱乐”QQ群</button>
         </template>
 
         <template v-else>
           <p id="promotion-push-description" class="promotion-push-lead">如果助手帮到了你，可以用微信赞赏支持持续维护。不赞助不影响任何功能，按你的心意即可。</p>
           <img :src="donateCodeUrl" alt="微信赞赏码" class="donate-code promotion-push-donate-code" />
         </template>
+        <footer class="promotion-push-footer">
+          <button class="promotion-muted-action" type="button" @click="disable">以后不再主动提醒</button>
+          <span>可随时在资源阁、群聊或关于页面主动访问</span>
+        </footer>
       </section>
     </div>
   </Teleport>
 </template>
-

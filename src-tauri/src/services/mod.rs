@@ -1,10 +1,8 @@
-pub mod bot_chat_config;
 pub mod bot_difficulty;
 pub mod cs2;
 pub mod cs2_discovery;
 pub mod demo;
 pub mod intro;
-pub mod map_rotation;
 pub mod panel;
 pub mod simple_rating;
 pub mod support;

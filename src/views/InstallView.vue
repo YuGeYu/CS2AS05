@@ -51,7 +51,7 @@ const installHint = computed(() => {
   if (!store.selectedRoot) return '选择 Counter-Strike Global Offensive 目录后才能安装。'
   if (store.cs2Running && !store.writeUnlocked) return '检测到 CS2 正在运行，可在全局状态条确认已关闭后再继续。'
   if (store.environment?.baseEnvironmentReady) return `已检测到插件，可直接覆盖更新到 ${appConfig.appVersion} 定制包。`
-  return '将安装基于 CS2-Bot-Improver v1.4.4 的定制资源包。'
+  return '将安装基于 CS2-Bot-Improver v1.4.5 的官方 Windows 资源包。'
 })
 const packageState = computed(() => (store.environment?.baseEnvironmentReady ? '已安装' : '待安装'))
 const processLabel = computed(
@@ -97,7 +97,7 @@ const diagnosis = computed(() => {
   return {
     tone: 'info',
     title: '环境可以安装',
-    message: '目录有效，可以安装基于 CS2-Bot-Improver v1.4.4 的定制资源包。',
+      message: '目录有效，可以安装基于 CS2-Bot-Improver v1.4.5 的官方 Windows 资源包。',
     action: '开始安装',
   }
 })
@@ -351,7 +351,7 @@ onBeforeUnmount(() => { window.removeEventListener('cs2as:focus-bot-vision', foc
         <div class="install-section-copy">
           <p class="overline">主任务 · 定制资源包</p>
           <h2 id="install-title">{{ appConfig.appVersion }} 定制资源包</h2>
-          <p>基于上游 CS2-Bot-Improver v1.4.4，保留上游能力并叠加本项目定制。</p>
+          <p>基于上游 CS2-Bot-Improver v1.4.5 Windows 资源包。</p>
           <p>{{ installHint }}</p>
         </div>
         <div class="install-action-stack">
@@ -425,9 +425,9 @@ onBeforeUnmount(() => { window.removeEventListener('cs2as:focus-bot-vision', foc
 
       <section class="panel-section" aria-labelledby="panel-title">
         <div>
-          <p class="overline">高级兼容入口</p>
-          <h2 id="panel-title">原版 Panel v1.4.4</h2>
-          <p>融合功能异常时可临时打开原版工具；请勿让两个面板同时写入同一目录。</p>
+          <p class="overline">官方控制中心</p>
+          <h2 id="panel-title">原版 Panel v1.4.5</h2>
+          <p>模式切换、难度、瞄准、投掷物、刀具、机器人物品、规则和开发者信息都由上游 Panel 统一维护。请在这里打开官方工具完成配置。</p>
         </div>
         <button class="secondary-button panel-button" type="button" :disabled="store.busy" @click="openPanel">
           <TerminalSquare :size="19" />

@@ -50,7 +50,7 @@ describe('app titlebar', () => {
     expect(windowApi.startDragging).toHaveBeenCalledOnce()
     expect(windowApi.minimize).toHaveBeenCalledOnce()
     expect(windowApi.toggleMaximize).toHaveBeenCalledOnce()
-    expect(windowApi.close).toHaveBeenCalledOnce()
+    expect(wrapper.emitted('requestClose')).toHaveLength(1)
   })
 
   it('updates the restore icon after resize synchronization', async () => {

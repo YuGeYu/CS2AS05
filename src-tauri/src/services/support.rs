@@ -21,6 +21,9 @@ pub const IDEA_PAGE_URL: &str = "https://cs2as.600318.xyz/idea";
 pub const RELEASE_PAGE_URL: &str = "https://cs2as.600318.xyz/rizhi";
 pub const UPSTREAM_PROJECT_URL: &str = "https://github.com/ed0ard/CS2-Bot-Improver";
 pub const INVENTORY_WORKSHOP_URL: &str = "https://inventory.cstrike.app";
+pub const COMMUNITY_GROUP_URL: &str = "https://qm.qq.com/q/DXLtk0KFby";
+const COMMAND_LIBRARY_URL: &str = "https://cs2as.600318.xyz/api/command-library";
+const MAX_COMMAND_LIBRARY_BYTES: usize = 16 * 1024 * 1024;
 const REFERENCE_PROJECTS: &[(&str, &str)] = &[
     ("bot-improver", UPSTREAM_PROJECT_URL),
     ("botvision", "https://github.com/XBribo/CS2-Bot-Vision"),
@@ -120,6 +123,40 @@ pub struct AiChatSession {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CommandLibraryPayload {
+    pub schema_version: u32,
+    pub source: CommandLibrarySource,
+    pub commands: Vec<CommandLibraryCommand>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandLibrarySource {
+    pub name: String,
+    pub url: String,
+    #[serde(default)]
+    pub page_title: String,
+    #[serde(default)]
+    pub revision_id: String,
+    #[serde(default)]
+    pub build_note: String,
+    pub imported_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandLibraryCommand {
+    pub name: String,
+    #[serde(default)]
+    pub default_value: String,
+    #[serde(default)]
+    pub flags: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommunityAuth {
     pub token: String,
     pub service_url: String,
@@ -152,6 +189,10 @@ pub fn open_api_purchase() -> Result<(), AppError> {
 
 pub fn open_inventory_workshop() -> Result<(), AppError> {
     open_external(INVENTORY_WORKSHOP_URL)
+}
+
+pub fn open_community_group() -> Result<(), AppError> {
+    open_external(COMMUNITY_GROUP_URL)
 }
 
 pub fn get_ai_connection(app: &AppHandle) -> Result<AiConnectionSummary, AppError> {
@@ -235,6 +276,65 @@ pub async fn get_ai_models(app: &AppHandle, url: &str, key: &str) -> Result<Vec<
         return Err(AppError::runtime("当前连接没有返回可用模型。"));
     }
     Ok(models)
+}
+
+pub async fn get_command_library(force: bool) -> Result<CommandLibraryPayload, AppError> {
+    // 官网接口是公开资料，但没有 CORS；桌面端必须在 Rust 网络层读取后再交给 WebView。
+    let url = if force {
+        format!(
+            "{COMMAND_LIBRARY_URL}?t={}",
+            chrono::Utc::now().timestamp_millis()
+        )
+    } else {
+        COMMAND_LIBRARY_URL.to_string()
+    };
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .user_agent("CS2AS05/0.6.4")
+        .build()
+        .map_err(|error| AppError::runtime(format!("无法初始化指令资料连接：{error}")))?;
+    let response = client
+        .get(url)
+        .header(reqwest::header::ACCEPT, "application/json")
+        .send()
+        .await
+        .map_err(|error| {
+            AppError::runtime(format!("指令资料连接失败，请检查网络后重试：{error}"))
+        })?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(AppError::runtime(if status.as_u16() == 503 {
+            "官网指令资料暂未发布，请稍后再试。".to_string()
+        } else {
+            format!("官网指令资料加载失败（HTTP {}）。", status.as_u16())
+        }));
+    }
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_COMMAND_LIBRARY_BYTES as u64)
+    {
+        return Err(AppError::runtime("指令资料文件过大，已停止读取。"));
+    }
+    let body = response
+        .bytes()
+        .await
+        .map_err(|error| AppError::runtime(format!("指令资料读取失败，请稍后重试：{error}")))?;
+    if body.len() > MAX_COMMAND_LIBRARY_BYTES {
+        return Err(AppError::runtime("指令资料文件过大，已停止读取。"));
+    }
+    let payload: CommandLibraryPayload = serde_json::from_slice(&body)
+        .map_err(|error| AppError::runtime(format!("指令资料格式无效：{error}")))?;
+    if payload.commands.is_empty()
+        || payload
+            .commands
+            .iter()
+            .any(|command| command.name.trim().is_empty())
+    {
+        return Err(AppError::runtime(
+            "指令资料为空或缺少命令名称，请稍后重试。",
+        ));
+    }
+    Ok(payload)
 }
 
 pub fn run_ai_powershell(command: &str, working_dir: &Path) -> Result<String, AppError> {
@@ -812,12 +912,82 @@ pub fn dismiss_bot_profile_guide(app: &AppHandle) -> Result<(), AppError> {
 pub fn get_assistant_preferences() -> Result<AssistantPreferences, AppError> {
     Ok(AssistantPreferences {
         autostart_enabled: autostart_enabled()?,
+        promotion_push_disabled: promotion_push_disabled(),
+        close_choice: close_choice(),
     })
 }
 
 pub fn set_assistant_autostart(enabled: bool) -> Result<AssistantPreferences, AppError> {
     set_autostart(enabled)?;
     get_assistant_preferences()
+}
+
+pub fn set_promotion_push_disabled(disabled: bool) -> Result<AssistantPreferences, AppError> {
+    let path = promotion_preferences_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| AppError::runtime(format!("无法保存资源推送偏好：{error}")))?;
+    }
+    let value: &[u8] = if disabled {
+        b"disabled\n"
+    } else {
+        b"enabled\n"
+    };
+    fs::write(path, value)
+        .map_err(|error| AppError::runtime(format!("无法保存资源推送偏好：{error}")))?;
+    get_assistant_preferences()
+}
+
+pub fn set_close_choice(choice: Option<&str>) -> Result<AssistantPreferences, AppError> {
+    let path = close_choice_preferences_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| AppError::runtime(format!("无法保存关闭偏好：{error}")))?;
+    }
+    let value = match choice {
+        Some("exit") => "exit\n",
+        Some("tray") => "tray\n",
+        None => "none\n",
+        Some(_) => return Err(AppError::runtime("关闭偏好无效。")),
+    };
+    fs::write(path, value)
+        .map_err(|error| AppError::runtime(format!("无法保存关闭偏好：{error}")))?;
+    get_assistant_preferences()
+}
+
+fn promotion_preferences_path() -> Result<PathBuf, AppError> {
+    std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("APPDATA").map(PathBuf::from))
+        .map(|path| {
+            path.join("CS2人机增强助手")
+                .join("promotion-push-preference")
+        })
+        .ok_or_else(|| AppError::runtime("无法定位助手数据目录。"))
+}
+
+fn promotion_push_disabled() -> bool {
+    promotion_preferences_path()
+        .ok()
+        .and_then(|path| fs::read_to_string(path).ok())
+        .is_some_and(|value| value.trim() == "disabled")
+}
+
+fn close_choice_preferences_path() -> Result<PathBuf, AppError> {
+    // 关闭偏好必须和桌面应用生命周期一致，不能依赖 WebView 的 sessionStorage。
+    std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("APPDATA").map(PathBuf::from))
+        .map(|path| path.join("CS2人机增强助手").join("close-choice-preference"))
+        .ok_or_else(|| AppError::runtime("无法定位助手数据目录。"))
+}
+
+fn close_choice() -> Option<String> {
+    close_choice_preferences_path()
+        .ok()
+        .and_then(|path| fs::read_to_string(path).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| value == "exit" || value == "tray")
 }
 
 pub fn clear_assistant_data(app: &AppHandle) -> Result<OperationResult, AppError> {
@@ -834,6 +1004,12 @@ pub fn clear_assistant_data(app: &AppHandle) -> Result<OperationResult, AppError
         AI_CHAT_SESSIONS_FILE,
     ] {
         removed += remove_data_path(&local_data.join(relative))?;
+    }
+    if let Ok(path) = promotion_preferences_path() {
+        removed += remove_data_path(&path)?;
+    }
+    if let Ok(path) = close_choice_preferences_path() {
+        removed += remove_data_path(&path)?;
     }
 
     let runtime_log = diagnostics_log_path();

@@ -2,26 +2,14 @@ import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(
-  'third_party/CS2-Bot-Improver-map-rotation/addons/counterstrikesharp/plugins/MapRotation/MapRotation.cs',
-  'utf8',
-)
+const zip = readFileSync('src-tauri/resources/CS2BotImprover.zip')
 
-describe('MapRotation release contract', () => {
-  it('starts automatic rotation disabled while retaining an explicit enable switch', () => {
-    expect(source).toContain('_enabled = LoadDefaultEnabled();')
-    expect(source).toContain('lbtv_map_rotation [0|1]')
-    expect(source).toContain('ScheduleNextMap')
-    expect(source).toContain('System.Text.Json')
-    expect(source).toContain('AutoChangeDelaySeconds = 15.0f')
-    expect(source).toContain('DefaultConfigRelativePath')
-    expect(source).toContain('private const bool DefaultEnabled = false;')
-    expect(source).toContain('lbtv_map_next')
-  })
-
-  it('ships the external default config in the release zip', () => {
-    const zip = readFileSync('src-tauri/resources/CS2BotImprover.zip')
+describe('官方 v1.4.5 资源包边界', () => {
+  it('使用已核验的上游整包，不把下游自动换图或 BOT AI 聊天注入资源包', () => {
     expect(zip.length).toBeGreaterThan(1)
-    expect(createHash('sha256').update(zip).digest('hex').toUpperCase()).toBe('EC3280E6848CA06B094FBAC2741674BA7E5586DF6679DB8D6ECC3B43109BB648')
+    expect(createHash('sha256').update(zip).digest('hex').toUpperCase()).toBe('AE37B86533ABFE0547C5AD4346D478CD846727509FC092842A81240EB0130140')
+    const text = zip.toString('binary')
+    expect(text).not.toContain('MapRotation')
+    expect(text).not.toContain('CS2BotLlmChat')
   })
 })

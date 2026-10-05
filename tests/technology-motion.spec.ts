@@ -188,7 +188,7 @@ describe('technology motion interaction boundaries', () => {
     await wrapper.get('input').setValue('br_reroll')
     const matches = wrapper.findAll('.command-list button.is-match')
     expect(matches).toHaveLength(1)
-    expect(matches[0]?.text()).toBe('br_reroll')
+    expect(matches[0]?.find('code').text()).toBe('br_reroll')
     await matches[0]?.trigger('click')
     await flushPromises()
     expect(tauri.writeText).toHaveBeenCalledWith('br_reroll')
@@ -202,7 +202,7 @@ describe('technology motion interaction boundaries', () => {
     const panel = usePanelStore(); panel.snapshot = snapshot()
     tauri.setNades.mockResolvedValue({ ...snapshot(), presets: { aim: 'mixed', nades: 'less', writable: true } })
     const wrapper = mount(PresetsView, { global: { plugins: [pinia] } })
-    const nades = wrapper.findAll('.control-group')[1]!
+    const nades = wrapper.findAll('.preset-module')[1]!
     expect(nades.findAll('.segmented button').map(button => button.text())).toEqual(['最多', '较多', '正常', '较少', '关闭'])
     await nades.findAll('.segmented button')[3]?.trigger('click')
     await flushPromises()

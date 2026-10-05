@@ -50,16 +50,12 @@ describe('StatusStrip CS2 close control', () => {
     expect(button.getAttribute('aria-label')).toBe('关闭 CS2')
   })
 
-  it('优雅关闭失败时显示应用内强制确认，并只在确认后调用 force=true', async () => {
+  it('优雅关闭失败后自动尝试强制关闭', async () => {
     api.close.mockResolvedValueOnce({ success: false, message: 'CS2 仍在运行，可能未响应；确认后可强制关闭。' })
     const wrapper = mountStrip('running')
     await wrapper.get('button.status-strip-close').trigger('click')
     await flushPromises()
     expect(api.close).toHaveBeenCalledWith(false)
-    expect(wrapper.text()).toContain('强制关闭可能丢失未保存内容')
-    expect(wrapper.text()).toContain('确认强制关闭')
-    await wrapper.get('.status-strip-confirm button').trigger('click')
-    await flushPromises()
     expect(api.close).toHaveBeenNthCalledWith(2, true)
   })
 

@@ -17,7 +17,7 @@ describe('desktop design contract', () => {
 
     expect(styles).toContain(":root[data-theme='dark']")
     expect(styles).toContain('--app-bg: #0b0c0c')
-    expect(styles).toContain('--primary: #d5b56a')
+    expect(styles).toContain('--primary: #2f80ed')
     expect(styles).not.toContain('font-family: Inter')
     expect(styles).toContain('"Microsoft YaHei UI", "Segoe UI", sans-serif')
     expect(styles).toContain('Consolas, "Cascadia Mono", monospace')

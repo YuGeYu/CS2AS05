@@ -1,6 +1,6 @@
 # Optional source build for investigation
 
-The application ships the official `InventorySimulator-v3.3.0.zip` Release
+The application ships the official `InventorySimulator-v3.5.0.zip` Release
 asset directly. The following command is for source investigation only; its
 output is not copied into application resources.
 

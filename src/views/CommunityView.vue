@@ -23,6 +23,23 @@ type Peer = {
   input?: MediaStreamAudioSourceNode
   context?: AudioContext
 }
+type CommunitySignal = {
+  description?: RTCSessionDescriptionInit
+  candidate?: RTCIceCandidateInit
+}
+type CommunityEvent = {
+  type?: string
+  id?: string
+  content?: string
+  emoji?: string
+  count?: number
+  displayName?: string
+  from?: string
+  user?: { id: string; role?: string }
+  messages?: ChatMessage[]
+  message?: ChatMessage
+  payload?: CommunitySignal
+}
 const messages = ref<ChatMessage[]>([])
 const draft = ref('')
 const connected = ref(false)
@@ -85,7 +102,7 @@ async function connect() {
       error.value = '圈子服务暂时不可用，请稍后重试'
     }
     socket.onmessage = (event) => {
-      const data = JSON.parse(event.data)
+      const data = JSON.parse(event.data) as CommunityEvent
       if (data.type === 'message-deleted') messages.value = messages.value.filter((message) => message.id !== data.id)
       void handleMessage(data)
     }
@@ -95,29 +112,32 @@ async function connect() {
     window.setTimeout(() => window.dispatchEvent(new CustomEvent('cs2as:focus-account')), 80)
   }
 }
-async function handleMessage(data: any) {
+async function handleMessage(data: CommunityEvent) {
   if (data.type === 'ready') {
+    if (!data.user) return
     selfId = data.user.id
     currentRole.value = data.user.role || 'user'
   }
-  if (data.type === 'history') messages.value = data.messages
-  if (data.type === 'message') messages.value.push(data.message)
+  if (data.type === 'history' && data.messages) messages.value = data.messages
+  if (data.type === 'message' && data.message) messages.value.push(data.message)
   if (data.type === 'message-edited') {
     const item = messages.value.find((message) => message.id === data.id)
-    if (item) item.content = data.content
+    if (item && typeof data.content === 'string') item.content = data.content
   }
-  if (data.type === 'presence') memberCount.value = data.count
+  if (data.type === 'presence' && typeof data.count === 'number') memberCount.value = data.count
   if (data.type === 'reaction') {
     const item = messages.value.find((message) => message.id === data.id)
-    if (item)
+    if (item && data.emoji) {
+      const reactions = item.reactions || {}
       item.reactions = {
-        ...(item.reactions || {}),
-        [data.emoji]: ((item.reactions || {})[data.emoji] || 0) + 1,
+        ...reactions,
+        [data.emoji]: (reactions[data.emoji] || 0) + 1,
       }
+    }
   }
-  if (data.type === 'peer-joined' && voiceOpen.value && data.id !== selfId) await createPeer(data.id, data.displayName, true)
-  if (data.type === 'peer-left') closePeer(data.id)
-  if (data.type === 'signal') await receiveSignal(data.from, data.payload)
+  if (data.type === 'peer-joined' && voiceOpen.value && data.id && data.id !== selfId) await createPeer(data.id, data.displayName || '玩家', true)
+  if (data.type === 'peer-left' && data.id) closePeer(data.id)
+  if (data.type === 'signal' && data.from && data.payload) await receiveSignal(data.from, data.payload)
 }
 function sendMessage() {
   const content = draft.value.trim()
@@ -205,9 +225,6 @@ async function connectToServer(message: ChatMessage) {
     error.value = cause instanceof Error ? cause.message : '无法启动 CS2'
   }
 }
-async function download(message: ChatMessage) {
-  await openDownload(message)
-}
 function isImage(message: ChatMessage) {
   return /^image\/(png|jpe?g|gif|webp|bmp|svg\+xml)$/i.test(resource(message).type || '') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(resource(message).name)
 }
@@ -267,9 +284,9 @@ async function createPeer(id: string, name: string, initiator: boolean) {
   })
   const peer: Peer = { id, name, connection }
   peers.set(id, peer)
-  const stream = media as any
+  const stream = media
   if (stream) {
-    for (const track of stream.getTracks()) connection.addTrack(track, stream as any)
+    for (const track of stream.getTracks()) connection.addTrack(track, stream)
   }
   connection.onicecandidate = (event) => {
     if (event.candidate) emit({ type: 'signal', to: id, payload: { candidate: event.candidate } })
@@ -289,7 +306,7 @@ async function createPeer(id: string, name: string, initiator: boolean) {
     emit({ type: 'signal', to: id, payload: { description: connection.localDescription } })
   }
 }
-async function receiveSignal(id: string, payload: any) {
+async function receiveSignal(id: string, payload: CommunitySignal) {
   let peer = peers.get(id)
   if (!peer) {
     await createPeer(id, '玩家', false)
@@ -324,10 +341,6 @@ function setInput() {
     const constraints = { ...settings, volume: value }
     void track.applyConstraints(constraints).catch(() => {})
   }
-}
-function setPeerGain(id: string) {
-  const peer = peers.get(id)
-  if (peer?.gain) peer.gain.gain.value = outputGain.value * (peerGains.value[id] ?? 1)
 }
 async function toggleLoopback() {
   if (loopbackTesting.value) {
@@ -379,7 +392,7 @@ onBeforeUnmount(() => {
         </button>
         <div v-if="voiceOpen" class="voice-controls">
           <div class="voice-untested-warning" role="status"><AlertTriangle :size="16" aria-hidden="true" /><span><strong>语音功能未测试</strong><small>当前仅完成代码链路，尚未验证真实多人、跨网络和麦克风设备兼容性。</small></span></div>
-          <label>麦克风输入<input v-model.number="inputGain" type="range" min="0" max="4" step="0.01" /></label><label>总接收音量<input v-model.number="outputGain" type="range" min="0" max="4" step="0.01" @input="setOutput" /></label
+          <label>麦克风输入<input v-model.number="inputGain" type="range" min="0" max="4" step="0.01" @input="setInput" /></label><label>总接收音量<input v-model.number="outputGain" type="range" min="0" max="4" step="0.01" @input="setOutput" /></label
           ><button v-if="currentRole === 'owner'" type="button" class="voice-test-button" @click="toggleLoopback">
             {{ loopbackTesting ? '停止本地回环' : '本地回环测试' }}</button
           ><small>自由输入 · 语音不录音 · 单人音量随连接自动显示</small>

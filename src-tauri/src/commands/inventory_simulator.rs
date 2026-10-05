@@ -10,9 +10,11 @@ use tauri::{AppHandle, Manager};
 use crate::errors::AppError;
 use crate::services::{cs2, support};
 
-const RESOURCE_VERSION: &str = "3.3.0-release";
-const UPSTREAM_TAG: &str = "3.3.0";
-const UPSTREAM_COMMIT: &str = "unknown";
+// Official Inventory Simulator v3.5.0 release asset; keep these hashes aligned
+// with third_party/cs2-css-inventory-simulator/SHA256SUMS.txt.
+const RESOURCE_VERSION: &str = "3.5.0-release";
+const UPSTREAM_TAG: &str = "3.5.0";
+const UPSTREAM_COMMIT: &str = "157086c73718920285d3d761fe22c47a98090ec1";
 const PLUGIN_PARENT_RELATIVE: &str = "addons/counterstrikesharp/plugins";
 const PLUGIN_NAME: &str = "InventorySimulator";
 const LEGACY_PLUGIN_NAME: &str = "PlayerSkinMod";
@@ -26,7 +28,7 @@ const PLUGIN_RESOURCES: &[(&str, &str, &str)] = &[
     (
         "InventorySimulator.dll",
         "InventorySimulator.dll",
-        "46F41BB65F2B7CAB53C2308ADA1A03C004670E24BDEBE9D10F2FA0491885D8EC",
+        "6E2AA5FBD58B634898C74E730D9A0D833225856CF9E8C984D9FD836420723829",
     ),
     (
         "InventorySimulator.deps.json",
@@ -36,7 +38,7 @@ const PLUGIN_RESOURCES: &[(&str, &str, &str)] = &[
     (
         "InventorySimulator.pdb",
         "InventorySimulator.pdb",
-        "1B584041FB695ACCE6DD1EFA0DD04001931E36FDCDCB9B6E99EE2BD44DA2C762",
+        "DEF0103313EC2A851B1E3B4C3594B3E01C030CFC32DEED44C1404DDF4C7084AA",
     ),
     (
         "lang/en.json",
@@ -56,10 +58,10 @@ const PLUGIN_RESOURCES: &[(&str, &str, &str)] = &[
     (
         "manifest.json",
         "CS2AS05.inventory-simulator.json",
-        "3B86ED2180623C5E986596600673A2310A65AF6348A6ECAF2F4875D323D07F91",
+        "B21591C21DE1FC0E74A8031A10A2A461BB1E249CE321DDDB6E5DAF433B1C69C3",
     ),
 ];
-const GAMEDATA_HASH: &str = "0492CDC6B0E2E6B92406B2838F18C4A06A9E70359A2DC05BC0E6A209A6D478CB";
+const GAMEDATA_HASH: &str = "D645A656C89FBD61C5F99A655724A5C722AD40F0BEEE5A22AAF063AFBE236B50";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -249,7 +251,7 @@ fn status(app: &AppHandle, root_path: &str) -> Result<InventorySimulatorStatus, 
         cs2_running,
         counter_strike_sharp_installed,
         counter_strike_sharp_version: counter_strike_sharp_installed
-            .then(|| "API DLL 已检测（目标 1.0.375）".into()),
+            .then(|| "API DLL 已检测（上游资源目标 1.0.375）".into()),
         legacy_player_skin_mod_present,
         legacy_app_data_present,
         inventory_simulator_present,

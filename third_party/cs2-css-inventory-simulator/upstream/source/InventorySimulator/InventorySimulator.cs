@@ -21,9 +21,12 @@ public partial class InventorySimulator : BasePlugin
         Runtime.Initialize(this);
         ConVars.Initialize(this);
         RegisterListener<Listeners.OnEntityCreated>(OnEntityCreated);
+        RegisterListener<Listeners.OnEntitySpawned>(OnEntitySpawned);
         RegisterListener<Listeners.OnEntityDeleted>(OnEntityDeleted);
+        RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterEventHandler<EventPlayerConnect>(OnPlayerConnect, HookMode.Post);
         RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnectFull, HookMode.Post);
+        RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn, HookMode.Post);
         RegisterEventHandler<EventPlayerDeath>(OnPlayerDeathPre);
         RegisterEventHandler<EventRoundMvp>(OnRoundMvpPre);
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect, HookMode.Post);
@@ -32,6 +35,9 @@ public partial class InventorySimulator : BasePlugin
         ConVars.File.ValueChanged += OnFileChanged;
         ConVars.IsRequireInventory.ValueChanged += OnIsRequireInventoryChanged;
         ConVars.IsSprayOnUse.ValueChanged += OnIsSprayOnUseChanged;
+        ConVars.IsPetImmortal.ValueChanged += OnIsPetImmortalChanged;
+        ConVars.IsPetFreeRoam.ValueChanged += OnPetRoamConVarChanged;
+        ConVars.IsPetRespawn.ValueChanged += OnPetRoamConVarChanged;
         ConVars.Url.ValueChanged += OnUrlChanged;
         ConVars.ApiKey.ValueChanged += OnApiSuspensionConVarChanged;
         ConVars.IsPublicApiStatTrakIncrement.ValueChanged += OnApiSuspensionConVarChanged;
@@ -40,11 +46,15 @@ public partial class InventorySimulator : BasePlugin
         OnFileChanged(null, ConVars.File.Value);
         OnIsRequireInventoryChanged(null, ConVars.IsRequireInventory.Value);
         OnIsSprayOnUseChanged(null, ConVars.IsSprayOnUse.Value);
+        OnIsPetImmortalChanged(null, ConVars.IsPetImmortal.Value);
+        OnPetRoamChanged(ConVars.IsPetFreeRoam.Value || ConVars.IsPetRespawn.Value);
     }
 
     private string _lastUrl = "";
     private bool _isActivatePlayerHooked = false;
     private bool _isProcessUsercmdsHooked = false;
+    private bool _isTakeDamageHooked = false;
+    private bool _isChickenManagerPostSimulateHooked = false;
 
     public void OnUrlChanged(object? _, string value)
     {
@@ -97,12 +107,48 @@ public partial class InventorySimulator : BasePlugin
         _isProcessUsercmdsHooked = value;
     }
 
+    public void OnIsPetImmortalChanged(object? _, bool value)
+    {
+        if (value == _isTakeDamageHooked)
+            return;
+        if (value)
+            RegisterListener<Listeners.OnEntityTakeDamagePre>(OnEntityTakeDamagePre);
+        else
+            RemoveListener<Listeners.OnEntityTakeDamagePre>(OnEntityTakeDamagePre);
+        _isTakeDamageHooked = value;
+    }
+
+    public void OnPetRoamConVarChanged(object? _, bool __)
+    {
+        OnPetRoamChanged(ConVars.IsPetFreeRoam.Value || ConVars.IsPetRespawn.Value);
+    }
+
+    public void OnPetRoamChanged(bool value)
+    {
+        if (value == _isChickenManagerPostSimulateHooked)
+            return;
+        if (value)
+            Natives.CCSChickenManager_ServerGamePostSimulate.Hook(
+                OnChickenManagerServerGamePostSimulate,
+                HookMode.Post
+            );
+        else
+            Natives.CCSChickenManager_ServerGamePostSimulate.Unhook(
+                OnChickenManagerServerGamePostSimulate,
+                HookMode.Post
+            );
+        _isChickenManagerPostSimulateHooked = value;
+    }
+
     public override void Unload(bool hotReload)
     {
         VirtualFunctions.GiveNamedItemFunc.Unhook(OnGiveNamedItemPre, HookMode.Pre);
         Natives.CCSPlayerInventory_GetItemInLoadout.Unhook(GetItemInLoadout, HookMode.Post);
         OnIsRequireInventoryChanged(null, false);
         OnIsSprayOnUseChanged(null, false);
+        OnIsPetImmortalChanged(null, false);
+        OnPetRoamChanged(false);
         CCSPlayerControllerState.ClearAllEconItemView();
+        SchemaHelper.FreeEmptyCEconItemView();
     }
 }

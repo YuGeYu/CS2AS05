@@ -1,8 +1,12 @@
 {
   "schemaVersion": 1,
-  "resourceVersion": "3.3.0-release",
-  "upstreamTag": "3.3.0",
-  "upstreamCommit": null,
+  "resourceVersion": "3.5.0-release",
+  "upstreamTag": "3.5.0",
+  "upstreamCommit": "157086c73718920285d3d761fe22c47a98090ec1",
   "counterStrikeSharpApi": "1.0.375",
+  "releaseAsset": "InventorySimulator-v3.5.0.zip",
+  "releaseAssetSha256": "9119DA8EFA655156DDB65D0F79F395A4DC1EEB158D3F357545797A8133FB8315",
+  "sourceArchive": "cs2-css-inventory-simulator-3.5.0.zip",
+  "sourceArchiveSha256": "A6F024A42D46ECB9267943B4C3E4E0F042D215BCED1DE408428B9F93877D6B74",
   "downstreamPatches": []
 }

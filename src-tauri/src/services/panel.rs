@@ -1,4 +1,4 @@
-// Compatibility behavior follows the released ed0ard/CS2-Bot-Improver v1.4.3 Panel.
+// Compatibility behavior follows the released ed0ard/CS2-Bot-Improver v1.4.5 Panel.
 use std::collections::BTreeSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -43,8 +43,6 @@ const SKIN_ONLY_DISABLED_BOT_PLUGINS: &[&str] = &[
     "BotHiderImpl",
     "BotRandomizer",
     "BotState",
-    "CS2BotLlmChat",
-    "MapRotation",
     "NadeSystem",
     "RayTraceImpl",
 ];
@@ -57,7 +55,7 @@ const SKIN_ONLY_NATIVE_METAMOD_VDFS: &[&str] = &[
     "BotVision.vdf",
     "RayTrace.vdf",
 ];
-// (logical item, canonical v1.4.4 key, legacy v1.4.3 alias)
+// (logical item, canonical v1.4.5-compatible key, legacy aliases)
 const BOT_ITEM_KEYS: [(&str, &str, &str); 8] = [
     (
         "profiles",
@@ -815,7 +813,7 @@ fn set_bot_item_values(object: &mut Map<String, Value>, items: &BotItemsState) {
             "charms" => items.charms,
             _ => unreachable!(),
         };
-        // Canonical v1.4.4 namespaces are authoritative; remove stale aliases
+        // Canonical v1.4.5-compatible namespaces are authoritative; remove stale aliases
         // so CounterStrikeSharp cannot resolve two conflicting values.
         object.remove(legacy_key);
         object.insert(key.into(), Value::Bool(enabled));
@@ -1165,6 +1163,16 @@ fn snapshot_at(root: &Path) -> Result<PanelSnapshot, AppError> {
         "overrides/Low/botprofile.vpk",
         "overrides/Medium/botprofile.vpk",
         "overrides/High/botprofile.vpk",
+        "cfg/gamemode_armsrace.cfg",
+        "cfg/gamemode_casual.cfg",
+        "cfg/gamemode_competitive.cfg",
+        "cfg/gamemode_competitive2v2.cfg",
+        "cfg/gamemode_deathmatch.cfg",
+        "cfg/gamemode_dm_freeforall.cfg",
+        "cfg/gamemode_retakecasual.cfg",
+        "cfg/gamemode_teamdeathmatch.cfg",
+        "cfg/gamemode_workshop.cfg",
+        "cfg/my_bot_rush_config.cfg",
     ];
     let missing_files = required
         .iter()
@@ -1471,6 +1479,8 @@ fn launch_cs2_inner(
     let (root, steam) = prepare_launch_paths(root_path, cs2::check_cs2_process, |root| {
         cs2_discovery::find_steam_executable(Some(root))
     })?;
+    // Validate Steam-owned game layers before changing Panel state, plugins, or gameinfo.
+    cs2::ensure_core_game_layers(&root)?;
     let recording_enabled = mode == "bots";
     apply_demo_recording(root_path, recording_enabled)?;
     demo::set_recording_desired(app, recording_enabled)?;
@@ -2006,11 +2016,16 @@ mod tests {
             fs::create_dir_all(csgo.join(relative)).unwrap();
         }
         fs::write(csgo.join("backup/Online/gameinfo.gi"), b"online").unwrap();
+        fs::write(csgo.join("backup/SkinOnly/gameinfo.gi"), b"online").unwrap();
         fs::write(
             csgo.join("backup/WithBots/gameinfo.gi"),
             b"Game csgo/addons/metamod",
         )
         .unwrap();
+        fs::write(csgo.join("backup/SkinOnly/gameinfo.gi"), b"online").unwrap();
+        fs::write(csgo.join("backup/SkinOnly/gameinfo.gi"), b"online").unwrap();
+        fs::create_dir_all(csgo.join("backup/SkinOnly")).unwrap();
+        fs::write(csgo.join("backup/SkinOnly/gameinfo.gi"), b"online").unwrap();
         fs::write(
             csgo.join("backup/SkinOnly/gameinfo.gi"),
             b"Game csgo/addons/metamod",
@@ -2045,6 +2060,8 @@ mod tests {
             csgo.join("gameinfo.gi"),
         )
         .unwrap();
+        fs::create_dir_all(csgo.join("backup/SkinOnly")).unwrap();
+        fs::write(csgo.join("backup/SkinOnly/gameinfo.gi"), b"online").unwrap();
         for level in ["Low", "Medium", "High"] {
             fs::write(
                 csgo.join(format!("overrides/{level}/botprofile.vpk")),
@@ -2138,6 +2155,17 @@ mod tests {
                 "Steam must be resolved before {mutation}"
             );
         }
+        let core_layers = launch.find("ensure_core_game_layers").unwrap();
+        for mutation in [
+            "initialize_panel_defaults_at",
+            "ensure_current_bot_plugin",
+            "set_mode",
+        ] {
+            assert!(
+                core_layers < launch.find(mutation).unwrap(),
+                "Steam core layers must be validated before {mutation}"
+            );
+        }
     }
 
     #[test]
@@ -2186,6 +2214,7 @@ mod tests {
         for relative in [
             "backup/Online",
             "backup/WithBots",
+            "backup/SkinOnly",
             "cfg",
             "overrides/Low",
             "overrides/Medium",
@@ -2200,6 +2229,7 @@ mod tests {
             b"Game csgo/addons/metamod",
         )
         .unwrap();
+        fs::write(csgo.join("backup/SkinOnly/gameinfo.gi"), b"online").unwrap();
         for level in ["Low", "Medium", "High"] {
             fs::write(
                 csgo.join(format!("overrides/{level}/botprofile.vpk")),
@@ -2213,6 +2243,7 @@ mod tests {
         }
         fs::create_dir_all(csgo.join("addons/counterstrikesharp/configs")).unwrap();
         fs::write(csgo.join(CORE_CONFIG_FILE), b"{}").unwrap();
+        fs::write(csgo.join("gameinfo.gi"), b"online").unwrap();
         write_gameinfo_sidecar(&csgo, "test", "test").unwrap();
 
         let root_text = root.to_string_lossy();

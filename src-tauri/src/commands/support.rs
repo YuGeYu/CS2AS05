@@ -61,6 +61,13 @@ pub async fn get_ai_models(
 }
 
 #[tauri::command]
+pub async fn get_command_library(force: bool) -> Result<support::CommandLibraryPayload, String> {
+    support::get_command_library(force)
+        .await
+        .map_err(AppError::into_string)
+}
+
+#[tauri::command]
 pub async fn run_ai_powershell(app: AppHandle, command: String) -> Result<String, String> {
     let working_dir = app
         .path()
@@ -115,6 +122,11 @@ pub fn open_resource_link(url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_community_group() -> Result<(), String> {
+    support::open_community_group().map_err(AppError::into_string)
+}
+
+#[tauri::command]
 pub fn open_community_download(url: String) -> Result<(), String> {
     support::open_community_download(&url).map_err(AppError::into_string)
 }
@@ -160,6 +172,16 @@ pub fn get_assistant_preferences() -> Result<AssistantPreferences, String> {
 #[tauri::command]
 pub fn set_assistant_autostart(enabled: bool) -> Result<AssistantPreferences, String> {
     support::set_assistant_autostart(enabled).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn set_promotion_push_disabled(disabled: bool) -> Result<AssistantPreferences, String> {
+    support::set_promotion_push_disabled(disabled).map_err(AppError::into_string)
+}
+
+#[tauri::command]
+pub fn set_close_choice(choice: Option<String>) -> Result<AssistantPreferences, String> {
+    support::set_close_choice(choice.as_deref()).map_err(AppError::into_string)
 }
 
 #[tauri::command]

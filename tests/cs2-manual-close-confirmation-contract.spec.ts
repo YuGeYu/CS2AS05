@@ -22,7 +22,7 @@ describe('CS2 手动确认解锁契约', () => {
     const overview = read('src/views/OverviewView.vue')
     expect(store).toContain('writeUnlocked')
     expect(store).toContain('confirmClosedByPlayer')
-    expect(strip).toContain('我确认 CS2 已关闭，解锁本次会话')
+    expect(strip).toContain('我确认 CS2 已关闭，解锁全部功能')
     expect(overview).toContain('cs2.writeUnlocked')
   })
 })

@@ -1,7 +1,8 @@
 param(
   [string]$OfficialPath = 'D:\SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\csgo\gameinfo.gi',
   [string]$ZipPath = 'src-tauri/resources/CS2BotImprover.zip',
-  [string]$ReportDirectory = 'workspace/runtime/gameinfo-refresh'
+  [string]$ReportDirectory = 'workspace/runtime/gameinfo-refresh',
+  [string]$BuildId = '25640462'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,6 +18,12 @@ if ($matches.Count -ne 1) { throw 'Expected exactly one official Game_LowViolenc
 $anchor = $matches[0].Groups[0].Value
 $withBotsText = $text.Replace($anchor, "$anchor$botLines`r`n")
 $withBotsBytes = [Text.Encoding]::UTF8.GetBytes($withBotsText)
+$skinOnlyText = [regex]::Replace(
+  $withBotsText,
+  '(?m)^\s*Game\s+csgo/overrides/botprofile\.vpk[^\r\n]*(?:\r?\n)?',
+  ''
+)
+$skinOnlyBytes = [Text.Encoding]::UTF8.GetBytes($skinOnlyText)
 
 function Get-Sha([byte[]]$Bytes) { $h=[Security.Cryptography.SHA256]::Create(); try { ([BitConverter]::ToString($h.ComputeHash($Bytes))).Replace('-', '') } finally { $h.Dispose() } }
 $currentVersion = (Get-Content (Join-Path $workspace 'package.json') -Raw | ConvertFrom-Json).version
@@ -25,10 +32,12 @@ $manifest = [ordered]@{
   resourceVersion = $currentVersion
   generatedAt = (Get-Date).ToString('yyyy-MM-dd')
   officialSha256 = Get-Sha $officialBytes
+  sourceBuildId = $BuildId
   entries = [ordered]@{
     'gameinfo.gi' = [ordered]@{ sha256 = Get-Sha $officialBytes; size = $officialBytes.Length }
     'backup/Online/gameinfo.gi' = [ordered]@{ sha256 = Get-Sha $officialBytes; size = $officialBytes.Length }
     'backup/WithBots/gameinfo.gi' = [ordered]@{ sha256 = Get-Sha $withBotsBytes; size = $withBotsBytes.Length }
+    'backup/SkinOnly/gameinfo.gi' = [ordered]@{ sha256 = Get-Sha $skinOnlyBytes; size = $skinOnlyBytes.Length }
   }
 } | ConvertTo-Json -Depth 5
 
@@ -44,6 +53,7 @@ try {
       'gameinfo.gi' = $officialBytes
       'backup/Online/gameinfo.gi' = $officialBytes
       'backup/WithBots/gameinfo.gi' = $withBotsBytes
+      'backup/SkinOnly/gameinfo.gi' = $skinOnlyBytes
       'gameinfo.manifest.json' = [Text.Encoding]::UTF8.GetBytes("$manifest`n")
     }
     foreach ($name in $entries.Keys) {
@@ -56,6 +66,6 @@ try {
   # 资源 ZIP 变化后必须重建插件 marker，避免旧版本 marker 触发 BOT 启动版本门禁。
   & (Join-Path $PSScriptRoot 'generate-plugin-manifest.ps1') -ZipPath $ZipPath | Out-Null
   $reportRoot = Join-Path $workspace $ReportDirectory; New-Item -ItemType Directory -Force -Path $reportRoot | Out-Null
-  [pscustomobject]@{ completedAt=(Get-Date).ToString('o'); officialPath=$official; onlineSha256=(Get-Sha $officialBytes); withBotsSha256=(Get-Sha $withBotsBytes); onlineBytes=$officialBytes.Length; withBotsBytes=$withBotsBytes.Length; zipSha256=(Get-FileHash $zip -Algorithm SHA256).Hash; backupPath=$backup } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reportRoot 'result.json') -Encoding utf8
+  [pscustomobject]@{ completedAt=(Get-Date).ToString('o'); sourceBuildId=$BuildId; officialPath=$official; onlineSha256=(Get-Sha $officialBytes); withBotsSha256=(Get-Sha $withBotsBytes); skinOnlySha256=(Get-Sha $skinOnlyBytes); onlineBytes=$officialBytes.Length; withBotsBytes=$withBotsBytes.Length; skinOnlyBytes=$skinOnlyBytes.Length; zipSha256=(Get-FileHash $zip -Algorithm SHA256).Hash; backupPath=$backup } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reportRoot 'result.json') -Encoding utf8
   Get-Content -Raw (Join-Path $reportRoot 'result.json')
 } finally { if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force } }

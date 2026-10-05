@@ -23,6 +23,7 @@ const contextLabels: Record<string, string> = {
   inventory: '库存换肤',
   community: '玩家圈子',
   commands: '命令',
+  commandLibrary: '指令研究所',
   demoReview: '对局复盘',
   quickSupport: '快快客服',
   install: '安装与诊断',

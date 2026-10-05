@@ -10,6 +10,17 @@ namespace InventorySimulator;
 
 public partial class InventorySimulator
 {
+    public void OnMapStart(string mapName)
+    {
+        // Clients clear their skin material cache on map change. Inventories that outlived the old
+        // map keep their wears claimed, the others get new ones when they're fetched again.
+        WearRegistry.Reset(
+            CCSPlayerControllerExtensions
+                .GetAllStates()
+                .SelectMany(state => state.Inventory?.GetAllWeapons() ?? [])
+        );
+    }
+
     public void OnEntityCreated(CEntityInstance entity)
     {
         var designerName = entity.DesignerName;
@@ -30,6 +41,26 @@ public partial class InventorySimulator
         }
     }
 
+    public void OnEntitySpawned(CEntityInstance entity)
+    {
+        var designerName = entity.DesignerName;
+        if (designerName == "chicken")
+        {
+            Server.NextWorldUpdate(() =>
+            {
+                var chicken = entity.As<CChicken>();
+                if (!chicken.IsValid)
+                    return;
+                var controller = chicken.Owner.Value;
+                if (controller == null || controller.SteamID == 0)
+                    return;
+                var item = controller.GetState().Inventory?.Pet;
+                if (item != null)
+                    chicken.ApplyPetStyle(item);
+            });
+        }
+    }
+
     public void OnEntityDeleted(CEntityInstance entity)
     {
         var designerName = entity.DesignerName;
@@ -39,5 +70,14 @@ public partial class InventorySimulator
             if (controller.SteamID != 0)
                 controller.RemoveState();
         }
+    }
+
+    public HookResult OnEntityTakeDamagePre(CBaseEntity entity, CTakeDamageInfo info)
+    {
+        if (!ConVars.IsPetImmortal.Value)
+            return HookResult.Continue;
+        if (entity.DesignerName != "chicken" || entity.As<CChicken>().Owner.Value == null)
+            return HookResult.Continue;
+        return HookResult.Handled;
     }
 }

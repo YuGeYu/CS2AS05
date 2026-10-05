@@ -1,6 +1,6 @@
-import { Bot, Boxes, ChartNoAxesCombined, Gauge, Headphones, ScrollText, Settings, Sword, WalletCards, LibraryBig, MessagesSquare, Lightbulb } from 'lucide-vue-next'
+import { Bot, Boxes, ChartNoAxesCombined, Gauge, Headphones, ScrollText, Settings, Sword, WalletCards, LibraryBig, MessagesSquare, Lightbulb, TerminalSquare } from 'lucide-vue-next'
 
-export type ViewKey = 'overview' | 'presets' | 'items' | 'knives' | 'inventory' | 'commands' | 'demoReview' | 'quickSupport' | 'resourceVault' | 'community' | 'suggestions' | 'install'
+export type ViewKey = 'overview' | 'presets' | 'items' | 'knives' | 'inventory' | 'commands' | 'commandLibrary' | 'demoReview' | 'quickSupport' | 'resourceVault' | 'community' | 'suggestions' | 'install'
 export type NavigationGroup = 'core' | 'tools' | 'review' | 'support'
 
 export const NAV_ITEMS = [
@@ -8,7 +8,8 @@ export const NAV_ITEMS = [
   { key: 'presets', label: '人机预设', icon: Bot, required: false, group: 'core' },
   { key: 'items', label: 'Bot 物品', icon: Boxes, required: false, group: 'tools' },
   { key: 'knives', label: '刀具', icon: Sword, required: false, group: 'tools' },
-  { key: 'commands', label: '命令', icon: ScrollText, required: false, group: 'tools' },
+  { key: 'commands', label: '本地命令', icon: ScrollText, required: false, group: 'tools' },
+  { key: 'commandLibrary', label: '指令研究所', icon: TerminalSquare, required: false, group: 'tools' },
   { key: 'inventory', label: '库存换肤', icon: WalletCards, required: false, group: 'review' },
   { key: 'demoReview', label: '对局复盘', icon: ChartNoAxesCombined, required: false, group: 'review' },
   { key: 'quickSupport', label: '快快客服', icon: Headphones, required: false, group: 'support' },

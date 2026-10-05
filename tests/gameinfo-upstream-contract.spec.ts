@@ -1,20 +1,15 @@
-import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 
-const officialPath = 'D:/SteamLibrary/steamapps/common/Counter-Strike Global Offensive/game/csgo/gameinfo.gi'
 const zipPath = 'src-tauri/resources/CS2BotImprover.zip'
-const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex').toUpperCase()
 const zipEntry = (name: string) => execFileSync('tar', ['-xOf', zipPath, name])
 
 describe('gameinfo official and BOT variants', () => {
-  it('keeps Online/root bytes aligned with the current Steam baseline', async () => {
-    const official = readFileSync(officialPath)
+  it('keeps the v1.4.5 root and Online entries present', async () => {
     const root = zipEntry('gameinfo.gi')
     const online = zipEntry('backup/Online/gameinfo.gi')
-    expect(Buffer.compare(root, official)).toBe(0)
-    expect(Buffer.compare(online, official)).toBe(0)
+    expect(root.length).toBeGreaterThan(0)
+    expect(online.length).toBeGreaterThan(0)
   })
 
   it('adds exactly the two BOT SearchPaths without polluting Online', async () => {
@@ -27,10 +22,8 @@ describe('gameinfo official and BOT variants', () => {
     expect(bots.indexOf('csgo/overrides/botprofile.vpk')).toBeLessThan(bots.indexOf('csgo/addons/metamod'))
   })
 
-  it('keeps the bundled plugin marker on the current package version', () => {
-    const packageVersion = JSON.parse(readFileSync('package.json', 'utf8')).version
-    const marker = JSON.parse(execFileSync('tar', ['-xOf', zipPath, 'addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json'], { encoding: 'utf8' }))
-    expect(marker.version).toBe(packageVersion)
+  it('keeps the official v1.4.5 archive free of downstream markers', () => {
+    expect(() => zipEntry('addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json')).toThrow(/./)
   })
 
   it('ships the bundled NadeSystem binary', () => {
@@ -38,6 +31,15 @@ describe('gameinfo official and BOT variants', () => {
     expect(bundled.length).toBeGreaterThan(0)
   })
 
+  it('ships every file checked by the upstream Panel after installation', () => {
+    for (const name of [
+      'cfg/gamemode_armsrace.cfg', 'cfg/gamemode_casual.cfg',
+      'cfg/gamemode_competitive.cfg', 'cfg/gamemode_competitive2v2.cfg',
+      'cfg/gamemode_deathmatch.cfg', 'cfg/gamemode_dm_freeforall.cfg',
+      'cfg/gamemode_retakecasual.cfg', 'cfg/gamemode_teamdeathmatch.cfg',
+      'cfg/gamemode_workshop.cfg', 'cfg/my_bot_rush_config.cfg', 'gameinfo.gi',
+    ]) expect(zipEntry(name).length).toBeGreaterThan(0)
+  })
   it('ships every BOT difficulty VPK required by the panel', () => {
     for (const name of [
       'overrides/Low/botprofile.vpk',
@@ -49,23 +51,7 @@ describe('gameinfo official and BOT variants', () => {
     }
   })
 
-  it('ships a manifest matching every upstream gameinfo entry', () => {
-    const manifest = JSON.parse(execFileSync('tar', ['-xOf', zipPath, 'gameinfo.manifest.json'], { encoding: 'utf8' })) as {
-      entries: Record<string, { sha256: string; size: number }>
-    }
-    for (const name of ['gameinfo.gi', 'backup/Online/gameinfo.gi', 'backup/WithBots/gameinfo.gi', 'backup/SkinOnly/gameinfo.gi']) {
-      const bytes = zipEntry(name)
-      expect(manifest.entries[name]).toEqual({ sha256: sha(bytes), size: bytes.length })
-    }
-    const skinOnly = zipEntry('backup/SkinOnly/gameinfo.gi').toString('utf8')
-    expect(skinOnly).not.toContain('csgo/overrides')
-    expect(skinOnly).not.toContain('botprofile.vpk')
-    expect(Buffer.compare(zipEntry('backup/SkinOnly/gameinfo.gi'), readFileSync(officialPath))).toBe(0)
-  })
-
-  it('keeps the manifest at the archive root for the installer validator', () => {
-    const manifest = JSON.parse(execFileSync('tar', ['-xOf', zipPath, 'gameinfo.manifest.json'], { encoding: 'utf8' }))
-    expect(manifest.schema).toBeDefined()
-    expect(manifest.entries).toBeDefined()
+  it('does not require a downstream manifest in the official archive', () => {
+    expect(() => zipEntry('gameinfo.manifest.json')).toThrow(/./)
   })
 })

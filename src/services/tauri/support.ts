@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { invoke, isTauri } from '@tauri-apps/api/core'
 import type { PanelSnapshot } from '@/features/panel/types'
 
 export function openOfficialSite() {
@@ -87,8 +87,33 @@ export function openResourceLink(url: string) {
   return invoke<void>('open_resource_link', { url })
 }
 
+export function openCommunityGroup() {
+  return invoke<void>('open_community_group')
+}
+
 export function openCommunityDownload(url: string) {
   return invoke<void>('open_community_download', { url })
+}
+
+export interface CommandLibraryCommand { name: string; defaultValue: string; flags: string; description: string }
+export interface CommandLibraryPayload {
+  schemaVersion: number
+  source: { name: string; url: string; pageTitle: string; revisionId: string; buildNote: string; importedAt: string }
+  commands: CommandLibraryCommand[]
+}
+
+export async function loadCommandLibrary(force = false): Promise<CommandLibraryPayload> {
+  // 桌面 WebView 不应直接依赖官网的 CORS 头，统一通过 Rust 后端读取发布快照。
+  if (isTauri()) return await invoke<CommandLibraryPayload>('get_command_library', { force })
+  const url = `https://cs2as.600318.xyz/api/command-library${force ? `?t=${Date.now()}` : ''}`
+  let response: Response
+  try {
+    response = await fetch(url, { headers: { Accept: 'application/json' }, credentials: 'omit' })
+  } catch {
+    throw new Error('当前运行环境无法直接读取指令资料，请使用桌面版助手或稍后重试。')
+  }
+  if (!response.ok) throw new Error(response.status === 503 ? '指令资料暂未发布，请稍后再试。' : `指令资料加载失败（${response.status}）`)
+  return await response.json() as CommandLibraryPayload
 }
 export function openAccountRegister() { return invoke<void>('open_account_register') }
 
@@ -100,6 +125,8 @@ export function dismissBotProfileGuide() { return invoke<void>('dismiss_bot_prof
 
 export interface AssistantPreferences {
   autostartEnabled: boolean
+  promotionPushDisabled: boolean
+  closeChoice: 'exit' | 'tray' | null
 }
 
 export interface FaultSubmissionResult {
@@ -122,6 +149,14 @@ export function getAssistantPreferences() {
 
 export function setAssistantAutostart(enabled: boolean) {
   return invoke<AssistantPreferences>('set_assistant_autostart', { enabled })
+}
+
+export function setPromotionPushDisabled(disabled: boolean) {
+  return invoke<AssistantPreferences>('set_promotion_push_disabled', { disabled })
+}
+
+export function setCloseChoice(choice: 'exit' | 'tray' | null) {
+  return invoke<AssistantPreferences>('set_close_choice', { choice })
 }
 
 export function clearAssistantData() {

@@ -108,6 +108,8 @@ pub struct DiagnosticsPayload {
 #[serde(rename_all = "camelCase")]
 pub struct AssistantPreferences {
     pub autostart_enabled: bool,
+    pub promotion_push_disabled: bool,
+    pub close_choice: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

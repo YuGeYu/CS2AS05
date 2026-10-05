@@ -1,10 +1,12 @@
 # NOTICE
 
-CS2 人机增强助手 `0.5.6` 同包并行包含 BotVision `0.2.2`（[XBribo/CS2-Bot-Vision](https://github.com/XBribo/CS2-Bot-Vision/releases/tag/v0.2.2)，固定提交 `17a2ca707ec1ffea8797e56d94915596ec5ef4c4`）的三个 Windows MetaMod 组件：`addons/BotVision/gamedata.json`、`addons/BotVision/bin/win64/BotVision.dll`、`addons/metamod/BotVision.vdf`。源 ZIP `E:\dow\BotVision-Windows-0.2.2.zip` SHA-256 为 `40B596D34BF336D9E59E663DAC2F94BD7C61D951C56E421EF66B5190B8787290`。上游 `v0.2.2` README/LICENSE 已核实为 AGPL-3.0；其闭源再分发、托管服务和不满足 copyleft 的专有集成需完整履行相应许可证或另行取得商业许可。该 DLL 当前核查结果为 Authenticode `NotSigned`；BotVision 是原生 MetaMod 并行组件，不替换 CounterStrikeSharp 或 NadeSystem。
+CS2 人机增强助手 `0.6.4` 同包并行包含 BotVision `0.2.2`（[XBribo/CS2-Bot-Vision](https://github.com/XBribo/CS2-Bot-Vision/releases/tag/v0.2.2)，固定提交 `17a2ca707ec1ffea8797e56d94915596ec5ef4c4`）的三个 Windows MetaMod 组件：`addons/BotVision/gamedata.json`、`addons/BotVision/bin/win64/BotVision.dll`、`addons/metamod/BotVision.vdf`。源 ZIP `E:\dow\BotVision-Windows-0.2.2.zip` SHA-256 为 `40B596D34BF336D9E59E663DAC2F94BD7C61D951C56E421EF66B5190B8787290`。上游 `v0.2.2` README/LICENSE 已核实为 AGPL-3.0；其闭源再分发、托管服务和不满足 copyleft 的专有集成需完整履行相应许可证或另行取得商业许可。该 DLL 当前核查结果为 Authenticode `NotSigned`；BotVision 是原生 MetaMod 并行组件，不替换 CounterStrikeSharp 或 NadeSystem。
 
-CS2 人机增强助手 `0.5.6`（[YuGeYu/CS2AS05](https://github.com/YuGeYu/CS2AS05)）是独立下游项目，并非上游官方发行版。它内置并再分发基于 [ed0ard/CS2-Bot-Improver](https://github.com/ed0ard/CS2-Bot-Improver) 的最小定制资源包。
+CS2 人机增强助手 `0.6.4`（[YuGeYu/CS2AS05](https://github.com/YuGeYu/CS2AS05)）是独立下游项目，并非上游官方发行版。0.6.4 内置并原样再分发 [ed0ard/CS2-Bot-Improver v1.4.5](https://github.com/ed0ard/CS2-Bot-Improver/releases/tag/v1.4.5) Windows 资源包；对应完整源码快照保存在 `third_party/CS2-Bot-Improver-v1.4.5-source.zip`。
 
-上游基线为 tag `v1.4.3`、提交 `d1d83982db88fbdb686b2bf13aa8c6f9d65a4604`。相对官方 ZIP 仅修改两个 BOT cfg、替换 `addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll`，并新增助手自用的 `CS2AS05.plugin.json` 完整性标记；对应修改源码、策略测试和基线说明位于 `third_party/CS2-Bot-Improver-v1.4.3/nades-pacing/`。该定制不生成 `[NadeAudit]` 或 `[NadeLimit]` 控制台行。
+本版本不对 v1.4.5 资源包做任何修改。后续版本如需下游修改，应另行记录差异、源码和验证结果，不得将其回写为本版本的上游原样包。
+
+0.6.4 的活动安装面不包含自动换图 `MapRotation` 或 `CS2BotLlmChat`；旧版本遗留目录只在覆盖安装事务中被暂存和清理。Inventory Simulator 仍按其独立的 MIT 资源记录部署。
 
 上游项目及本助手均遵循 GNU Affero General Public License v3.0 或更高版本。发布本助手时应保留内置资源包已有的 LICENSE、README、版权和归属信息，并同时提供与安装程序对应的源代码。
 
@@ -39,14 +41,15 @@ upstream application is included.
 ## ianlucas/cs2-css-inventory-simulator
 
 The inventory customization workflow redistributes Inventory Simulator
-from https://github.com/ianlucas/cs2-css-inventory-simulator at tag `3.3.0`,
+from https://github.com/ianlucas/cs2-css-inventory-simulator at tag `3.5.0`,
 copyright Ian Lucas, under the
 MIT License. The complete license, fixed source snapshot, Release provenance,
 and hashes are preserved in `third_party/cs2-css-inventory-simulator/`.
 
-The bundled `3.3.0` plugin binaries come directly from the upstream Release
-asset, without downstream changes. The upstream `invsim_ws_enabled` default is
-`false`; the `!ws` command requires explicit server-side enabling.
+The bundled `3.5.0` plugin binaries come directly from the upstream Release
+asset, without downstream changes. This release adds pet spawning, warmup-only
+pet respawn, and pet roaming controls. The upstream `invsim_ws_enabled` default
+is `false`; the `!ws` command requires explicit server-side enabling.
 
 ## CS2-insight-agent behavior reference
 

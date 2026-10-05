@@ -18,6 +18,7 @@ import PresetsView from '@/views/PresetsView.vue'
 import BotItemsView from '@/views/BotItemsView.vue'
 import KnivesView from '@/views/KnivesView.vue'
 import CommandsView from '@/views/CommandsView.vue'
+import CommandLibraryView from '@/views/CommandLibraryView.vue'
 import DemoReviewView from '@/views/DemoReviewView.vue'
 import InstallView from '@/views/InstallView.vue'
 import InventorySimulatorView from '@/views/InventorySimulatorView.vue'
@@ -56,6 +57,7 @@ const view = computed(
       knives: KnivesView,
       inventory: InventorySimulatorView,
       commands: CommandsView,
+      commandLibrary: CommandLibraryView,
       demoReview: DemoReviewView,
       quickSupport: QuickSupportView,
       resourceVault: ResourceVaultView,

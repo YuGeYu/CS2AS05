@@ -3,90 +3,43 @@ param(
   [string]$ReportDirectory = 'workspace/runtime/plugin-manifest'
 )
 
+# v1.4.5 is shipped byte-for-byte from ed0ard/CS2-Bot-Improver. This legacy
+# helper is now a read-only verifier; it must never append a downstream marker
+# or mutate the official archive.
+# Report contract: fixedZipHashGuard=$false (the archive is verified, never rewritten).
 $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $zip = (Resolve-Path (Join-Path $workspace $ZipPath)).Path
-$version = (Get-Content (Join-Path $workspace 'package.json') -Raw | ConvertFrom-Json).version
-$markerName = 'addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json'
-$panelName = 'Panel v1.4.4.exe'
-$mapRotationEntry = 'addons/counterstrikesharp/plugins/MapRotation/MapRotation.dll'
-$mapRotationConfigEntry = 'addons/counterstrikesharp/configs/plugins/MapRotation/MapRotation.json'
-$rustServicePath = Join-Path $workspace 'src-tauri/src/services/cs2.rs'
-$temporary = "$zip.tmp-$([guid]::NewGuid().ToString('N'))"
-$backup = "$zip.before-plugin-manifest-$((Get-Date).ToString('yyyyMMdd-HHmmss')).bak"
+$reportRoot = Join-Path $workspace $ReportDirectory
+New-Item -ItemType Directory -Force -Path $reportRoot | Out-Null
 
-Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-
-function Get-Hex([byte[]]$Bytes) { ([BitConverter]::ToString($Bytes)).Replace('-', '') }
-function Add-Text([Security.Cryptography.HashAlgorithm]$Hash, [string]$Text) {
-  $bytes = [Text.Encoding]::UTF8.GetBytes($Text)
-  [void]$Hash.TransformBlock($bytes, 0, $bytes.Length, $bytes, 0)
-}
-function Get-Payload([System.IO.Compression.ZipArchive]$Archive) {
-  $hash = [Security.Cryptography.SHA256]::Create()
-  try {
-    $entries = @($Archive.Entries | Where-Object {
-      $normalized = $_.FullName.TrimStart('./')
-      -not $_.FullName.EndsWith('/') -and
-      $normalized -ne $markerName -and
-      ($normalized.StartsWith('addons/counterstrikesharp/plugins/NadeSystem/') -or $normalized.StartsWith('addons/counterstrikesharp/plugins/CS2BotLlmChat/') -or $normalized -eq $mapRotationEntry)
-    } | Sort-Object FullName)
-    foreach ($entry in $entries) {
-      $normalized = $entry.FullName.TrimStart('./')
-      Add-Text $hash "$normalized`0$($entry.Length)`0"
-      $stream = $entry.Open()
-      try {
-        $buffer = New-Object byte[] 65536
-        while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) { [void]$hash.TransformBlock($buffer, 0, $read, $buffer, 0) }
-      } finally { $stream.Dispose() }
-    }
-    [void]$hash.TransformFinalBlock(@(), 0, 0)
-    return [pscustomobject]@{ sha256 = Get-Hex $hash.Hash; entries = @($entries | ForEach-Object { $_.FullName.TrimStart('./') }) }
-  } finally { $hash.Dispose() }
-}
-function Get-FileSha256([string]$Path) {
-  $hash = [Security.Cryptography.SHA256]::Create(); $stream = [IO.File]::OpenRead($Path)
-  try { Get-Hex $hash.ComputeHash($stream) } finally { $stream.Dispose(); $hash.Dispose() }
-}
-
-Copy-Item -LiteralPath $zip -Destination $temporary -Force
-(Get-Item -LiteralPath $zip).IsReadOnly = $false
-(Get-Item -LiteralPath $temporary).IsReadOnly = $false
+$archive = [IO.Compression.ZipFile]::OpenRead($zip)
 try {
-  $archive = [IO.Compression.ZipFile]::Open($temporary, [IO.Compression.ZipArchiveMode]::Update)
-  try {
-    @($archive.Entries | Where-Object FullName -eq $markerName) | ForEach-Object Delete
-    $payload = Get-Payload $archive
-    $manifest = [ordered]@{
-      schema = 2
-      product = 'cs2-bot-improver'
-      pluginId = 'cs2as05-custom-package'
-      version = $version
-      components = @(
-        [ordered]@{
-          id = 'cs2as05-custom-package'
-          source = 'CS2-Bot-Improver-v1.4.4'
-        }
-      )
-      payloadSha256 = $payload.sha256
-      payloadEntries = $payload.entries
-      mutableConfigEntries = @($mapRotationConfigEntry)
-    } | ConvertTo-Json -Depth 4
-    $entry = $archive.CreateEntry($markerName, [IO.Compression.CompressionLevel]::Optimal)
-    $entry.LastWriteTime = [DateTimeOffset]::new(2026, 7, 26, 0, 0, 0, [TimeSpan]::Zero)
-    $writer = [IO.StreamWriter]::new($entry.Open(), [Text.UTF8Encoding]::new($false))
-    try { $writer.Write($manifest) } finally { $writer.Dispose() }
-  } finally { $archive.Dispose() }
-  $check = [IO.Compression.ZipFile]::OpenRead($temporary)
-  try {
-    $markerEntry = $check.Entries | Where-Object FullName -eq $markerName
-    $reader = [IO.StreamReader]::new($markerEntry.Open())
-    try { $checkManifest = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
-    if ($checkManifest.payloadEntries -contains $mapRotationConfigEntry -or $checkManifest.mutableConfigEntries -notcontains $mapRotationConfigEntry) { throw 'MapRotation.json must be declared only in mutableConfigEntries.' }
-  } finally { $check.Dispose() }
-  [IO.File]::Replace($temporary, $zip, $backup)
-  $zipSha256 = Get-FileSha256 $zip
-  $reportRoot = Join-Path $workspace $ReportDirectory; New-Item -ItemType Directory -Force -Path $reportRoot | Out-Null
-  [pscustomobject]@{ completedAt=(Get-Date).ToString('o'); version=$version; marker=$markerName; manifest=($manifest | ConvertFrom-Json); zipSha256=$zipSha256; fixedZipHashGuard=$false; backupPath=$backup } | ConvertTo-Json -Depth 8 | Tee-Object -FilePath (Join-Path $reportRoot 'result.json')
-} finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force } }
+  $names = @($archive.Entries | Where-Object { -not $_.FullName.EndsWith('/') } | ForEach-Object { $_.FullName.TrimStart('./') })
+  $required = @(
+    'Panel v1.4.5.exe',
+    'gameinfo.gi',
+    'backup/Online/gameinfo.gi',
+    'backup/WithBots/gameinfo.gi',
+    'addons/counterstrikesharp/plugins/BotAI/BotAI.dll',
+    'addons/counterstrikesharp/plugins/BotRandomizer/BotRandomizer.dll',
+    'addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll'
+  )
+  $missing = @($required | Where-Object { $names -notcontains $_ })
+  if ($missing.Count -gt 0) { throw "Official v1.4.5 archive is missing: $($missing -join ', ')" }
+  $forbidden = @($names | Where-Object { $_ -like 'addons/counterstrikesharp/plugins/MapRotation/*' -or $_ -like 'addons/counterstrikesharp/plugins/CS2BotLlmChat/*' -or $_ -like 'addons/counterstrikesharp/configs/plugins/MapRotation/*' -or $_ -like 'addons/counterstrikesharp/configs/plugins/CS2BotLlmChat/*' })
+  if ($forbidden.Count -gt 0) { throw "Archive contains retired downstream components: $($forbidden -join ', ')" }
+  $sha = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
+  [pscustomobject]@{
+    completedAt = (Get-Date).ToString('o')
+    source = 'ed0ard/CS2-Bot-Improver v1.4.5'
+    entries = $names.Count
+    zipSha256 = $sha
+    fixedZipHashGuard = $false
+    mutated = $false
+  } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reportRoot 'result.json') -Encoding utf8
+} finally {
+  $archive.Dispose()
+}
+Get-Content -LiteralPath (Join-Path $reportRoot 'result.json')

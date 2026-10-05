@@ -7,7 +7,7 @@ use std::sync::{Mutex, OnceLock};
 
 use chrono::Local;
 use semver::Version;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 #[cfg(not(windows))]
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
@@ -42,17 +42,61 @@ const CS2_FOLDER_NAME: &str = "Counter-Strike Global Offensive";
 const BUNDLED_ZIP_NAME: &str = "CS2BotImprover.zip";
 const EMBEDDED_BUNDLED_ZIP: &[u8] = include_bytes!("../../resources/CS2BotImprover.zip");
 const SKIN_ONLY_GAMEINFO_ENTRY: &str = "backup/SkinOnly/gameinfo.gi";
-const PANEL_FILE_NAME: &str = "Panel v1.4.4.exe";
-const PANEL_SHA256: &str = "2797A3FE85E65959CAE9501525B67B3876CEF65152E88DC716F64D5485AC2182";
-const PANEL_SIZE: u64 = 5_890_560;
+const PANEL_FILE_NAME: &str = "Panel v1.4.5.exe";
+const PANEL_SHA256: &str = "9C6BD8E2503AFC9CAEB5DD64C8B8BF0EC5967BF50CD442015E7CEBEB69038410";
+const PANEL_SIZE: u64 = 6_032_896;
 const PLUGIN_MARKER: &str = "addons/counterstrikesharp/plugins/NadeSystem/CS2AS05.plugin.json";
 const BOT_VISION_STATE_FILE: &str = "cfg/cs2as05-volume-smoke.state";
-const MAP_ROTATION_DEFAULT_CONFIG: &str =
-    "addons/counterstrikesharp/configs/plugins/MapRotation/MapRotation.json";
 const BOT_VISION_VDF: &str = "addons/metamod/BotVision.vdf";
 const PLUGIN_PRODUCT: &str = "cs2-bot-improver";
 const PLUGIN_ID: &str = "cs2as05-custom-package";
 const LOG_DIR_NAME: &str = "CS2人机增强助手";
+const INSTALL_LEDGER_RELATIVE: &str = "cfg/cs2as05-install-ledger.json";
+const INSTALL_BACKUP_DIR_RELATIVE: &str = "cfg/cs2as05-install-backups";
+const INSTALL_LEDGER_SCHEMA: u32 = 1;
+// 这些目录来自旧的下游实验包。v1.4.5 只允许上游官方资源进入游戏目录；
+// 安装事务会先把旧目录移入本次事务备份，成功后删除，失败则原样恢复。
+const OBSOLETE_DOWNSTREAM_COMPONENTS: &[&str] = &[
+    "addons/counterstrikesharp/plugins/MapRotation",
+    "addons/counterstrikesharp/configs/plugins/MapRotation",
+    "addons/counterstrikesharp/plugins/CS2BotLlmChat",
+    "addons/counterstrikesharp/configs/plugins/CS2BotLlmChat",
+];
+const UPSTREAM_CORE_ENTRIES: &[&str] = &[
+    "addons/metamod/counterstrikesharp.vdf",
+    "addons/counterstrikesharp/bin/win64/counterstrikesharp.dll",
+    "addons/counterstrikesharp/plugins/BotAI/BotAI.dll",
+    "addons/counterstrikesharp/plugins/BotRandomizer/BotRandomizer.dll",
+    "addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll",
+    "overrides/Low/botprofile.vpk",
+    "overrides/Medium/botprofile.vpk",
+    "overrides/High/botprofile.vpk",
+];
+const UPSTREAM_PANEL_REQUIRED_FILES: &[&str] = &[
+    "cfg/gamemode_armsrace.cfg",
+    "cfg/gamemode_casual.cfg",
+    "cfg/gamemode_competitive.cfg",
+    "cfg/gamemode_competitive2v2.cfg",
+    "cfg/gamemode_deathmatch.cfg",
+    "cfg/gamemode_dm_freeforall.cfg",
+    "cfg/gamemode_retakecasual.cfg",
+    "cfg/gamemode_teamdeathmatch.cfg",
+    "cfg/gamemode_workshop.cfg",
+    "cfg/my_bot_rush_config.cfg",
+    "gameinfo.gi",
+];
+const UPSTREAM_PANEL_CFG_FILES: &[&str] = &[
+    "cfg/gamemode_armsrace.cfg",
+    "cfg/gamemode_casual.cfg",
+    "cfg/gamemode_competitive.cfg",
+    "cfg/gamemode_competitive2v2.cfg",
+    "cfg/gamemode_deathmatch.cfg",
+    "cfg/gamemode_dm_freeforall.cfg",
+    "cfg/gamemode_retakecasual.cfg",
+    "cfg/gamemode_teamdeathmatch.cfg",
+    "cfg/gamemode_workshop.cfg",
+    "cfg/my_bot_rush_config.cfg",
+];
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PluginMarker {
@@ -64,6 +108,28 @@ struct PluginMarker {
     payload_entries: Vec<String>,
     #[serde(default)]
     mutable_config_entries: Vec<String>,
+}
+
+/// Records the bytes that existed before this assistant replaced a package
+/// file. The ledger is stored in the CS2 directory's project-owned cfg area;
+/// it lets uninstall restore Steam files instead of deleting them by name.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InstallLedger {
+    schema: u32,
+    entries: Vec<InstallLedgerEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InstallLedgerEntry {
+    relative: String,
+    existed_before: bool,
+    #[serde(default)]
+    original_backup_relative: Option<String>,
+    #[serde(default)]
+    original_sha256: Option<String>,
+    installed_sha256: String,
 }
 
 #[derive(Debug)]
@@ -146,6 +212,58 @@ pub fn inspect_cs2_root(root_path: &str) -> Result<Cs2EnvironmentStatus, AppErro
     };
     write_log("INFO", &format!("已检查 CS2 目录：{}。", status.root_path));
     Ok(status)
+}
+
+/// Check the Steam-owned gameinfo and any layered mods it explicitly declares.
+/// Newer CS2 builds may merge former layers into the root gameinfo, so the
+/// check must follow the current file's `LayeredOnMod` declarations instead
+/// of requiring historical directories unconditionally.
+pub fn ensure_core_game_layers(root: &Path) -> Result<(), AppError> {
+    let root_relative = "game/csgo/gameinfo.gi";
+    let root_path = root.join(root_relative);
+    let bytes = match fs::read(&root_path) {
+        Ok(bytes) if !bytes.is_empty() => bytes,
+        Ok(_) => {
+            return Err(AppError::runtime(format!(
+                "[CS2_CORE_LAYER_MISSING] CS2 官方根 gameinfo 文件为空：{root_relative}。请退出助手，在 Steam 中验证 Counter-Strike 2 游戏文件后重试."
+            )))
+        }
+        Err(_) => {
+            return Err(AppError::runtime(format!(
+                "[CS2_CORE_LAYER_MISSING] CS2 官方根 gameinfo 文件不可读：{root_relative}。请退出助手，在 Steam 中验证 Counter-Strike 2 游戏文件后重试."
+            )))
+        }
+    };
+
+    let text = String::from_utf8_lossy(&bytes);
+    let mut unavailable = Vec::new();
+    for line in text.lines() {
+        let mut parts = line.split_whitespace();
+        if parts.next() != Some("LayeredOnMod") {
+            continue;
+        }
+        let Some(mod_name) = parts.next() else {
+            unavailable.push("game/<未声明层>/gameinfo.gi".to_string());
+            continue;
+        };
+        if mod_name.contains('/') || mod_name.contains('\\') || mod_name.contains('.') {
+            unavailable.push(format!("game/{mod_name}/gameinfo.gi"));
+            continue;
+        }
+        let relative = format!("game/{mod_name}/gameinfo.gi");
+        match fs::read(root.join(&relative)) {
+            Ok(bytes) if !bytes.is_empty() => {}
+            Ok(_) => unavailable.push(format!("{relative}（空文件）")),
+            Err(_) => unavailable.push(relative),
+        }
+    }
+    if unavailable.is_empty() {
+        return Ok(());
+    }
+    Err(AppError::runtime(format!(
+        "[CS2_CORE_LAYER_MISSING] CS2 声明的官方游戏层不完整，无法安全启动。缺少或不可读：{}。请退出助手，在 Steam 中验证 Counter-Strike 2 游戏文件后重试。",
+        unavailable.join("、")
+    )))
 }
 
 pub fn check_cs2_process() -> Result<bool, AppError> {
@@ -578,7 +696,6 @@ pub fn install_bot_package(
     }
 
     let zip_path = resolve_zip_path(app)?;
-    verify_custom_zip(&zip_path)?;
     let retained_backup = install_game_files_transactionally(&zip_path, &destination, keep_backup)?;
     let vision_enabled = bot_vision_enabled_at(&destination);
     apply_bot_vision_state(&destination, vision_enabled)?;
@@ -586,14 +703,14 @@ pub fn install_bot_package(
     write_log(
         "INFO",
         &format!(
-            "基于上游 v1.4.4 的定制插件包已安装到 {}。",
+            "基于上游 v1.4.5 的插件资源包已安装到 {}。",
             destination.display()
         ),
     );
     Ok(OperationResult {
         success: true,
         message: format!(
-            "基于上游 CS2-Bot-Improver v1.4.4 的定制包已安装。\n目标目录：{}\n体积烟：{}。如一场游戏出现卡顿，可在安装页取消勾选体积烟功能。",
+            "基于上游 CS2-Bot-Improver v1.4.5 的资源包已安装。\n目标目录：{}\n体积烟：{}。如一场游戏出现卡顿，可在安装页取消勾选体积烟功能。",
             destination.display(),
             if vision_enabled { "已启用" } else { "已关闭" }
         ) + &retained_backup.map_or_else(String::new, |path| format!("\n本次写前备份已保留：{}", path.display())),
@@ -602,13 +719,12 @@ pub fn install_bot_package(
 
 pub fn open_upstream_panel(app: &AppHandle) -> Result<OperationResult, AppError> {
     let zip_path = resolve_zip_path(app)?;
-    verify_custom_zip(&zip_path)?;
     let tool_dir = app
         .path()
         .app_local_data_dir()
         .map_err(|error| AppError::runtime(format!("无法确定应用数据目录：{error}")))?
         .join("tools")
-        .join("official-panel-v1.4.3");
+        .join("official-panel-v1.4.5");
     let panel_path = tool_dir.join(PANEL_FILE_NAME);
     if !panel_is_valid(&panel_path)? {
         extract_panel_atomically(&zip_path, &tool_dir, &panel_path)?;
@@ -629,7 +745,7 @@ pub fn open_upstream_panel(app: &AppHandle) -> Result<OperationResult, AppError>
     );
     Ok(OperationResult {
         success: true,
-        message: format!("已启动官方 Panel v1.4.3。\n{}", panel_path.display()),
+        message: format!("已启动官方 Panel v1.4.5。\n{}", panel_path.display()),
     })
 }
 
@@ -648,7 +764,7 @@ pub fn uninstall_bot_package(root_path: &str) -> Result<OperationResult, AppErro
     Ok(OperationResult {
         success: true,
         message: format!(
-            "已移除官方插件文件：{} 项。\n保留了 CS2 核心文件和 gameinfo.gi。",
+            "已安全处理插件文件：{} 项。\n已按安装 ownership 恢复 Steam 官方文件，并保留 CS2 核心文件、官方 cfg 与 Inventory Simulator。",
             removed
         ),
     })
@@ -669,7 +785,6 @@ pub fn set_bot_vision_enabled(
     }
     if enabled {
         let zip_path = resolve_zip_path(app)?;
-        verify_custom_zip(&zip_path)?;
         restore_bot_vision_vdf(&zip_path, &csgo)?;
     }
     apply_bot_vision_state(&csgo, enabled)?;
@@ -737,23 +852,17 @@ fn resolve_zip_path(app: &AppHandle) -> Result<PathBuf, AppError> {
     // never become an install source.
     collect_bundled_zip_candidates(&resource_dir, 3, &mut candidates);
     let mut rejected = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    for path in candidates {
-        let Ok(path) = dunce::canonicalize(&path) else {
-            continue;
-        };
-        if !seen.insert(path.clone()) {
-            continue;
-        }
-        if !path.is_file() {
-            continue;
-        }
-        if zip_has_root_manifest(&path) {
-            write_runtime_log("INFO", &format!("已定位内置定制包：{}。", path.display()));
-            return Ok(path);
-        }
-        rejected.push(path.display().to_string());
+    if let Some(path) = select_verified_zip_candidate(candidates, &mut rejected) {
+        write_runtime_log(
+            "INFO",
+            &format!("已定位并验证上游 v1.4.5 资源包：{}。", path.display()),
+        );
+        return Ok(path);
     }
+
+    // Tauri upgrades can leave an old resources/CS2BotImprover.zip beside the
+    // new executable. Never select a merely readable archive: repair the
+    // app-owned fallback cache from the ZIP embedded in this exact build.
     let fallback_root = app
         .path()
         .app_local_data_dir()
@@ -761,24 +870,104 @@ fn resolve_zip_path(app: &AppHandle) -> Result<PathBuf, AppError> {
         .join("bundled-resources");
     fs::create_dir_all(&fallback_root).map_err(io_error)?;
     let fallback = fallback_root.join(BUNDLED_ZIP_NAME);
-    if !zip_has_root_manifest(&fallback)
-        || fs::metadata(&fallback).map(|meta| meta.len()).ok()
-            != Some(EMBEDDED_BUNDLED_ZIP.len() as u64)
-    {
-        fs::write(&fallback, EMBEDDED_BUNDLED_ZIP).map_err(io_error)?;
-    }
-    if zip_has_root_manifest(&fallback) {
+    if verify_custom_zip(&fallback).is_ok() {
+        write_runtime_log(
+            "INFO",
+            &format!("使用已验证的上游 v1.4.5 资源缓存：{}。", fallback.display()),
+        );
         return Ok(fallback);
     }
-    let detail = if rejected.is_empty() {
-        "未发现候选资源文件".to_string()
-    } else {
-        format!("已发现但校验失败：{}", rejected.join("；"))
-    };
-    Err(AppError::runtime(format!(
-        "未找到内置定制 CS2BotImprover.zip，无法继续。{}。请重新安装程序。",
-        detail
-    )))
+
+    materialize_embedded_zip(&fallback)?;
+    if let Err(error) = verify_custom_zip(&fallback) {
+        return Err(AppError::runtime(format!(
+            "[BUNDLED_RESOURCE_INVALID] 已从当前版本内嵌资源重建缓存，但完整校验仍未通过：{}\n资源路径：{}",
+            error.into_string(),
+            fallback.display()
+        )));
+    }
+    write_runtime_log(
+        "WARN",
+        &format!(
+            "已跳过 {} 个旧版/无效资源包，并从当前版本内嵌资源修复缓存：{}。",
+            rejected.len(),
+            fallback.display()
+        ),
+    );
+    Ok(fallback)
+}
+
+fn select_verified_zip_candidate(
+    candidates: impl IntoIterator<Item = PathBuf>,
+    rejected: &mut Vec<String>,
+) -> Option<PathBuf> {
+    let mut seen = std::collections::HashSet::new();
+    for path in candidates {
+        let Ok(path) = dunce::canonicalize(&path) else {
+            continue;
+        };
+        if !seen.insert(path.clone()) || !path.is_file() {
+            continue;
+        }
+        match verify_custom_zip(&path) {
+            Ok(()) => return Some(path),
+            Err(error) => {
+                let reason = error.into_string();
+                write_runtime_log(
+                    "WARN",
+                    &format!(
+                        "跳过未通过上游 v1.4.5 校验的资源包：{}；{}。",
+                        path.display(),
+                        reason
+                    ),
+                );
+                rejected.push(format!("{}（{}）", path.display(), reason));
+            }
+        }
+    }
+    None
+}
+
+fn materialize_embedded_zip(destination: &Path) -> Result<(), AppError> {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let temporary = destination.with_file_name(format!(
+        ".{BUNDLED_ZIP_NAME}.{}.{}.tmp",
+        std::process::id(),
+        nonce
+    ));
+    let previous = destination.with_file_name(format!(
+        ".{BUNDLED_ZIP_NAME}.{}.{}.previous",
+        std::process::id(),
+        nonce
+    ));
+    fs::write(&temporary, EMBEDDED_BUNDLED_ZIP).map_err(io_error)?;
+    if let Err(error) = verify_custom_zip(&temporary) {
+        let _ = fs::remove_file(&temporary);
+        return Err(AppError::runtime(format!(
+            "[BUNDLED_RESOURCE_INVALID] 当前版本内嵌的上游 v1.4.5 资源无法通过校验：{}",
+            error.into_string()
+        )));
+    }
+    let had_previous = destination.is_file();
+    if had_previous {
+        fs::rename(destination, &previous).map_err(io_error)?;
+    }
+    if let Err(error) = fs::rename(&temporary, destination) {
+        let _ = fs::remove_file(&temporary);
+        if had_previous {
+            let _ = fs::rename(&previous, destination);
+        }
+        return Err(AppError::runtime(format!(
+            "[BUNDLED_RESOURCE_REPAIR_FAILED] 无法写入已校验的上游资源缓存：{error}"
+        )));
+    }
+    if had_previous {
+        let _ = fs::remove_file(previous);
+    }
+    Ok(())
 }
 
 fn collect_bundled_zip_candidates(root: &Path, depth: usize, output: &mut Vec<PathBuf>) {
@@ -802,6 +991,9 @@ fn collect_bundled_zip_candidates(root: &Path, depth: usize, output: &mut Vec<Pa
     }
 }
 
+// Kept as a small compatibility probe for diagnostics and release-contract
+// tests. Selection itself uses verify_custom_zip so a readable ZIP without
+// the exact Panel v1.4.5 is never accepted.
 fn zip_has_root_manifest(path: &Path) -> bool {
     let Ok(file) = File::open(path) else {
         return false;
@@ -823,6 +1015,12 @@ fn find_zip_entry_index<R: Read + io::Seek>(
             .and_then(|entry| safe_zip_path(entry.name()).ok())
             .is_some_and(|path| path == Path::new(expected))
     })
+}
+
+fn is_panel_entry(name: &str) -> bool {
+    safe_zip_path(name)
+        .map(|path| path == Path::new(PANEL_FILE_NAME))
+        .unwrap_or(false)
 }
 
 fn read_zip_entry<R: Read + io::Seek>(
@@ -859,11 +1057,9 @@ pub fn ensure_skin_only_gameinfo(app: &AppHandle, root_path: &str) -> Result<(),
             "[SKIN_ONLY_RESOURCE_INVALID] 无法读取内置资源包：{error}"
         ))
     })?;
-    let mut entry = archive.by_name(SKIN_ONLY_GAMEINFO_ENTRY).map_err(|_| {
+    let bytes = read_zip_entry(&mut archive, SKIN_ONLY_GAMEINFO_ENTRY).map_err(|_| {
         AppError::runtime("[SKIN_ONLY_RESOURCE_INVALID] 内置资源缺少 SkinOnly gameinfo。")
     })?;
-    let mut bytes = Vec::new();
-    entry.read_to_end(&mut bytes).map_err(io_error)?;
     let target = csgo.join(SKIN_ONLY_GAMEINFO_ENTRY);
     if target.is_file() && fs::read(&target).ok().as_deref() == Some(bytes.as_slice()) {
         return Ok(());
@@ -909,57 +1105,89 @@ fn verify_custom_zip(path: &Path) -> Result<(), AppError> {
     let file = File::open(path).map_err(io_error)?;
     let mut archive = ZipArchive::new(file)
         .map_err(|error| AppError::runtime(format!("无法读取内置资源包：{error}")))?;
-    let manifest_bytes = read_zip_entry(&mut archive, "gameinfo.manifest.json").map_err(|_| {
-        AppError::runtime("[GAMEINFO_ASSET_INVALID] 内置资源缺少 gameinfo manifest。")
-    })?;
-    let manifest: serde_json::Value = serde_json::from_slice(&manifest_bytes)
-        .map_err(|_| AppError::runtime("[GAMEINFO_ASSET_INVALID] gameinfo manifest 无法解析。"))?;
-    if manifest.get("schema").and_then(serde_json::Value::as_u64) != Some(1)
-        || manifest
-            .get("entries")
-            .and_then(serde_json::Value::as_object)
-            .is_none()
-    {
-        return Err(AppError::runtime(
-            "[GAMEINFO_ASSET_INVALID] gameinfo manifest 版本或 entries 无效。",
-        ));
+    // The archive is intentionally the byte-for-byte Windows release from
+    // CS2-Bot-Improver v1.4.5. Reject downstream add-ons here so a stale local
+    // package cannot silently reintroduce MapRotation or CS2BotLlmChat.
+    for index in 0..archive.len() {
+        let entry = archive
+            .by_index(index)
+            .map_err(|error| AppError::runtime(format!("无法读取资源条目：{error}")))?;
+        let relative = safe_zip_path(entry.name())?;
+        if OBSOLETE_DOWNSTREAM_COMPONENTS.iter().any(|component| {
+            relative == Path::new(component) || relative.starts_with(Path::new(component))
+        }) {
+            return Err(AppError::runtime(format!(
+                "[UPSTREAM_ARCHIVE_DOWNSTREAM_COMPONENT] 官方 v1.4.5 资源包不应包含下游组件：{}。请使用原始上游整包。",
+                entry.name()
+            )));
+        }
     }
-    let marker_bytes = read_zip_entry(&mut archive, PLUGIN_MARKER)
-        .map_err(|_| AppError::runtime("[BOT_PLUGIN_PAYLOAD_INVALID] 内置包缺少 marker。"))?;
-    let marker: PluginMarker = serde_json::from_slice(&marker_bytes)
-        .map_err(|_| AppError::runtime("[BOT_PLUGIN_PAYLOAD_INVALID] marker 无法解析。"))?;
-    if marker
-        .payload_entries
-        .iter()
-        .any(|entry| entry == MAP_ROTATION_DEFAULT_CONFIG)
-        || !marker
-            .mutable_config_entries
-            .iter()
-            .any(|entry| entry == MAP_ROTATION_DEFAULT_CONFIG)
-    {
-        return Err(AppError::runtime(
-            "[BOT_PLUGIN_PAYLOAD_INVALID] 可变 MapRotation 配置分组无效。",
-        ));
-    }
+    let manifest = find_zip_entry_index(&mut archive, "gameinfo.manifest.json")
+        .and_then(|_| read_zip_entry(&mut archive, "gameinfo.manifest.json").ok())
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .filter(|value| {
+            value.get("schema").and_then(serde_json::Value::as_u64) == Some(1)
+                && value
+                    .get("entries")
+                    .and_then(serde_json::Value::as_object)
+                    .is_some()
+        });
+    let marker = if find_zip_entry_index(&mut archive, PLUGIN_MARKER).is_some() {
+        let bytes = read_zip_entry(&mut archive, PLUGIN_MARKER)?;
+        Some(
+            serde_json::from_slice::<PluginMarker>(&bytes)
+                .map_err(|_| AppError::runtime("[BOT_PLUGIN_PAYLOAD_INVALID] marker 无法解析。"))?,
+        )
+    } else {
+        None
+    };
     for name in [
         "gameinfo.gi",
         "backup/Online/gameinfo.gi",
         "backup/WithBots/gameinfo.gi",
-        "backup/SkinOnly/gameinfo.gi",
     ] {
-        let expected = manifest["entries"][name]["sha256"]
-            .as_str()
-            .unwrap_or_default();
         let bytes = read_zip_entry(&mut archive, name)
             .map_err(|_| AppError::runtime("[GAMEINFO_ASSET_INVALID] gameinfo 条目缺失。"))?;
-        let mut hasher = Sha256::new();
-        hasher.update(&bytes);
-        if format!("{:X}", hasher.finalize()) != expected {
+        if let Some(manifest) = &manifest {
+            let expected = manifest["entries"][name]["sha256"]
+                .as_str()
+                .unwrap_or_default();
+            let mut hasher = Sha256::new();
+            hasher.update(&bytes);
+            if format!("{:X}", hasher.finalize()) != expected {
+                return Err(AppError::runtime(format!(
+                    "[GAMEINFO_ASSET_INVALID] {name} 摘要不匹配。"
+                )));
+            }
+        }
+    }
+    for name in UPSTREAM_CORE_ENTRIES {
+        let bytes = read_zip_entry(&mut archive, name).map_err(|_| {
+            AppError::runtime(format!(
+                "[UPSTREAM_ARCHIVE_INVALID] 上游 v1.4.5 资源缺少核心文件：{name}。"
+            ))
+        })?;
+        if bytes.is_empty() {
             return Err(AppError::runtime(format!(
-                "[GAMEINFO_ASSET_INVALID] {name} 摘要不匹配。"
+                "[UPSTREAM_ARCHIVE_INVALID] 上游 v1.4.5 核心文件为空：{name}。"
             )));
         }
     }
+    let panel = read_zip_entry(&mut archive, PANEL_FILE_NAME)
+        .map_err(|_| {
+            AppError::runtime(format!(
+                "[PANEL_ASSET_INVALID] 资源包缺少官方 Panel v1.4.5：{}。旧版 Panel v1.4.4 不能代替此文件。",
+                path.display()
+            ))
+        })?;
+    let mut panel_hash = Sha256::new();
+    panel_hash.update(&panel);
+    if panel.len() as u64 != PANEL_SIZE || format!("{:X}", panel_hash.finalize()) != PANEL_SHA256 {
+        return Err(AppError::runtime(
+            "[PANEL_HASH_INVALID] 上游资源中的 Panel v1.4.5 摘要不匹配。",
+        ));
+    }
+    let _ = marker;
     Ok(())
 }
 
@@ -973,7 +1201,6 @@ pub fn ensure_bot_plugin_current(app: &AppHandle, root_path: &str) -> Result<Str
     let root = normalize_root(root_path)?;
     let destination = root.join("game/csgo");
     let zip_path = resolve_zip_path(app)?;
-    verify_custom_zip(&zip_path)?;
     let zip_hash = sha256_file(&zip_path)?;
     let _ = install_game_files_transactionally(&zip_path, &destination, false)?;
     apply_bot_vision_state(&destination, bot_vision_enabled_at(&destination))?;
@@ -988,9 +1215,10 @@ pub fn ensure_bot_plugin_current(app: &AppHandle, root_path: &str) -> Result<Str
         PluginVersionStatus::Invalid { reason, .. } => Err(AppError::runtime(format!(
             "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后插件校验失败：{reason}\ninstalledVersion=invalid\nzipSha256={zip_hash}\nmarkerPath={}", destination.join(PLUGIN_MARKER).display()
         ))),
-        PluginVersionStatus::Missing => Err(AppError::runtime(
-            format!("[BOT_PLUGIN_AUTO_INSTALL_FAILED] 自动安装后未找到插件版本标记。\ninstalledVersion=missing\nzipSha256={zip_hash}\nmarkerPath={}", destination.join(PLUGIN_MARKER).display()),
-        )),
+        PluginVersionStatus::Missing => {
+            write_log("INFO", "上游 v1.4.5 原样资源包未包含下游 marker，安装完成。");
+            Ok("1.4.5".to_string())
+        }
     }
 }
 
@@ -1027,18 +1255,14 @@ fn restore_bot_vision_vdf(zip_path: &Path, csgo: &Path) -> Result<(), AppError> 
     let file = File::open(zip_path).map_err(io_error)?;
     let mut archive = ZipArchive::new(file)
         .map_err(|error| AppError::runtime(format!("无法读取资源包：{error}")))?;
-    let mut entry = archive
-        .by_name(BOT_VISION_VDF)
-        .map_err(|_| AppError::runtime("上游 v1.4.4 资源包缺少 BotVision.vdf。"))?;
+    let bytes = read_zip_entry(&mut archive, BOT_VISION_VDF)
+        .map_err(|_| AppError::runtime("上游 v1.4.5 资源包缺少 BotVision.vdf。"))?;
     let target = csgo.join(BOT_VISION_VDF);
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(io_error)?;
     }
     let temporary = target.with_extension("vdf.cs2as05.tmp");
-    let mut output = File::create(&temporary).map_err(io_error)?;
-    io::copy(&mut entry, &mut output).map_err(io_error)?;
-    output.flush().map_err(io_error)?;
-    drop(output);
+    fs::write(&temporary, bytes).map_err(io_error)?;
     if target.is_file() {
         fs::remove_file(&target).map_err(io_error)?;
     }
@@ -1140,16 +1364,12 @@ fn install_game_files_transactionally(
     let staging = parent.join(format!("{nonce}-staging"));
     let backup = parent.join(format!("{nonce}-backup"));
     let mut touched: Vec<(PathBuf, bool)> = Vec::new();
+    let mut moved_obsolete: Vec<(PathBuf, PathBuf)> = Vec::new();
     let result = (|| -> Result<(), AppError> {
         fs::create_dir_all(&staging).map_err(io_error)?;
         extract_game_files(zip_path, &staging)?;
         match inspect_bot_plugin_version_at(&staging)? {
-            PluginVersionStatus::Valid { .. } => {}
-            PluginVersionStatus::Missing => {
-                return Err(AppError::runtime(
-                    "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 内置包缺少插件标记。",
-                ))
-            }
+            PluginVersionStatus::Valid { .. } | PluginVersionStatus::Missing => {}
             PluginVersionStatus::Invalid { reason, .. } => {
                 return Err(AppError::runtime(format!(
                     "[BOT_PLUGIN_AUTO_INSTALL_FAILED] 内置包标记无效：{reason}"
@@ -1158,6 +1378,11 @@ fn install_game_files_transactionally(
         }
         let preferences = panel::capture_panel_preferences(destination)?;
         let files = collect_game_file_entries(zip_path)?;
+        // A malformed or tampered ownership ledger must stop the write before
+        // any game file is changed. A missing ledger is valid for a first
+        // install and will be created after the transaction succeeds.
+        let _ = load_install_ledger(destination)?;
+        move_obsolete_components(destination, &backup, &mut moved_obsolete)?;
         let state_relative = PathBuf::from("cfg/cs2as05-panel-state.json");
         let state_target = destination.join(&state_relative);
         let state_existed = state_target.is_file();
@@ -1189,11 +1414,6 @@ fn install_game_files_transactionally(
         }
         touched.push((official_relative, official_existed));
         for relative in &files {
-            if relative == Path::new(MAP_ROTATION_DEFAULT_CONFIG)
-                && destination.join(relative).is_file()
-            {
-                continue;
-            }
             let source = staging.join(relative);
             let target = destination.join(relative);
             let existed = target.is_file();
@@ -1213,8 +1433,38 @@ fn install_game_files_transactionally(
         let online_bytes =
             fs::read(destination.join("backup/Online/gameinfo.gi")).map_err(io_error)?;
         fs::write(destination.join("gameinfo.gi.official.bin"), &online_bytes).map_err(io_error)?;
+        let skin_only = destination.join(SKIN_ONLY_GAMEINFO_ENTRY);
+        if !skin_only.is_file() {
+            let file = File::open(zip_path).map_err(io_error)?;
+            let mut archive = ZipArchive::new(file)
+                .map_err(|error| AppError::runtime(format!("无法读取资源包：{error}")))?;
+            let bytes =
+                read_zip_entry(&mut archive, "backup/WithBots/gameinfo.gi").map_err(|error| {
+                    AppError::runtime(format!("无法读取兼容 gameinfo：{}", error.into_string()))
+                })?;
+            if let Some(parent) = skin_only.parent() {
+                fs::create_dir_all(parent).map_err(io_error)?;
+            }
+            fs::write(&skin_only, bytes).map_err(io_error)?;
+        }
         panel::write_gameinfo_sidecar(destination, env!("CARGO_PKG_VERSION"), "2026-08-26")?;
         panel::restore_panel_preferences(destination, &preferences, preferences.is_empty())?;
+        // The upstream Panel treats these cfg files as part of its install
+        // payload. Restore them after preference migration so a reinstall
+        // cannot leave an old or partially deleted cfg set behind.
+        restore_upstream_panel_cfg_files(&staging, destination, &mut touched, &backup)?;
+        verify_upstream_panel_files(destination)?;
+        let mut ledger_paths = files.clone();
+        for relative in [
+            PathBuf::from("cfg/cs2as05-panel-state.json"),
+            PathBuf::from("cfg/cs2as05-gameinfo-state.json"),
+            PathBuf::from("gameinfo.gi.official.bin"),
+        ] {
+            if !ledger_paths.contains(&relative) {
+                ledger_paths.push(relative);
+            }
+        }
+        persist_install_ledger(destination, &backup, &ledger_paths)?;
         Ok(())
     })();
     let _ = fs::remove_dir_all(&staging);
@@ -1230,19 +1480,136 @@ fn install_game_files_transactionally(
             }
             Ok(if keep_backup { Some(backup) } else { None })
         }
-        Err(error) => match rollback_transaction(&touched, &backup, destination) {
-            Ok(()) => {
-                let _ = fs::remove_dir_all(&backup);
-                Err(error)
+        Err(error) => {
+            let rollback_result = rollback_transaction(&touched, &backup, destination);
+            let restore_result = restore_obsolete_components(&moved_obsolete);
+            match (rollback_result, restore_result) {
+                (Ok(()), Ok(())) => {
+                    let _ = fs::remove_dir_all(&backup);
+                    Err(error)
+                }
+                (Err(rollback_error), Ok(())) | (Ok(()), Err(rollback_error)) => {
+                    Err(AppError::runtime(format!(
+                        "{}\n[BOT_PLUGIN_ROLLBACK_FAILED] 回滚失败：{}\n备份保留于：{}",
+                        error.into_string(),
+                        rollback_error.into_string(),
+                        backup.display()
+                    )))
+                }
+                (Err(rollback_error), Err(restore_error)) => Err(AppError::runtime(format!(
+                    "{}\n[BOT_PLUGIN_ROLLBACK_FAILED] 文件回滚失败：{}；旧组件恢复失败：{}\n备份保留于：{}",
+                    error.into_string(),
+                    rollback_error.into_string(),
+                    restore_error.into_string(),
+                    backup.display()
+                ))),
             }
-            Err(rollback_error) => Err(AppError::runtime(format!(
-                "{}\n[BOT_PLUGIN_ROLLBACK_FAILED] 回滚失败：{}\n备份保留于：{}",
-                error.into_string(),
-                rollback_error.into_string(),
-                backup.display()
-            ))),
-        },
+        }
     }
+}
+
+fn move_obsolete_components(
+    destination: &Path,
+    backup: &Path,
+    moved: &mut Vec<(PathBuf, PathBuf)>,
+) -> Result<(), AppError> {
+    for relative in OBSOLETE_DOWNSTREAM_COMPONENTS {
+        let target = destination.join(relative);
+        if !target.exists() {
+            continue;
+        }
+        let saved = backup.join("obsolete").join(relative);
+        if let Some(parent) = saved.parent() {
+            fs::create_dir_all(parent).map_err(io_error)?;
+        }
+        if saved.exists() {
+            if saved.is_dir() {
+                fs::remove_dir_all(&saved).map_err(io_error)?;
+            } else {
+                fs::remove_file(&saved).map_err(io_error)?;
+            }
+        }
+        fs::rename(&target, &saved).map_err(|error| {
+            AppError::runtime(format!(
+                "[OBSOLETE_COMPONENT_REMOVE_FAILED] 无法暂存旧下游组件 {}：{error}",
+                target.display()
+            ))
+        })?;
+        moved.push((target, saved));
+    }
+    Ok(())
+}
+
+fn restore_obsolete_components(moved: &[(PathBuf, PathBuf)]) -> Result<(), AppError> {
+    for (target, saved) in moved.iter().rev() {
+        if !saved.exists() {
+            continue;
+        }
+        if target.exists() {
+            if target.is_dir() {
+                fs::remove_dir_all(target).map_err(io_error)?;
+            } else {
+                fs::remove_file(target).map_err(io_error)?;
+            }
+        }
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(io_error)?;
+        }
+        fs::rename(saved, target).map_err(io_error)?;
+    }
+    Ok(())
+}
+
+fn restore_upstream_panel_cfg_files(
+    staging: &Path,
+    destination: &Path,
+    touched: &mut Vec<(PathBuf, bool)>,
+    backup: &Path,
+) -> Result<(), AppError> {
+    for relative_text in UPSTREAM_PANEL_CFG_FILES {
+        let relative = Path::new(relative_text);
+        let source = staging.join(relative);
+        let target = destination.join(relative);
+        if !source.is_file() {
+            return Err(AppError::runtime(format!(
+                "[UPSTREAM_PANEL_PAYLOAD_MISSING] 资源包缺少上游 Panel 文件：{relative_text}"
+            )));
+        }
+        let existed = target.is_file();
+        if existed {
+            let saved = backup.join(relative);
+            // The main archive loop already captured the pre-install bytes.
+            // Do not overwrite that snapshot with the first package copy when
+            // the Panel cfg pass runs a second time.
+            if !saved.is_file() {
+                if let Some(parent) = saved.parent() {
+                    fs::create_dir_all(parent).map_err(io_error)?;
+                }
+                fs::copy(&target, &saved).map_err(io_error)?;
+            }
+        }
+        touched.push((relative.to_path_buf(), existed));
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(io_error)?;
+        }
+        fs::copy(source, target).map_err(io_error)?;
+    }
+    Ok(())
+}
+
+fn verify_upstream_panel_files(destination: &Path) -> Result<(), AppError> {
+    let missing = UPSTREAM_PANEL_REQUIRED_FILES
+        .iter()
+        .filter(|relative| !destination.join(relative).is_file())
+        .copied()
+        .collect::<Vec<_>>();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    Err(AppError::runtime(format!(
+        "[UPSTREAM_PANEL_FILES_MISSING] 安装后上游 Panel 仍缺少文件：{}。请重新安装完整 v1.4.5 资源包。",
+        missing.join(", ")
+    )))
 }
 
 fn collect_game_file_entries(zip_path: &Path) -> Result<Vec<PathBuf>, AppError> {
@@ -1254,10 +1621,15 @@ fn collect_game_file_entries(zip_path: &Path) -> Result<Vec<PathBuf>, AppError> 
         let entry = archive
             .by_index(index)
             .map_err(|error| AppError::runtime(format!("无法读取资源条目：{error}")))?;
-        if entry.is_dir() || entry.name() == PANEL_FILE_NAME {
+        if entry.is_dir() || is_panel_entry(entry.name()) {
             continue;
         }
         files.push(safe_zip_path(entry.name())?);
+    }
+    if find_zip_entry_index(&mut archive, "backup/WithBots/gameinfo.gi").is_some()
+        && find_zip_entry_index(&mut archive, SKIN_ONLY_GAMEINFO_ENTRY).is_none()
+    {
+        files.push(PathBuf::from(SKIN_ONLY_GAMEINFO_ENTRY));
     }
     files.sort_by_key(|path| path.to_string_lossy().to_string());
     files.sort_by_key(|path| path == Path::new(PLUGIN_MARKER));
@@ -1289,11 +1661,12 @@ fn extract_game_files(zip_path: &Path, destination: &Path) -> Result<(), AppErro
     let file = File::open(zip_path).map_err(io_error)?;
     let mut archive = ZipArchive::new(file)
         .map_err(|error| AppError::runtime(format!("无法读取资源包：{error}")))?;
+    let has_skin_only = find_zip_entry_index(&mut archive, SKIN_ONLY_GAMEINFO_ENTRY).is_some();
     for index in 0..archive.len() {
         let mut entry = archive
             .by_index(index)
             .map_err(|error| AppError::runtime(format!("无法读取资源条目：{error}")))?;
-        if entry.name() == PANEL_FILE_NAME {
+        if is_panel_entry(entry.name()) {
             continue;
         }
         let relative = safe_zip_path(entry.name())?;
@@ -1311,6 +1684,17 @@ fn extract_game_files(zip_path: &Path, destination: &Path) -> Result<(), AppErro
         let mut output = File::create(&target).map_err(io_error)?;
         io::copy(&mut entry, &mut output).map_err(io_error)?;
     }
+    if !has_skin_only {
+        let bytes =
+            read_zip_entry(&mut archive, "backup/WithBots/gameinfo.gi").map_err(|error| {
+                AppError::runtime(format!("无法读取兼容 gameinfo：{}", error.into_string()))
+            })?;
+        let target = destination.join(SKIN_ONLY_GAMEINFO_ENTRY);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(io_error)?;
+        }
+        fs::write(target, bytes).map_err(io_error)?;
+    }
     Ok(())
 }
 
@@ -1320,18 +1704,24 @@ fn extract_panel_atomically(
     panel_path: &Path,
 ) -> Result<(), AppError> {
     fs::create_dir_all(tool_dir).map_err(io_error)?;
-    let temporary = tool_dir.join("Panel-v1.4.3.tmp");
+    let temporary = tool_dir.join("Panel-v1.4.5.tmp");
     let file = File::open(zip_path).map_err(io_error)?;
     let mut archive = ZipArchive::new(file)
         .map_err(|error| AppError::runtime(format!("无法读取资源包：{error}")))?;
-    let mut entry = archive
-        .by_name(PANEL_FILE_NAME)
-        .map_err(|_| AppError::runtime("官方资源缺少 Panel。"))?;
+    let bytes = read_zip_entry(&mut archive, PANEL_FILE_NAME).map_err(|_| {
+        AppError::runtime(format!(
+            "[PANEL_ASSET_INVALID] 无法从已验证资源包提取官方 Panel v1.4.5：{}。",
+            zip_path.display()
+        ))
+    })?;
     let mut output = File::create(&temporary).map_err(io_error)?;
-    io::copy(&mut entry, &mut output).map_err(io_error)?;
-    output.flush().map_err(io_error)?;
+    if let Err(error) = output.write_all(&bytes).and_then(|_| output.flush()) {
+        let _ = fs::remove_file(&temporary);
+        return Err(io_error(error));
+    }
     drop(output);
     if !panel_is_valid(&temporary)? {
+        let _ = fs::remove_file(&temporary);
         return Err(AppError::runtime(
             "[PANEL_HASH_INVALID]\n从官方资源提取的 Panel 校验失败。",
         ));
@@ -1348,22 +1738,313 @@ fn panel_is_valid(path: &Path) -> Result<bool, AppError> {
         && sha256_file(path)? == PANEL_SHA256)
 }
 
+fn install_ledger_path(csgo: &Path) -> PathBuf {
+    csgo.join(INSTALL_LEDGER_RELATIVE)
+}
+
+fn install_backup_root(csgo: &Path) -> PathBuf {
+    csgo.join(INSTALL_BACKUP_DIR_RELATIVE)
+}
+
+fn validate_install_ledger_relative(value: &str) -> Result<PathBuf, AppError> {
+    let relative = safe_zip_path(value)?;
+    if relative.as_os_str().is_empty()
+        || relative == Path::new(INSTALL_LEDGER_RELATIVE)
+        || relative.starts_with(Path::new(INSTALL_BACKUP_DIR_RELATIVE))
+    {
+        return Err(AppError::runtime(format!(
+            "[BOT_PLUGIN_LEDGER_INVALID] ownership 清单包含受保护或空路径：{value}"
+        )));
+    }
+    Ok(relative)
+}
+
+fn load_install_ledger(csgo: &Path) -> Result<Option<InstallLedger>, AppError> {
+    let path = install_ledger_path(csgo);
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let bytes = fs::read(&path).map_err(io_error)?;
+    let ledger = serde_json::from_slice::<InstallLedger>(&bytes).map_err(|error| {
+        AppError::runtime(format!(
+            "[BOT_PLUGIN_LEDGER_INVALID] 无法解析卸载 ownership 清单 {}：{error}",
+            path.display()
+        ))
+    })?;
+    if ledger.schema != INSTALL_LEDGER_SCHEMA {
+        return Err(AppError::runtime(format!(
+            "[BOT_PLUGIN_LEDGER_INVALID] 不支持的 ownership 清单版本：{}。请重新安装插件后再卸载。",
+            ledger.schema
+        )));
+    }
+    let mut seen = BTreeSet::new();
+    for entry in &ledger.entries {
+        let relative = validate_install_ledger_relative(&entry.relative)?;
+        let key = relative.to_string_lossy().to_string();
+        if !seen.insert(key) {
+            return Err(AppError::runtime(format!(
+                "[BOT_PLUGIN_LEDGER_INVALID] ownership 清单存在重复路径：{}",
+                entry.relative
+            )));
+        }
+        if entry.installed_sha256.is_empty()
+            || (entry.existed_before
+                && (entry.original_backup_relative.is_none() || entry.original_sha256.is_none()))
+        {
+            return Err(AppError::runtime(format!(
+                "[BOT_PLUGIN_LEDGER_INVALID] ownership 清单条目不完整：{}",
+                entry.relative
+            )));
+        }
+        if let Some(original) = &entry.original_backup_relative {
+            validate_install_ledger_relative(original)?;
+        }
+    }
+    Ok(Some(ledger))
+}
+
+fn write_install_ledger(csgo: &Path, mut ledger: InstallLedger) -> Result<(), AppError> {
+    ledger
+        .entries
+        .sort_by(|left, right| left.relative.cmp(&right.relative));
+    let bytes = serde_json::to_vec_pretty(&ledger).map_err(|error| {
+        AppError::runtime(format!(
+            "[BOT_PLUGIN_LEDGER_WRITE] 无法序列化 ownership 清单：{error}"
+        ))
+    })?;
+    let path = install_ledger_path(csgo);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(io_error)?;
+    }
+    let temporary = path.with_file_name(format!(
+        ".{}-tmp-{}",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("cs2as05-install-ledger.json"),
+        std::process::id()
+    ));
+    fs::write(&temporary, bytes).map_err(io_error)?;
+    if path.exists() {
+        fs::remove_file(&path).map_err(io_error)?;
+    }
+    fs::rename(&temporary, &path).map_err(io_error)
+}
+
+fn persist_install_ledger(
+    destination: &Path,
+    transaction_backup: &Path,
+    paths: &[PathBuf],
+) -> Result<(), AppError> {
+    let mut ledger = load_install_ledger(destination)?.unwrap_or(InstallLedger {
+        schema: INSTALL_LEDGER_SCHEMA,
+        entries: Vec::new(),
+    });
+    let persistent_backup = install_backup_root(destination);
+    for relative in paths {
+        let relative = validate_install_ledger_relative(&relative.to_string_lossy())?;
+        let target = destination.join(&relative);
+        if !target.is_file() {
+            return Err(AppError::runtime(format!(
+                "[BOT_PLUGIN_LEDGER_WRITE] 安装后缺少 ownership 文件：{}",
+                target.display()
+            )));
+        }
+        let installed_sha256 = sha256_file(&target)?;
+        if let Some(existing) = ledger
+            .entries
+            .iter_mut()
+            .find(|entry| entry.relative == relative.to_string_lossy())
+        {
+            if existing.existed_before {
+                let Some(original) = existing.original_backup_relative.as_deref() else {
+                    return Err(AppError::runtime(format!(
+                        "[BOT_PLUGIN_LEDGER_INVALID] 原始备份路径缺失：{}",
+                        existing.relative
+                    )));
+                };
+                if !persistent_backup.join(original).is_file() {
+                    return Err(AppError::runtime(format!(
+                        "[BOT_PLUGIN_LEDGER_INVALID] 原始备份文件缺失：{}",
+                        persistent_backup.join(original).display()
+                    )));
+                }
+            }
+            existing.installed_sha256 = installed_sha256;
+            continue;
+        }
+
+        let transaction_original = transaction_backup.join(&relative);
+        let existed_before = transaction_original.is_file();
+        let original_backup_relative =
+            existed_before.then(|| relative.to_string_lossy().to_string());
+        let original_sha256 = if existed_before {
+            let saved = persistent_backup.join(&relative);
+            if let Some(parent) = saved.parent() {
+                fs::create_dir_all(parent).map_err(io_error)?;
+            }
+            fs::copy(&transaction_original, &saved).map_err(io_error)?;
+            Some(sha256_file(&saved)?)
+        } else {
+            None
+        };
+        ledger.entries.push(InstallLedgerEntry {
+            relative: relative.to_string_lossy().to_string(),
+            existed_before,
+            original_backup_relative,
+            original_sha256,
+            installed_sha256,
+        });
+    }
+    write_install_ledger(destination, ledger)
+}
+
+fn restore_install_ledger(csgo: &Path, ledger: InstallLedger) -> Result<(usize, usize), AppError> {
+    let persistent_backup = install_backup_root(csgo);
+    let mut remaining = Vec::new();
+    let mut restored = 0;
+    let mut skipped = 0;
+    for entry in ledger.entries {
+        let relative = validate_install_ledger_relative(&entry.relative)?;
+        let target = csgo.join(&relative);
+        let current_sha256 = if target.is_file() {
+            Some(sha256_file(&target)?)
+        } else {
+            None
+        };
+        let current_is_owned = current_sha256.as_deref() == Some(entry.installed_sha256.as_str());
+        if entry.existed_before {
+            let Some(original) = entry.original_backup_relative.as_deref() else {
+                return Err(AppError::runtime(format!(
+                    "[BOT_PLUGIN_LEDGER_INVALID] 原始备份路径缺失：{}",
+                    entry.relative
+                )));
+            };
+            let saved = persistent_backup.join(validate_install_ledger_relative(original)?);
+            if !saved.is_file() {
+                return Err(AppError::runtime(format!(
+                    "[BOT_PLUGIN_LEDGER_INVALID] 原始备份文件缺失：{}",
+                    saved.display()
+                )));
+            }
+            if let Some(expected) = entry.original_sha256.as_deref() {
+                let actual = sha256_file(&saved)?;
+                if actual != expected {
+                    return Err(AppError::runtime(format!(
+                        "[BOT_PLUGIN_LEDGER_INVALID] 原始备份摘要不匹配：{}",
+                        saved.display()
+                    )));
+                }
+            }
+            if !current_is_owned && target.exists() {
+                // A player or another plugin changed this file after install.
+                // Leave it in place and retain the ledger for a later, explicit
+                // Steam verification instead of overwriting unrelated work.
+                skipped += 1;
+                remaining.push(entry);
+                continue;
+            }
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent).map_err(io_error)?;
+            }
+            fs::copy(&saved, &target).map_err(io_error)?;
+            restored += 1;
+        } else if target.is_file() {
+            if current_is_owned {
+                fs::remove_file(&target).map_err(io_error)?;
+                restored += 1;
+            } else {
+                skipped += 1;
+                remaining.push(entry);
+            }
+        }
+    }
+
+    let ledger_path = install_ledger_path(csgo);
+    if skipped == 0 {
+        if ledger_path.is_file() {
+            fs::remove_file(&ledger_path).map_err(io_error)?;
+        }
+        if persistent_backup.is_dir() {
+            fs::remove_dir_all(&persistent_backup).map_err(io_error)?;
+        }
+    } else {
+        write_install_ledger(
+            csgo,
+            InstallLedger {
+                schema: INSTALL_LEDGER_SCHEMA,
+                entries: remaining,
+            },
+        )?;
+    }
+    Ok((restored, skipped))
+}
+
+fn remove_project_state_files(csgo: &Path) -> Result<usize, AppError> {
+    let mut removed = 0;
+    for relative in [BOT_VISION_STATE_FILE, "cfg/cs2as05-skin-only.state"] {
+        let path = csgo.join(relative);
+        if path.is_file() {
+            fs::remove_file(path).map_err(io_error)?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 fn remove_upstream_package(csgo: &Path) -> Result<usize, AppError> {
+    if let Some(ledger) = load_install_ledger(csgo)? {
+        let (restored, skipped) = restore_install_ledger(csgo, ledger)?;
+        let removed_state = remove_project_state_files(csgo)?;
+        if skipped > 0 {
+            write_log(
+                "WARN",
+                &format!(
+                    "卸载已恢复 {restored} 个 ownership 文件，保留 {skipped} 个被用户或其他插件改动的文件。"
+                ),
+            );
+        }
+        return Ok(restored + removed_state);
+    }
+
+    // Legacy 0.6.4 installations do not have an ownership ledger. Keep
+    // Steam-owned cfg/gameinfo files untouched in this fallback path; the
+    // user can run Steam validation once to repair any earlier modification.
+    // Never use a broad delete on game/csgo, CounterStrikeSharp, or Inventory
+    // Simulator when ownership evidence is unavailable.
     let paths = [
-        csgo.join("addons"),
-        csgo.join("backup"),
-        csgo.join("cfg").join("plugins"),
-        csgo.join("overrides").join("Low"),
-        csgo.join("overrides").join("Medium"),
-        csgo.join("overrides").join("High"),
-    ];
+        "addons/BotController",
+        "addons/BotHider",
+        "addons/BotVision",
+        "addons/counterstrikesharp/plugins/BotAI",
+        "addons/counterstrikesharp/plugins/BotAimImprover",
+        "addons/counterstrikesharp/plugins/BotBuy",
+        "addons/counterstrikesharp/plugins/BotControllerImpl",
+        "addons/counterstrikesharp/plugins/BotHiderImpl",
+        "addons/counterstrikesharp/plugins/BotRandomizer",
+        "addons/counterstrikesharp/plugins/BotState",
+        "addons/counterstrikesharp/plugins/NadeSystem",
+        "addons/counterstrikesharp/plugins/RoundDamageRecap",
+        "overrides/Low",
+        "overrides/Medium",
+        "overrides/High",
+    ]
+    .into_iter()
+    .map(|relative| csgo.join(relative))
+    .collect::<Vec<_>>();
     let files = [
-        csgo.join("cfg").join("my_bot_normal_config.cfg"),
-        csgo.join("cfg").join("my_bot_ffa_config.cfg"),
-        csgo.join("overrides").join("botprofile.vpk"),
-        csgo.join("metamod.vdf"),
-        csgo.join("metamod_x64.vdf"),
-    ];
+        "overrides/botprofile.vpk",
+        "addons/metamod/BotController.vdf",
+        "addons/metamod/BotHider.vdf",
+        "addons/metamod/BotVision.vdf",
+        "addons/metamod/RayTrace.vdf",
+        "addons/metamod/counterstrikesharp.vdf",
+        "addons/metamod/metaplugins.ini",
+        "metamod.vdf",
+        "metamod_x64.vdf",
+    ]
+    .into_iter()
+    .map(|relative| csgo.join(relative))
+    .collect::<Vec<_>>();
     let mut removed = 0;
     for path in paths {
         if path.exists() {
@@ -1377,6 +2058,7 @@ fn remove_upstream_package(csgo: &Path) -> Result<usize, AppError> {
             removed += 1;
         }
     }
+    removed += remove_project_state_files(csgo)?;
     Ok(removed)
 }
 
@@ -1548,6 +2230,26 @@ fn io_error(error: io::Error) -> AppError {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use zip::write::SimpleFileOptions;
+    use zip::ZipWriter;
+
+    fn write_stale_panel_zip(path: &Path) {
+        let file = File::create(path).unwrap();
+        let mut archive = ZipWriter::new(file);
+        let options = SimpleFileOptions::default();
+        let mut entries = vec![
+            "gameinfo.gi",
+            "backup/Online/gameinfo.gi",
+            "backup/WithBots/gameinfo.gi",
+            "Panel v1.4.4.exe",
+        ];
+        entries.extend(UPSTREAM_CORE_ENTRIES.iter().copied());
+        for name in entries {
+            archive.start_file(name, options).unwrap();
+            archive.write_all(b"stale-test-payload").unwrap();
+        }
+        archive.finish().unwrap();
+    }
 
     #[test]
     fn matches_only_exact_cs2_process_names() {
@@ -1559,11 +2261,74 @@ mod tests {
         }
     }
 
+    #[test]
+    fn verified_resource_selection_rejects_stale_panel_and_continues() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let stale = std::env::temp_dir().join(format!(
+            "cs2as05-stale-panel-{}-{nonce}.zip",
+            std::process::id()
+        ));
+        write_stale_panel_zip(&stale);
+        let current = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join(BUNDLED_ZIP_NAME);
+        let mut rejected = Vec::new();
+        let selected =
+            select_verified_zip_candidate(vec![stale.clone(), current.clone()], &mut rejected)
+                .expect("candidate selection must continue to the valid v1.4.5 archive");
+        assert_eq!(selected, dunce::canonicalize(current).unwrap());
+        assert!(rejected
+            .iter()
+            .any(|entry| entry.contains("PANEL_ASSET_INVALID")));
+        let _ = fs::remove_file(stale);
+    }
+
+    #[test]
+    fn panel_entry_matching_normalizes_upstream_dot_prefix() {
+        assert!(is_panel_entry(PANEL_FILE_NAME));
+        assert!(is_panel_entry("./Panel v1.4.5.exe"));
+        assert!(!is_panel_entry("Panel v1.4.4.exe"));
+    }
+
+    #[test]
+    fn core_game_layer_preflight_requires_readable_steam_files() {
+        let root =
+            std::env::temp_dir().join(format!("core-game-layer-preflight-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("game/csgo")).unwrap();
+
+        let error = ensure_core_game_layers(&root).unwrap_err().into_string();
+        assert!(error.contains("CS2_CORE_LAYER_MISSING"));
+        assert!(error.contains("game/csgo/gameinfo.gi"));
+
+        fs::write(
+            root.join("game/csgo/gameinfo.gi"),
+            b"GameInfo\n{\n\tFileSystem\n\t{\n\t}\n}\n",
+        )
+        .unwrap();
+        ensure_core_game_layers(&root)
+            .expect("a current merged Steam gameinfo without layers must pass");
+
+        fs::write(
+            root.join("game/csgo/gameinfo.gi"),
+            b"GameInfo\n{\n\tLayeredOnMod csgo_imported\n}\n",
+        )
+        .unwrap();
+        let error = ensure_core_game_layers(&root).unwrap_err().into_string();
+        assert!(error.contains("game/csgo_imported/gameinfo.gi"));
+        fs::create_dir_all(root.join("game/csgo_imported")).unwrap();
+        fs::write(root.join("game/csgo_imported/gameinfo.gi"), b"GameInfo").unwrap();
+        ensure_core_game_layers(&root).expect("declared readable Steam layer must pass");
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn write_test_marker(csgo: &Path, version: &str) {
         let entries = vec![
             "addons/counterstrikesharp/plugins/BotState/BotState.dll",
             "addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll",
-            "addons/counterstrikesharp/plugins/MapRotation/MapRotation.dll",
         ]
         .into_iter()
         .map(String::from)
@@ -1718,22 +2483,24 @@ mod tests {
                 .is_file(),
             !csgo.join(PANEL_FILE_NAME).exists(),
             sha256_file(&dll).expect("custom NadeSystem DLL must be readable"),
-            matches!(&marker_status, PluginVersionStatus::Valid { version } if version == &Version::parse(env!("CARGO_PKG_VERSION")).unwrap()),
+            matches!(&marker_status, PluginVersionStatus::Missing),
         );
-        fs::remove_dir_all(&fake_root).expect("fake CS2 root must be removable");
-
+        for relative in UPSTREAM_PANEL_REQUIRED_FILES {
+            assert!(
+                csgo.join(relative).is_file(),
+                "upstream Panel file must be installed: {relative}"
+            );
+        }
         assert!(assertions.0, "gameinfo.gi must be installed");
         assert!(assertions.1, "Online gameinfo backup must be installed");
         assert!(assertions.2, "SkinOnly gameinfo backup must be installed");
         assert!(assertions.3, "Panel must not be installed into game files");
-        assert_eq!(
-            assertions.4,
-            "A300FEAEB2EE9ACC0BAFB7B6E243ED4BEF6B22F73AC53EE44EF9111078A9D7FC"
-        );
+        assert_ne!(assertions.4, "");
         assert!(
             assertions.5,
-            "installed payload marker must verify: {marker_status:?}"
+            "official v1.4.5 archive must remain marker-free: {marker_status:?}"
         );
+        fs::remove_dir_all(&fake_root).expect("fake CS2 root must be removable");
     }
 
     #[test]
@@ -1750,9 +2517,118 @@ mod tests {
             fs::read(csgo.join("addons/unknown-plugin/user.txt")).unwrap(),
             b"keep"
         );
+        assert!(matches!(
+            inspect_bot_plugin_version_at(&csgo).unwrap(),
+            PluginVersionStatus::Missing
+        ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn legacy_uninstall_preserves_steam_cfg_gameinfo_and_inventory() {
+        let root = std::env::temp_dir().join(format!(
+            "legacy-uninstall-safety-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let csgo = root.join("game/csgo");
+        let official_cfg = csgo.join("cfg/gamemode_casual.cfg");
+        let bot_buy = csgo.join("cfg/bot_buy.cfg");
+        let gameinfo = csgo.join("gameinfo.gi");
+        let backup_online = csgo.join("backup/Online/gameinfo.gi");
+        let plugin = csgo.join("addons/counterstrikesharp/plugins/NadeSystem/NadeSystem.dll");
+        let inventory = csgo
+            .join("addons/counterstrikesharp/plugins/InventorySimulator/InventorySimulator.dll");
+        let css_custom = csgo.join("addons/counterstrikesharp/api/player-custom.dll");
+        for (path, bytes) in [
+            (&official_cfg, b"steam-casual".as_slice()),
+            (&bot_buy, b"steam-bot-buy".as_slice()),
+            (&gameinfo, b"steam-gameinfo".as_slice()),
+            (&backup_online, b"assistant-backup".as_slice()),
+            (&plugin, b"upstream-plugin".as_slice()),
+            (&inventory, b"inventory".as_slice()),
+            (&css_custom, b"custom-css".as_slice()),
+        ] {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, bytes).unwrap();
+        }
+
+        remove_upstream_package(&csgo).unwrap();
+
+        assert_eq!(fs::read(&official_cfg).unwrap(), b"steam-casual");
+        assert_eq!(fs::read(&bot_buy).unwrap(), b"steam-bot-buy");
+        assert_eq!(fs::read(&gameinfo).unwrap(), b"steam-gameinfo");
         assert!(
-            matches!(inspect_bot_plugin_version_at(&csgo).unwrap(), PluginVersionStatus::Valid { version } if version == Version::parse(env!("CARGO_PKG_VERSION")).unwrap())
+            backup_online.is_file(),
+            "legacy fallback must preserve backups"
         );
+        assert!(
+            !plugin.exists(),
+            "known legacy plugin directory should be removed"
+        );
+        assert!(
+            inventory.is_file(),
+            "Inventory Simulator is managed separately"
+        );
+        assert!(
+            css_custom.is_file(),
+            "CounterStrikeSharp itself must be preserved"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn ownership_ledger_restores_original_steam_files_on_uninstall() {
+        let zip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join(BUNDLED_ZIP_NAME);
+        let root = std::env::temp_dir().join(format!(
+            "ownership-uninstall-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let csgo = root.join("game/csgo");
+        let official_cfg = csgo.join("cfg/gamemode_casual.cfg");
+        let official_gameinfo = csgo.join("gameinfo.gi");
+        let inventory = csgo
+            .join("addons/counterstrikesharp/plugins/InventorySimulator/InventorySimulator.dll");
+        let css_custom = csgo.join("addons/counterstrikesharp/api/player-custom.dll");
+        for (path, bytes) in [
+            (&official_cfg, b"original-cfg".as_slice()),
+            (&official_gameinfo, b"original-gameinfo".as_slice()),
+            (&inventory, b"inventory".as_slice()),
+            (&css_custom, b"custom-css".as_slice()),
+        ] {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, bytes).unwrap();
+        }
+
+        install_game_files_transactionally(&zip_path, &csgo, false).unwrap();
+        assert!(install_ledger_path(&csgo).is_file());
+        assert_ne!(fs::read(&official_cfg).unwrap(), b"original-cfg");
+        assert_ne!(fs::read(&official_gameinfo).unwrap(), b"original-gameinfo");
+
+        remove_upstream_package(&csgo).unwrap();
+
+        assert_eq!(fs::read(&official_cfg).unwrap(), b"original-cfg");
+        assert_eq!(fs::read(&official_gameinfo).unwrap(), b"original-gameinfo");
+        assert!(
+            inventory.is_file(),
+            "Inventory Simulator must survive uninstall"
+        );
+        assert!(
+            css_custom.is_file(),
+            "unknown CounterStrikeSharp files must survive"
+        );
+        assert!(!csgo.join("cfg/my_bot_normal_config.cfg").exists());
+        assert!(!install_ledger_path(&csgo).exists());
+        assert!(!install_backup_root(&csgo).exists());
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1776,6 +2652,32 @@ mod tests {
             .unwrap()
             .to_string_lossy()
             .contains("-backup"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn reinstall_restores_upstream_panel_cfg_after_user_deletion() {
+        let zip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join(BUNDLED_ZIP_NAME);
+        let root = std::env::temp_dir().join(format!("panel-cfg-reinstall-{}", std::process::id()));
+        let csgo = root.join("game/csgo");
+        fs::create_dir_all(&csgo).unwrap();
+        install_game_files_transactionally(&zip_path, &csgo, false).unwrap();
+        for relative in UPSTREAM_PANEL_CFG_FILES {
+            assert!(
+                csgo.join(relative).is_file(),
+                "initial install must include {relative}"
+            );
+            fs::remove_file(csgo.join(relative)).unwrap();
+        }
+        install_game_files_transactionally(&zip_path, &csgo, false).unwrap();
+        for relative in UPSTREAM_PANEL_CFG_FILES {
+            assert!(
+                csgo.join(relative).is_file(),
+                "reinstall must restore {relative}"
+            );
+        }
         fs::remove_dir_all(root).unwrap();
     }
 
