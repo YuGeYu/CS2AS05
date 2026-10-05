@@ -2,6 +2,7 @@ pub mod bot_difficulty;
 pub mod cs2;
 pub mod cs2_discovery;
 pub mod demo;
+pub mod demotracer;
 pub mod intro;
 pub mod panel;
 pub mod simple_rating;

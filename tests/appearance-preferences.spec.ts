@@ -24,9 +24,10 @@ describe('appearance preferences', () => {
     update({ hiddenSidebarItems: ['install', 'overview'], sidebarOrder: ['install', 'overview'] })
     expect(preferences.hiddenSidebarItems).toEqual(['overview'])
     expect(preferences.sidebarOrder[0]).toBe('install')
-    expect(preferences.sidebarOrder).toHaveLength(13)
+    expect(preferences.sidebarOrder).toHaveLength(14)
     expect(preferences.sidebarOrder).toContain('suggestions')
     expect(preferences.sidebarOrder).toContain('commandLibrary')
+    expect(preferences.sidebarOrder).toContain('demoReplay')
   })
 
   it('persists the startup animation preference', () => {

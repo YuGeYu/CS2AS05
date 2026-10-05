@@ -18,6 +18,7 @@ const currentContext = ref('概览')
 const contextLabels: Record<string, string> = {
   overview: '概览',
   presets: '人机预设',
+  demoReplay: 'Demo 重玩',
   items: 'Bot 物品',
   knives: '刀具',
   inventory: '库存换肤',

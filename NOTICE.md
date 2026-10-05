@@ -8,6 +8,19 @@ CS2 人机增强助手 `0.6.4`（[YuGeYu/CS2AS05](https://github.com/YuGeYu/CS2A
 
 0.6.4 的活动安装面不包含自动换图 `MapRotation` 或 `CS2BotLlmChat`；旧版本遗留目录只在覆盖安装事务中被暂存和清理。Inventory Simulator 仍按其独立的 MIT 资源记录部署。
 
+## unicbm/demotracer
+
+本版本新增 Demo 重玩核心能力，内置 [unicbm/demotracer](https://github.com/unicbm/demotracer)
+的 GUI v1.5.3 与 Playback v1.5.2 官方资源。第一方代码按 AGPL-3.0-only 提供；上游源码快照、
+`LICENSE`、`TRADEMARKS.md`、Playback 内置许可证和第三方通知保存在
+`third_party/demotracer/`，资源摘要位于 `third_party/demotracer/SHA256SUMS.txt`。
+
+DemoTracer Playback 需要 Windows x64、Metamod 2.0 build 1469+（plugin API 18）、启用 KHook
+的 CounterStrikeSharp（managed API 至少 1.0.371）。本助手只写入上游安装清单中的 `addons/`
+文件，使用独立 ownership ledger 和写前备份；卸载不会按文件名删除 Steam 官方 CS2 文件，
+改动过的文件会保留。DemoTracer 的名称、图标和官方发行标识仍受上游 `TRADEMARKS.md` 约束；
+CS2 人机增强助手是独立下游集成，不代表上游官方发行版或背书。
+
 上游项目及本助手均遵循 GNU Affero General Public License v3.0 或更高版本。发布本助手时应保留内置资源包已有的 LICENSE、README、版权和归属信息，并同时提供与安装程序对应的源代码。
 
 刀具页的 20 张 PNG 历史素材仍来自固定官方 `Panel v1.4.2.exe` 的 Tauri 嵌入资源；这与 `0.5.4` 运行时内置并校验的 `Panel v1.4.3.exe` 是两个独立来源记录。图片按运行资源路径中的 subclass 数字映射并通过 Brotli 无损解压，逐图路径、尺寸和 SHA256 位于 `src/assets/knives/manifest.json`，可复现提取工具为 `scripts/extract-panel-knives.mjs`。

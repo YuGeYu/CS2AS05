@@ -15,6 +15,7 @@ import { useDemoStore } from '@/stores/demo'
 import { quickSupportState } from '@/services/quick-support-state'
 import OverviewView from '@/views/OverviewView.vue'
 import PresetsView from '@/views/PresetsView.vue'
+import DemoReplayView from '@/views/DemoReplayView.vue'
 import BotItemsView from '@/views/BotItemsView.vue'
 import KnivesView from '@/views/KnivesView.vue'
 import CommandsView from '@/views/CommandsView.vue'
@@ -53,6 +54,7 @@ const view = computed(
     ({
       overview: OverviewView,
       presets: PresetsView,
+      demoReplay: DemoReplayView,
       items: BotItemsView,
       knives: KnivesView,
       inventory: InventorySimulatorView,

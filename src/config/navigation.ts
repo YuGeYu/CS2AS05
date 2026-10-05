@@ -1,11 +1,12 @@
-import { Bot, Boxes, ChartNoAxesCombined, Gauge, Headphones, ScrollText, Settings, Sword, WalletCards, LibraryBig, MessagesSquare, Lightbulb, TerminalSquare } from 'lucide-vue-next'
+import { Bot, Boxes, ChartNoAxesCombined, Gauge, Headphones, ScrollText, Settings, Sword, WalletCards, LibraryBig, MessagesSquare, Lightbulb, TerminalSquare, PlaySquare } from 'lucide-vue-next'
 
-export type ViewKey = 'overview' | 'presets' | 'items' | 'knives' | 'inventory' | 'commands' | 'commandLibrary' | 'demoReview' | 'quickSupport' | 'resourceVault' | 'community' | 'suggestions' | 'install'
+export type ViewKey = 'overview' | 'presets' | 'demoReplay' | 'items' | 'knives' | 'inventory' | 'commands' | 'commandLibrary' | 'demoReview' | 'quickSupport' | 'resourceVault' | 'community' | 'suggestions' | 'install'
 export type NavigationGroup = 'core' | 'tools' | 'review' | 'support'
 
 export const NAV_ITEMS = [
   { key: 'overview', label: '概览', icon: Gauge, required: false, group: 'core' },
   { key: 'presets', label: '人机预设', icon: Bot, required: false, group: 'core' },
+  { key: 'demoReplay', label: 'Demo 重玩', icon: PlaySquare, required: false, group: 'core' },
   { key: 'items', label: 'Bot 物品', icon: Boxes, required: false, group: 'tools' },
   { key: 'knives', label: '刀具', icon: Sword, required: false, group: 'tools' },
   { key: 'commands', label: '本地命令', icon: ScrollText, required: false, group: 'tools' },

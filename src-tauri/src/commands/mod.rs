@@ -1,6 +1,7 @@
 pub mod bot_difficulty;
 pub mod cs2;
 pub mod demo;
+pub mod demotracer;
 pub mod intro;
 pub mod inventory_simulator;
 pub mod panel;
